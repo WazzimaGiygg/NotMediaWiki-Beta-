@@ -1,1 +1,576 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+    background-color: #f8fafc;
+  }
+
+  html.dark body {
+    color: #f1f5f9;
+    background-color: #0f172a;
+  }
+}
+
+/* Authentic MediaWiki & Wikipedia Content Typography */
+.wiki-content {
+  font-family: 'Newsreader', 'Linux Libertine', Georgia, serif;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: #1e293b;
+}
+
+.wiki-content p {
+  margin-bottom: 1.15rem;
+}
+
+.wiki-content h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e2e8f0;
+  scroll-margin-top: 115px;
+}
+
+.wiki-content h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  scroll-margin-top: 115px;
+}
+
+.wiki-content h4 {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  scroll-margin-top: 115px;
+}
+
+.wiki-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.wiki-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.wiki-content li {
+  margin-bottom: 0.25rem;
+}
+
+.wiki-content .wikitable {
+  font-family: 'Inter', sans-serif;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  width: 100%;
+}
+
+.wiki-content .wikitable th {
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.wiki-content .wikitable td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 0.75rem;
+}
+
+.wiki-content .infobox {
+  font-family: 'Inter', sans-serif;
+}
+
+.wiki-content code {
+  font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  background-color: #f1f5f9;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  color: #0f172a;
+}
+
+/* Prism.js Code Blocks inside .wiki-content */
+.wiki-content .code-block-wrapper {
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  border: 1px solid #334155;
+  background-color: #0f172a;
+  overflow: hidden;
+}
+
+.wiki-content .code-block-header {
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
+  padding: 0.4rem 0.85rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.725rem;
+  letter-spacing: 0.025em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wiki-content .code-block-header .code-lang-badge {
+  font-size: 0.625rem;
+  font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: lowercase;
+  border-radius: 0.25rem;
+  line-height: 1;
+}
+
+.wiki-content .code-block-body {
+  display: flex;
+  overflow-x: auto;
+  background-color: #0f172a;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.wiki-content .code-line-numbers {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 0.65rem 1rem 0.85rem;
+  font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: #475569;
+  background-color: rgba(15, 23, 42, 0.75);
+  border-right: 1px solid #334155;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 2.75rem;
+}
+
+.wiki-content .code-line-numbers .code-line-num {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  display: block;
+  line-height: 1.65;
+  height: 1.65em;
+  color: #475569;
+  transition: color 0.15s ease;
+}
+
+.wiki-content .code-block-wrapper:hover .code-line-numbers .code-line-num {
+  color: #64748b;
+}
+
+.wiki-content pre[class*="language-"],
+.wiki-content pre {
+  font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  background-color: transparent !important;
+  color: #f8fafc;
+  padding: 1rem 1.15rem;
+  margin: 0 !important;
+  overflow-x: auto;
+  border-radius: 0;
+  tab-size: 2;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  word-wrap: normal;
+  flex: 1;
+}
+
+.wiki-content pre code {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  line-height: 1.65 !important;
+  display: block;
+}
+
+/* Prism Tokens Theming (VS Code Dark+ inspired) */
+.wiki-content .token.comment,
+.wiki-content .token.prolog,
+.wiki-content .token.doctype,
+.wiki-content .token.cdata {
+  color: #64748b;
+  font-style: italic;
+}
+
+.wiki-content .token.punctuation {
+  color: #94a3b8;
+}
+
+.wiki-content .token.property,
+.wiki-content .token.tag,
+.wiki-content .token.boolean,
+.wiki-content .token.number,
+.wiki-content .token.constant,
+.wiki-content .token.symbol,
+.wiki-content .token.deleted {
+  color: #f59e0b;
+}
+
+.wiki-content .token.selector,
+.wiki-content .token.attr-name,
+.wiki-content .token.string,
+.wiki-content .token.char,
+.wiki-content .token.builtin,
+.wiki-content .token.inserted {
+  color: #4ade80;
+}
+
+.wiki-content .token.operator,
+.wiki-content .token.entity,
+.wiki-content .token.url,
+.wiki-content .language-css .token.string,
+.wiki-content .style .token.string {
+  color: #38bdf8;
+}
+
+.wiki-content .token.atrule,
+.wiki-content .token.attr-value,
+.wiki-content .token.keyword {
+  color: #c084fc;
+  font-weight: 600;
+}
+
+.wiki-content .token.function,
+.wiki-content .token.class-name {
+  color: #60a5fa;
+}
+
+.wiki-content .token.regex,
+.wiki-content .token.important,
+.wiki-content .token.variable {
+  color: #fb7185;
+}
+
+.wiki-content .token.important,
+.wiki-content .token.bold {
+  font-weight: bold;
+}
+
+.wiki-content .token.italic {
+  font-style: italic;
+}
+
+/* Dark Mode Typography and Components for .wiki-content */
+html.dark .wiki-content {
+  color: #e2e8f0;
+}
+
+html.dark .wiki-content h2 {
+  color: #f8fafc;
+  border-bottom-color: #334155;
+}
+
+html.dark .wiki-content h3,
+html.dark .wiki-content h4 {
+  color: #f8fafc;
+}
+
+html.dark .wiki-content a {
+  color: #60a5fa;
+}
+
+html.dark .wiki-content a:hover {
+  color: #93c5fd;
+}
+
+html.dark .wiki-content .wikitable {
+  border-color: #334155;
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+html.dark .wiki-content .wikitable th {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+html.dark .wiki-content .wikitable td {
+  border-color: #334155;
+}
+
+html.dark .wiki-content code {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+html.dark .wiki-content blockquote {
+  border-left-color: #475569;
+  color: #94a3b8;
+}
+
+html.dark .wiki-content .infobox {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+/* ==========================================================================
+   CSS Print Stylesheet for Paper Formatting
+   Hides navigation, sticky bars, sidebars, action toolbars, and floating UI.
+   Ensures core wiki content is cleanly rendered and readable for paper printing.
+   ========================================================================== */
+@media print {
+  /* Hide non-printable global layout and navigation controls */
+  header,
+  footer,
+  .no-print,
+  nav,
+  aside,
+  [role="navigation"] {
+    display: none !important;
+  }
+
+  /* Reset body and root backgrounds for crisp paper printing */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide reading progress bars and interactive headers */
+  .fixed,
+  .sticky,
+  div[class*="z-[60]"],
+  div[class*="top-0"],
+  div[class*="sticky"] {
+    display: none !important;
+  }
+
+  /* Hide wiki reader UI toolbars, buttons, action tabs, and sidebars */
+  button,
+  [class*="border-b"][class*="pb-2"][class*="mb-6"],
+  [class*="lg:col-span-3"],
+  [class*="lg:hidden"],
+  .toc-container,
+  .related-articles-sidebar,
+  .article-categories-filter {
+    display: none !important;
+  }
+
+  /* Ensure main article container takes full 100% paper width */
+  main,
+  .max-w-7xl,
+  [class*="lg:col-span-9"],
+  .grid {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Core article styling for paper */
+  article.wiki-content {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #0f172a !important;
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif !important;
+    font-size: 11.5pt !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Article Headings */
+  .wiki-content h1,
+  h1 {
+    font-size: 22pt !important;
+    margin-top: 0 !important;
+    margin-bottom: 0.5rem !important;
+    color: #000000 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .wiki-content h2 {
+    font-size: 16pt !important;
+    border-bottom: 1px solid #94a3b8 !important;
+    padding-bottom: 4px !important;
+    margin-top: 1.5rem !important;
+    color: #0f172a !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .wiki-content h3 {
+    font-size: 13pt !important;
+    margin-top: 1.25rem !important;
+    color: #1e293b !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Links on print: Keep legible without aggressive underlines */
+  .wiki-content a {
+    color: #0f172a !important;
+    text-decoration: none !important;
+  }
+
+  /* Tables formatting for print */
+  .wiki-content .wikitable,
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 1rem 0 !important;
+    page-break-inside: auto !important;
+  }
+
+  .wiki-content .wikitable th,
+  th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 10px !important;
+    font-size: 9.5pt !important;
+  }
+
+  .wiki-content .wikitable td,
+  td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 10px !important;
+    font-size: 9.5pt !important;
+    color: #1e293b !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Code blocks & Pre tags on paper */
+  .wiki-content .code-block-wrapper {
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 1rem 0 !important;
+    box-shadow: none !important;
+  }
+
+  .wiki-content .code-block-header {
+    background-color: #e2e8f0 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+
+  /* Hide interactive code buttons (copy, toggle line numbers) in print */
+  .copy-code-btn,
+  .toggle-lines-btn {
+    display: none !important;
+  }
+
+  .wiki-content .code-line-numbers {
+    background-color: #f1f5f9 !important;
+    border-right: 1px solid #cbd5e1 !important;
+    color: #64748b !important;
+  }
+
+  .wiki-content pre {
+    background-color: transparent !important;
+    color: #0f172a !important;
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+    font-size: 9pt !important;
+  }
+
+  .wiki-content pre code {
+    color: #0f172a !important;
+  }
+
+  /* Prism code tokens simplified for monochrome/paper contrast */
+  .wiki-content .token {
+    color: #0f172a !important;
+    background: transparent !important;
+    font-style: normal !important;
+  }
+  .wiki-content .token.keyword {
+    font-weight: bold !important;
+  }
+  .wiki-content .token.comment {
+    color: #64748b !important;
+    font-style: italic !important;
+  }
+
+  /* Blockquotes, Infoboxes & Images */
+  .wiki-content blockquote {
+    border-left: 3px solid #64748b !important;
+    color: #334155 !important;
+    background: #f8fafc !important;
+    padding: 0.5rem 1rem !important;
+    page-break-inside: avoid !important;
+  }
+
+  .wiki-content .infobox {
+    border: 1px solid #94a3b8 !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    font-size: 9pt !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Page margins and break rules */
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+
+  /* Footnotes and Citations */
+  .article-footnotes,
+  .references {
+    page-break-inside: avoid !important;
+    border-top: 1px solid #cbd5e1 !important;
+    margin-top: 2rem !important;
+    padding-top: 1rem !important;
+    font-size: 9pt !important;
+  }
+}
+
+
