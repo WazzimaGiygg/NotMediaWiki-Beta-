@@ -1,0 +1,223 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 255;
+    }
+
+    // MediaWiki Articles: Public read (get and list), validated write
+    match /articles/{articleSlug} {
+      allow get: if isValidId(articleSlug);
+      allow list: if true;
+      allow create, update: if isValidId(articleSlug) &&
+        request.resource.data.slug is string &&
+        request.resource.data.title is string &&
+        request.resource.data.wikitext is string;
+      allow delete: if false;
+    }
+
+    // MediaWiki Revisions: Public read, immutable append
+    match /revisions/{revisionId} {
+      allow get: if isValidId(revisionId);
+      allow list: if true;
+      allow create: if isValidId(revisionId) &&
+        request.resource.data.id is string &&
+        request.resource.data.articleSlug is string &&
+        request.resource.data.sha256 is string;
+      allow update, delete: if false;
+    }
+
+    // MediaWiki EventStreams: Public read, append only
+    match /wiki_events/{eventId} {
+      allow get: if isValidId(eventId);
+      allow list: if true;
+      allow create: if isValidId(eventId) &&
+        request.resource.data.id is string &&
+        request.resource.data.page_title is string;
+      allow update, delete: if false;
+    }
+
+    // MediaWiki Users: Public read of author profiles, write for profile owner or admin
+    match /users/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create, update: if isValidId(userId) &&
+        request.resource.data.uid is string &&
+        request.resource.data.displayName is string;
+      allow delete: if isValidId(userId);
+    }
+
+    // General Wiki Information and Metadata: Public read, write updates
+    match /wiki_metadata/{metaId} {
+      allow get: if isValidId(metaId);
+      allow list: if true;
+      allow create, update: if isValidId(metaId) &&
+        request.resource.data.id is string;
+      allow delete: if false;
+    }
+
+    // Sync Status: Public read, write status updates
+    match /sync_status/{statusId} {
+      allow get: if isValidId(statusId);
+      allow list: if true;
+      allow create, update: if isValidId(statusId) &&
+        request.resource.data.status is string;
+      allow delete: if false;
+    }
+
+    // System and Microservices Logs: Public read for admin dashboard, append allowed
+    match /system_logs/{logId} {
+      allow get: if isValidId(logId);
+      allow list: if true;
+      allow create: if isValidId(logId) &&
+        request.resource.data.id is string &&
+        request.resource.data.level is string &&
+        request.resource.data.message is string;
+      allow update, delete: if false;
+    }
+
+    // System Extensions: Public read, creation and updates for extensions configuration
+    match /extensions/{extensionId} {
+      allow get: if isValidId(extensionId);
+      allow list: if true;
+      allow create, update: if isValidId(extensionId) &&
+        request.resource.data.id is string &&
+        request.resource.data.name is string &&
+        request.resource.data.enabled is bool;
+      allow delete: if isValidId(extensionId);
+    }
+
+    // Allowed Domains Whitelist: Managed directly in Firebase by Bureaucrats
+    match /allowed_domains/{domainId} {
+      allow get: if isValidId(domainId);
+      allow list: if true;
+      allow create, update: if isValidId(domainId) &&
+        request.resource.data.id is string &&
+        request.resource.data.domain is string &&
+        request.resource.data.domain.size() <= 255;
+      allow delete: if isValidId(domainId);
+    }
+
+    // Conselho de Arbitragem (ArbCom): Sincronizado no Firestore
+    match /arbitration_cases/{caseId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(caseId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(caseId);
+    }
+
+    // Verificação de Contas (CheckUser & Fantoches): Sincronizado no Firestore
+    match /checkuser_investigations/{caseId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(caseId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(caseId);
+    }
+
+    // Avaliação de Desbloqueio: Sincronizado no Firestore
+    match /unblock_requests/{requestId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(requestId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(requestId);
+    }
+
+    // Pedido de Remoção de Dados (Oversight / LGPD Art. 18): Sincronizado no Firestore
+    match /data_removals/{removalId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(removalId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(removalId);
+    }
+
+    // Contato de Emergência 24/7: Sincronizado no Firestore
+    match /emergency_reports/{reportId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(reportId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(reportId);
+    }
+
+    // Conformidade LGPD e Marco Civil: Sincronizado no Firestore
+    match /compliance_records/{recordId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(recordId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(recordId);
+    }
+
+    // Páginas Pessoais de Usuários (com tags únicas e prevenção de duplicidades)
+    match /user_pages/{pageId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(pageId) &&
+        request.resource.data.id is string &&
+        request.resource.data.userId is string;
+      allow delete: if isValidId(pageId);
+    }
+
+    // Verificador de VPN & Auditoria de Conexão
+    match /vpn_detections/{detectionId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(detectionId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(detectionId);
+    }
+
+    // Conselho de Ética: Artigos de Pessoas Vivas e Derivados (WP:BLP)
+    match /blp_ethics_cases/{caseId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(caseId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(caseId);
+    }
+
+    // Chat Comunitário em Tempo Real
+    match /direct_chats/{chatId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(chatId) &&
+        request.resource.data.id is string;
+      allow delete: if isValidId(chatId);
+
+      match /messages/{messageId} {
+        allow get, list: if true;
+        allow create, update: if isValidId(messageId) &&
+          request.resource.data.id is string;
+        allow delete: if isValidId(messageId);
+      }
+    }
+
+    // 3.05.3.af & 3.05.8.b - Checklist Diário de Usuários
+    match /user_daily_checklists/{checklistId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(checklistId) &&
+        request.resource.data.id is string &&
+        request.resource.data.userId is string;
+      allow delete: if isValidId(checklistId);
+    }
+
+    // 3.05.8.b - Pontos Mensais Acumulados
+    match /user_monthly_points/{ledgerId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(ledgerId) &&
+        request.resource.data.id is string &&
+        request.resource.data.userId is string;
+      allow delete: if isValidId(ledgerId);
+    }
+
+    // 3.05.8.b.c - Avaliações de Artigos por Usuários
+    match /article_ratings/{ratingId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(ratingId) &&
+        request.resource.data.id is string &&
+        request.resource.data.articleSlug is string;
+      allow delete: if isValidId(ratingId);
+    }
+  }
+}
+
+

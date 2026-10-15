@@ -1,0 +1,323 @@
+{
+  "entities": {
+    "Article": {
+      "title": "Article",
+      "description": "MediaWiki encyclopedia article content and metadata",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "maxLength": 255 },
+        "title": { "type": "string", "maxLength": 255 },
+        "namespace": { "type": "number" },
+        "wikitext": { "type": "string", "maxLength": 500000 },
+        "summary": { "type": "string", "maxLength": 2000 },
+        "latestRevisionId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "categories": { "type": "array" },
+        "views": { "type": "number" },
+        "isProtected": { "type": "boolean" }
+      },
+      "required": ["slug", "title", "namespace", "wikitext", "latestRevisionId", "createdAt", "updatedAt"]
+    },
+    "Revision": {
+      "title": "Revision",
+      "description": "Immutable MediaWiki revision record with SHA-256 cryptographic verification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "articleSlug": { "type": "string", "maxLength": 255 },
+        "parentRevisionId": { "type": "string", "maxLength": 128 },
+        "wikitext": { "type": "string", "maxLength": 500000 },
+        "comment": { "type": "string", "maxLength": 1000 },
+        "author": { "type": "object" },
+        "timestamp": { "type": "string" },
+        "sha256": { "type": "string", "maxLength": 64 },
+        "byteSize": { "type": "number" },
+        "isMinor": { "type": "boolean" }
+      },
+      "required": ["id", "articleSlug", "wikitext", "author", "timestamp", "sha256", "byteSize"]
+    },
+    "WikiEvent": {
+      "title": "WikiEvent",
+      "description": "EventStreams recentchange event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "page_title": { "type": "string", "maxLength": 255 },
+        "page_namespace": { "type": "number" },
+        "rev_id": { "type": "string", "maxLength": 128 },
+        "rev_timestamp": { "type": "string" },
+        "rev_sha1": { "type": "string", "maxLength": 64 },
+        "rev_minor_edit": { "type": "boolean" },
+        "rev_len": { "type": "number" },
+        "user_text": { "type": "string", "maxLength": 128 },
+        "comment": { "type": "string", "maxLength": 1000 },
+        "type": { "type": "string" },
+        "database": { "type": "string" }
+      },
+      "required": ["id", "page_title", "rev_id", "rev_timestamp", "user_text", "type"]
+    },
+    "SyncStatus": {
+      "title": "SyncStatus",
+      "description": "Status and timestamp of MediaWiki Cloud Synchronization",
+      "type": "object",
+      "properties": {
+        "lastSyncedAt": { "type": "string" },
+        "articlesCount": { "type": "number" },
+        "revisionsCount": { "type": "number" },
+        "eventsCount": { "type": "number" },
+        "syncedBy": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["lastSyncedAt", "articlesCount", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "MediaWiki user profile synchronized with Firebase Auth",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 255 },
+        "email": { "type": "string", "maxLength": 255 },
+        "photoURL": { "type": "string", "maxLength": 1000 },
+        "role": { "type": "string", "enum": ["sysop", "bureaucrat", "moderator", "editor", "reader", "bot"] },
+        "editCount": { "type": "number" },
+        "isBanned": { "type": "boolean" },
+        "banReason": { "type": "string", "maxLength": 500 },
+        "bannedAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "role"]
+    },
+    "WikiMetadata": {
+      "title": "WikiMetadata",
+      "description": "General system statistics and overview information for MediaWiki",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "totalArticles": { "type": "number" },
+        "totalRevisions": { "type": "number" },
+        "totalEdits": { "type": "number" },
+        "activeUsers": { "type": "number" },
+        "engineVersion": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "totalArticles", "updatedAt"]
+    },
+    "SystemLog": {
+      "title": "SystemLog",
+      "description": "Real-time system and microservice log entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"] },
+        "service": { "type": "string", "maxLength": 64 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "timestamp": { "type": "string" },
+        "traceId": { "type": "string", "maxLength": 64 },
+        "details": { "type": "object" }
+      },
+      "required": ["id", "level", "service", "message", "timestamp"]
+    },
+    "WikiExtension": {
+      "title": "WikiExtension",
+      "description": "System extension and module configuration synchronized between Bureaucrats and Wiki clients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "namePt": { "type": "string", "maxLength": 255 },
+        "version": { "type": "string", "maxLength": 64 },
+        "category": { "type": "string", "enum": ["parser", "ui", "search", "security", "infra", "media"] },
+        "author": { "type": "string", "maxLength": 255 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "enabled": { "type": "boolean" },
+        "type": { "type": "string" },
+        "url": { "type": "string", "maxLength": 500 },
+        "license": { "type": "string", "maxLength": 64 },
+        "hooks": { "type": "array" },
+        "config": { "type": "array" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedByRole": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "enabled", "category"]
+    },
+    "AllowedDomain": {
+      "title": "AllowedDomain",
+      "description": "Permitted external domains managed in Firebase Firestore directly by bureaucrats to control whitelist routing and external navigation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "domain": { "type": "string", "maxLength": 255 },
+        "description": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["allowed", "trusted", "blocked"] },
+        "addedBy": { "type": "string", "maxLength": 128 },
+        "addedByRole": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "domain", "status", "addedBy", "createdAt"]
+    },
+    "ArbitrationCase": {
+      "title": "ArbitrationCase",
+      "description": "Conselho de Arbitragem cases, evidence, votes, and binding rulings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "caseNumber": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 255 },
+        "parties": { "type": "array" },
+        "openedBy": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string" },
+        "description": { "type": "string" },
+        "evidence": { "type": "array" },
+        "votes": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "caseNumber", "title", "status", "createdAt"]
+    },
+    "CheckUserInvestigation": {
+      "title": "CheckUserInvestigation",
+      "description": "CheckUser sockpuppet audit cases, telemetry, and network heuristic records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "caseCode": { "type": "string", "maxLength": 64 },
+        "primaryUser": { "type": "string", "maxLength": 128 },
+        "suspectedAccounts": { "type": "array" },
+        "status": { "type": "string" },
+        "confidenceScore": { "type": "number" },
+        "findings": { "type": "string" },
+        "requestedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "caseCode", "primaryUser", "status", "createdAt"]
+    },
+    "UnblockRequest": {
+      "title": "UnblockRequest",
+      "description": "Unblock appeals submitted by blocked editors for administrative review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 128 },
+        "blockedBy": { "type": "string", "maxLength": 128 },
+        "blockReason": { "type": "string" },
+        "blockDuration": { "type": "string" },
+        "userAppeal": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "status", "createdAt"]
+    },
+    "DataRemovalRequest": {
+      "title": "DataRemovalRequest",
+      "description": "Right to be forgotten and LGPD / Oversight data removal requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "protocolNumber": { "type": "string", "maxLength": 64 },
+        "requesterNameOrAlias": { "type": "string", "maxLength": 128 },
+        "legalBasis": { "type": "string" },
+        "targetSlug": { "type": "string", "maxLength": 255 },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "protocolNumber", "status", "createdAt"]
+    },
+    "EmergencyContactReport": {
+      "title": "EmergencyContactReport",
+      "description": "24/7 emergency incident dispatch records and operational tickets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "protocol": { "type": "string", "maxLength": 64 },
+        "category": { "type": "string" },
+        "title": { "type": "string", "maxLength": 255 },
+        "description": { "type": "string" },
+        "urgency": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "protocol", "status", "createdAt"]
+    },
+    "ComplianceRecord": {
+      "title": "ComplianceRecord",
+      "description": "LGPD and Marco Civil compliance audit logs, checklists, and DPIA metrics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "dpoEmail": { "type": "string" },
+        "details": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "type", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/articles/{articleSlug}": {
+      "schema": { "$ref": "#/entities/Article" },
+      "description": "MediaWiki articles indexed by canonical slug"
+    },
+    "/revisions/{revisionId}": {
+      "schema": { "$ref": "#/entities/Revision" },
+      "description": "MediaWiki immutable revision history documents"
+    },
+    "/wiki_events/{eventId}": {
+      "schema": { "$ref": "#/entities/WikiEvent" },
+      "description": "EventStreams recentchange stream events"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "MediaWiki user profiles and RBAC role assignments"
+    },
+    "/wiki_metadata/{metaId}": {
+      "schema": { "$ref": "#/entities/WikiMetadata" },
+      "description": "General MediaWiki platform telemetry, statistics, and metadata"
+    },
+    "/sync_status/{statusId}": {
+      "schema": { "$ref": "#/entities/SyncStatus" },
+      "description": "Real-time sync status between Node.js microservices and Firebase Firestore"
+    },
+    "/system_logs/{logId}": {
+      "schema": { "$ref": "#/entities/SystemLog" },
+      "description": "Real-time system and microservice logs from MediaWiki and Firebase"
+    },
+    "/extensions/{extensionId}": {
+      "schema": { "$ref": "#/entities/WikiExtension" },
+      "description": "System extensions and modules with enabled/disabled state managed by bureaucrats and synchronized with all clients"
+    },
+    "/allowed_domains/{domainId}": {
+      "schema": { "$ref": "#/entities/AllowedDomain" },
+      "description": "Permitted and allowlisted external domains stored directly in Firebase Firestore and managed by bureaucrats"
+    },
+    "/arbitration_cases/{caseId}": {
+      "schema": { "$ref": "#/entities/ArbitrationCase" },
+      "description": "Conselho de Arbitragem cases stored and synchronized in Firebase Firestore"
+    },
+    "/checkuser_investigations/{caseId}": {
+      "schema": { "$ref": "#/entities/CheckUserInvestigation" },
+      "description": "CheckUser sockpuppet investigation cases synchronized in Firebase Firestore"
+    },
+    "/unblock_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/UnblockRequest" },
+      "description": "Unblock appeals queue synchronized in Firebase Firestore"
+    },
+    "/data_removals/{removalId}": {
+      "schema": { "$ref": "#/entities/DataRemovalRequest" },
+      "description": "LGPD Art. 18 and Oversight data removal requests synchronized in Firebase Firestore"
+    },
+    "/emergency_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/EmergencyContactReport" },
+      "description": "Emergency 24/7 incident reports synchronized in Firebase Firestore"
+    },
+    "/compliance_records/{recordId}": {
+      "schema": { "$ref": "#/entities/ComplianceRecord" },
+      "description": "LGPD and Marco Civil technical compliance audit records synchronized in Firebase Firestore"
+    }
+  }
+}
