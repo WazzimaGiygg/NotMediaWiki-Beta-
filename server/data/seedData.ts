@@ -38,6 +38,9 @@ export interface UserSession {
   editCount: number;
   avatar: string;
   email?: string;
+  userTag?: string;
+  discriminator?: string;
+  userPageSlug?: string;
   isBanned?: boolean;
   banReason?: string;
   bannedAt?: string;

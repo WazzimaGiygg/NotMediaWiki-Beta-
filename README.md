@@ -1,257 +1,114 @@
-# NotMediaWiki (Beta)
+# NotMediaWiki
 
-Alternativa de gerenciamento de wiki que exige o mínimo de programação. O projeto reproduz, em uma stack moderna (React + Node.js + Firebase), os conceitos centrais do MediaWiki: artigos em wikitext, histórico de revisões imutável, papéis de usuário, fluxo de mudanças recentes e ferramentas de governança da comunidade.
-
-- **Site publicado:** https://not-media-wiki-beta.vercel.app
-- **Status:** Beta — em desenvolvimento ativo. Veja a seção [Segurança](#segurança) antes de colocar em produção.
+> Plataforma de base de conhecimento colaborativa e arquitetura de microsserviços em Node.js / TypeScript, Parsoid AST parser, EventStreams em tempo real e banco de dados Cloud Firestore do Firebase com segurança Zero-Trust ABAC.
 
 ---
 
-## Sumário
+## 🏛️ Arquitetura
 
-1. [Visão geral](#visão-geral)
-2. [Como funciona](#como-funciona)
-3. [Tecnologias](#tecnologias)
-4. [Estrutura do projeto](#estrutura-do-projeto)
-5. [Modelo de dados (Firestore)](#modelo-de-dados-firestore)
-6. [Papéis de usuário](#papéis-de-usuário)
-7. [Instalação e execução local](#instalação-e-execução-local)
-8. [Configuração do Firebase](#configuração-do-firebase)
-9. [Variáveis de ambiente](#variáveis-de-ambiente)
-10. [Deploy na Vercel](#deploy-na-vercel)
-11. [Segurança](#segurança)
-12. [Roteiro (Roadmap)](#roteiro-roadmap)
-13. [Contribuindo](#contribuindo)
-14. [Licença](#licença)
+O **NotMediaWiki** reimplementa as interfaces e serviços essenciais de uma wiki moderna sobre uma stack desacoplada de alto desempenho:
+
+1. **Frontend SPA (React 19 + Vite + Tailwind CSS v4):**
+   - Renderizador Parsoid AST com sanitização HTML anti-XSS (`sanitize-html`).
+   - Editor de wikitexto com numeração de linhas, diff visual (Myers algorithm) e histórico de revisões SHA-256.
+   - Suporte a tema escuro/claro, infoboxes, categorias, TOC hierárquico e notas de rodapé (`<ref>`).
+   - Painéis de governança administrativa (ArbCom, CheckUser, WP:BLP Ethics Council, Ouvidoria LGPD e auditoria de conexões VPN).
+
+2. **Backend API Gateway & Microsserviços (Express 4 + TypeScript):**
+   - `/api/v1/content`: Gerenciamento e renderização de artigos com verificação de autorização e cache em memória.
+   - `/api/v1/revisions`: Ledger imutável de revisões com cálculo determinístico de diffs e reversão de edições (rollback).
+   - `/api/v1/parsoid`: Parser wikitexto para HTML5 semântico com validação Zod e sanitização estrita de tags.
+   - `/api/v1/events`: Broadcast em tempo real de mudanças recentes via Server-Sent Events (SSE) com limitador de conexões simultâneas.
+   - `/api/v1/auth`: CentralAuth RBAC com verificação de Firebase ID Token (JWT) e proteção estrita de papéis administrativos.
+   - `/api/v1/telemetry`: Métricas de requisição, topologia de rede e circuit breakers.
+   - `/api/v1/migration`: Matriz de correspondência arquitetural e testes de conformidade em tempo real.
+
+3. **Banco de Dados & Segurança (Firebase Firestore):**
+   - Regras de segurança em `firestore.rules` seguindo o modelo Zero-Trust / ABAC.
+   - **Nenhuma escrita desprotegida:** Toda operação de escrita exige `request.auth != null`.
+   - **Restrição estrita de administradores:** Apenas os e-mails expressamente designados (`pedrohenriquecardonaperes@gmail.com` e `mafersao1100@gmail.com`) ou usuários com papel verificado (`sysop`, `bureaucrat`, `admin`) podem alterar configurações globais, suspender contas ou mudar papéis de usuários.
+   - Usuários comuns possuem papel fixo de `editor`, com permissão de criação e edição de artigos não protegidos e avaliação de conteúdo.
 
 ---
 
-## Visão geral
+## ⚙️ Variáveis de Ambiente
 
-O NotMediaWiki é uma plataforma colaborativa de base de conhecimento. Ela oferece:
+Crie ou configure as variáveis no seu arquivo `.env` ou nas configurações do seu provedor de nuvem:
 
-- **Artigos** escritos em wikitext, identificados por um *slug* único.
-- **Histórico de revisões** imutável, com hash **SHA-256** de cada versão para verificação de integridade.
-- **Fluxo de eventos** (`wiki_events`) no estilo *recentchange* do MediaWiki.
-- **Contas e papéis** (leitor, editor, moderador, burocrata, sysop, bot).
-- **Extensões** que podem ser ativadas ou desativadas por burocratas.
-- **Lista de domínios permitidos** para controlar links externos.
-- **Módulos de governança** da comunidade: arbitragem, verificação de contas (CheckUser), pedidos de desbloqueio, remoção de dados (LGPD), conselho de ética para biografias de pessoas vivas e contato de emergência.
-- **Recursos de engajamento:** páginas pessoais, checklist diário, pontos mensais e avaliação de artigos.
-- **Painel administrativo** com logs de sistema e status de sincronização.
+| Variável | Descrição | Exemplo |
+|---|---|---|
+| `PORT` | Porta de escuta do servidor Express (padrão: 3000) | `3000` |
+| `NODE_ENV` | Ambiente de execução (`development`, `production`, `test`) | `production` |
+| `APP_URL` | URL canônica onde a aplicação está hospedada (para CORS) | `https://ais-dev-...run.app` |
+| `FIREBASE_PROJECT_ID` | ID do projeto no Firebase / Google Cloud | `wzzm-ce3fc` |
+| `FIRESTORE_DATABASE_ID` | ID do banco Firestore provisionado | `ai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5` |
+| `GEMINI_API_KEY` | Chave de API opcional para recursos de inteligência (somente servidor) | `AIzaSy...` |
 
-## Como funciona
+As credenciais do cliente web são lidas automaticamente a partir de `firebase-applet-config.json`.
 
-A aplicação tem três camadas:
+---
 
-```
-┌───────────────────────────┐
-│  Cliente (React + Vite)   │  Interface do wiki, editor, painéis
-└─────────────┬─────────────┘
-              │ SDK do Firebase (Auth + Firestore)      │ HTTP /api/v1
-              ▼                                         ▼
-┌───────────────────────────┐        ┌─────────────────────────────┐
-│  Firebase                 │        │  Servidor Node.js (Express) │
-│  • Authentication         │◄───────┤  • API Gateway (/api/v1)    │
-│  • Firestore (dados)      │        │  • /health                  │
-│  • Regras de segurança    │        │  • Serve o build do Vite    │
-└───────────────────────────┘        └─────────────────────────────┘
-```
+## 🚀 Instalação e Execução Local
 
-1. **Cliente:** uma SPA em React 19 construída com Vite e estilizada com Tailwind CSS 4. O código wikitext/Markdown e de exemplos é realçado com Prism.js.
-2. **Servidor (`server.ts`):** um servidor Express que
-   - monta o gateway de microserviços em `/api/v1` (código em `server/`);
-   - expõe `GET /health` para verificação de saúde;
-   - devolve JSON 404 para qualquer rota `/api/*` inexistente (nunca cai no HTML da SPA);
-   - em **desenvolvimento**, embute o Vite em modo middleware (hot reload);
-   - em **produção**, serve os arquivos estáticos da pasta `dist/`.
-3. **Firebase:** o Firestore guarda todo o conteúdo e os registros de governança. O Firebase Authentication identifica os usuários. As regras em `firestore.rules` definem quem pode ler e escrever em cada coleção.
+### Pré-requisitos
+- **Node.js:** Versão 20.0.0 ou superior (`node >= 20`)
+- **Gerenciador de pacotes:** `npm` ou `bun`
 
-### Ciclo de vida de uma edição
-
-1. O usuário edita o wikitext de um artigo.
-2. O sistema calcula o **SHA-256** do conteúdo e o tamanho em bytes.
-3. É criado um documento **imutável** em `revisions` (nunca alterado nem apagado).
-4. O artigo em `articles` é atualizado apontando para `latestRevisionId`.
-5. Um evento é anexado em `wiki_events`, alimentando o painel de mudanças recentes.
-
-## Tecnologias
-
-| Camada | Tecnologia |
-| --- | --- |
-| Interface | React 19, Tailwind CSS 4, lucide-react, motion |
-| Build | Vite, TypeScript |
-| Servidor | Node.js, Express 4, tsx |
-| Dados e autenticação | Firebase (Firestore + Authentication) |
-| Realce de código | Prism.js |
-| IA (opcional) | `@google/genai` (Gemini) |
-| Gerenciador de pacotes | Bun (`bun.lock`) |
-| Hospedagem | Vercel (`vercel.json`) |
-
-## Estrutura do projeto
-
-```
-.
-├── server/                    # Gateway de microserviços (rotas /api/v1)
-├── src/                       # Código do cliente React
-├── server.ts                  # Servidor Express (API + Vite/estáticos)
-├── index.html                 # Ponto de entrada da SPA
-├── vite.config.ts             # Configuração do Vite
-├── tsconfig.json              # Configuração do TypeScript
-├── vercel.json                # Configuração de deploy na Vercel
-├── firestore.rules            # Regras de segurança do Firestore
-├── firebase-blueprint.json    # Esquema das entidades e coleções
-├── firebase-applet-config.json# Configuração do app web do Firebase
-├── .env.example               # Modelo das variáveis de ambiente
-├── metadata.json              # Metadados do projeto
-└── package.json               # Dependências e scripts
-```
-
-## Modelo de dados (Firestore)
-
-O esquema completo está em `firebase-blueprint.json`. Resumo das coleções:
-
-| Coleção | Finalidade |
-| --- | --- |
-| `articles` | Artigos (slug, título, namespace, wikitext, categorias, proteção) |
-| `revisions` | Revisões imutáveis com `sha256`, autor, comentário e tamanho |
-| `wiki_events` | Fluxo de mudanças recentes |
-| `users` | Perfis e papéis (RBAC) sincronizados com o Firebase Auth |
-| `wiki_metadata` | Estatísticas gerais da plataforma |
-| `sync_status` | Estado da sincronização entre servidor e Firestore |
-| `system_logs` | Logs de sistema e microserviços |
-| `extensions` | Extensões e módulos ativáveis |
-| `allowed_domains` | Domínios externos permitidos, confiáveis ou bloqueados |
-| `arbitration_cases` | Casos do Conselho de Arbitragem |
-| `checkuser_investigations` | Investigações de contas suspeitas (fantoches) |
-| `unblock_requests` | Pedidos de desbloqueio |
-| `data_removals` | Pedidos de remoção de dados (LGPD, art. 18) |
-| `emergency_reports` | Ocorrências de contato de emergência 24/7 |
-| `compliance_records` | Registros de conformidade (LGPD e Marco Civil) |
-| `user_pages` | Páginas pessoais dos usuários |
-| `vpn_detections` | Auditoria de conexões e detecção de VPN |
-| `blp_ethics_cases` | Conselho de Ética (biografias de pessoas vivas) |
-| `direct_chats` / `messages` | Chat da comunidade |
-| `user_daily_checklists` | Checklist diário |
-| `user_monthly_points` | Pontos mensais acumulados |
-| `article_ratings` | Avaliações de artigos |
-
-## Papéis de usuário
-
-| Papel | Descrição |
-| --- | --- |
-| `reader` | Lê o conteúdo |
-| `editor` | Cria e edita artigos |
-| `moderator` | Modera conteúdo e pedidos da comunidade |
-| `bureaucrat` | Gerencia extensões, domínios permitidos e papéis |
-| `sysop` | Administração completa |
-| `bot` | Contas automatizadas |
-
-> **Primeiro administrador:** depois do primeiro login, abra o Console do Firebase → Firestore → `users/{seu-uid}` e altere o campo `role` para `sysop`. A partir daí, promova os demais usuários pelo próprio wiki.
-
-## Instalação e execução local
-
-**Pré-requisitos:** [Bun](https://bun.sh) (ou Node.js 20+ com npm) e um projeto no [Firebase](https://console.firebase.google.com).
-
+### Passos
 ```bash
-# 1. Clonar o repositório
-git clone https://github.com/WazzimaGiygg/NotMediaWiki-Beta-.git
-cd NotMediaWiki-Beta-
+# 1. Instalar dependências
+npm install
 
-# 2. Instalar dependências
-bun install            # ou: npm install
+# 2. Iniciar servidor de desenvolvimento (Full-stack: Express + Vite Middleware)
+npm run dev
 
-# 3. Criar o arquivo de variáveis de ambiente
-cp .env.example .env   # depois edite com seus valores
+# 3. Executar verificações de tipo (TypeScript)
+npm run lint
 
-# 4. Iniciar em modo desenvolvimento
-bun run dev            # ou: npm run dev
+# 4. Executar suíte de testes automatizados (Vitest + Supertest)
+npm test
+
+# 5. Gerar build de produção para o bundle estático
+npm run build
 ```
-
-Acesse `http://localhost:3000`.
-
-### Scripts disponíveis
-
-| Comando | O que faz |
-| --- | --- |
-| `npm run dev` | Inicia o servidor Express com o Vite embutido (hot reload) |
-| `npm run build` | Gera o build de produção em `dist/` |
-| `npm start` | Inicia o servidor (use `NODE_ENV=production` para servir o `dist/`) |
-| `npm run preview` | Pré-visualiza o build com o Vite |
-| `npm run lint` | Verifica os tipos com `tsc --noEmit` |
-| `npm run clean` | Remove `dist/` e `server.js` |
-
-## Configuração do Firebase
-
-1. Crie um projeto no Console do Firebase.
-2. Ative o **Authentication** (por exemplo, login com Google).
-3. Crie um banco **Firestore** em modo de produção.
-4. Registre um app web e copie a configuração para `firebase-applet-config.json`.
-5. Publique as regras de segurança:
-   ```bash
-   firebase deploy --only firestore:rules
-   ```
-   Ou cole o conteúdo de `firestore.rules` em *Firestore → Regras → Publicar*.
-6. Defina o primeiro `sysop` (veja [Papéis de usuário](#papéis-de-usuário)).
-
-## Variáveis de ambiente
-
-Use o `.env.example` como referência. Valores típicos:
-
-| Variável | Uso |
-| --- | --- |
-| `PORT` | Porta do servidor (padrão `3000`) |
-| `NODE_ENV` | `production` para servir o build estático |
-| `GEMINI_API_KEY` | Chave da API do Gemini, se os recursos de IA estiverem ativos |
-
-> Nunca faça commit do arquivo `.env`. Segredos devem existir **apenas no servidor** e nunca no código do cliente.
-
-## Deploy na Vercel
-
-1. Importe o repositório na [Vercel](https://vercel.com).
-2. Defina as variáveis de ambiente no painel do projeto.
-3. O arquivo `vercel.json` já traz a configuração de roteamento.
-4. Cada `git push` na branch `main` gera um novo deploy.
-
-## Segurança
-
-Este projeto está em **beta**. Antes de abrir o wiki ao público:
-
-- [ ] **Regras do Firestore:** todas as regras de escrita devem exigir `request.auth` e verificar o papel do usuário. Regras com `allow ... if true` em escrita permitem que qualquer pessoa edite ou apague dados.
-- [ ] **Coleções sensíveis privadas:** `direct_chats`, `checkuser_investigations`, `data_removals`, `compliance_records`, `emergency_reports`, `unblock_requests`, `vpn_detections` e e-mails em `users` **não devem** ter leitura pública.
-- [ ] **Validação de campos:** aplicar limites de tamanho e tipos nas regras (o schema do blueprint não é imposto automaticamente).
-- [ ] **Servidor:** adicionar `helmet`, CORS restrito, `express-rate-limit` e verificação do ID token do Firebase nas rotas de escrita.
-- [ ] **Segredos:** nenhuma chave de API no bundle do cliente.
-- [ ] **LGPD:** só declare conformidade depois de proteger os dados pessoais e definir política de privacidade e encarregado (DPO).
-
-Para reportar uma vulnerabilidade, abra uma *issue* privada ou contate o mantenedor diretamente.
-
-## Roteiro (Roadmap)
-
-- [ ] Busca de texto completo (Algolia, Typesense ou Meilisearch)
-- [ ] Parser de wikitext com templates, tabelas e referências
-- [ ] Comparação (*diff*) entre revisões e reversão com um clique
-- [ ] Páginas de discussão, redirecionamentos e mover página
-- [ ] Upload de imagens e arquivos (Firebase Storage)
-- [ ] Renderização no servidor ou pré-renderização para SEO, `sitemap.xml` e `robots.txt`
-- [ ] Filtros antivandalismo e limite de edições para contas novas
-- [ ] Exportação e importação de conteúdo, e backup automático
-- [ ] Testes automatizados e integração contínua (GitHub Actions)
-- [ ] Internacionalização da interface
-
-## Contribuindo
-
-Contribuições são bem-vindas.
-
-1. Faça um *fork* do repositório.
-2. Crie uma branch: `git checkout -b minha-melhoria`.
-3. Rode `npm run lint` antes de enviar.
-4. Faça o commit e abra um *Pull Request* descrevendo a mudança.
-
-## Licença
-
-Defina a licença do projeto adicionando um arquivo `LICENSE` (sugestão: MIT). Enquanto não houver licença, o código não pode ser legalmente reutilizado por terceiros.
 
 ---
 
-Criado por [WazzimaGiygg](https://github.com/WazzimaGiygg).
+## ☁️ Deploy no Vercel
+
+O projeto está configurado com `vercel.json` e a função serverless em `api/index.ts`:
+
+1. No Vercel, o diretório `/api/*` é roteado diretamente para a função serverless Express exportada em `api/index.ts`.
+2. As demais rotas da aplicação frontend SPA são reescritas para `/index.html` em `dist/`.
+3. Para efetuar o deploy:
+```bash
+vercel deploy --prod
+```
+
+---
+
+## 🔒 Regras de Segurança do Firestore
+
+As regras de segurança em `firestore.rules` garantem:
+- **`articles`:** Leitura pública; escrita apenas para usuários autenticados e não banidos com validação de tamanho (máximo de 200.000 caracteres no wikitexto). Artigos com `isProtected: true` só podem ser modificados por moderadores ou administradores. Exclusão restrita a administradores e moderadores.
+- **`revisions` e `wiki_events`:** Registros imutáveis (sem permissão de `update` ou `delete`).
+- **`users`:** Usuários autenticados podem editar seu próprio perfil básico, mas são impedidos de alterar seus próprios campos de `role`, `isBanned` ou `editCount`. Exclusão de usuários restrita a administradores.
+- **Coleções sensíveis (`checkuser_investigations`, `vpn_detections`, `compliance_records`, etc.):** Leitura e escrita restritas a moderadores e administradores. Em `data_removals` e `emergency_reports`, a leitura é restrita apenas ao autor da solicitação e aos administradores.
+- **`direct_chats` e `messages`:** Leitura e escrita restritas estritamente aos participantes da conversa.
+
+---
+
+## 🧪 Testes
+
+A suíte de testes em `tests/` utiliza **Vitest** e **Supertest**:
+```bash
+npm test
+```
+- `tests/gateway.test.ts`: Testa rotas do gateway, rejeição de requisições não autenticadas (401), controle de acesso por papel (403), sanitização XSS de saída e execução dos testes de paridade.
+- `tests/rules.test.ts`: Valida estaticamente as regras do Firestore, garantindo que não existam regras de escrita abertas (`allow ...: if true`) e que as restrições ABAC estejam implementadas.
+
+---
+
+## 📄 Licença
+
+Distribuído sob a licença **Apache 2.0**. Consulte o arquivo [LICENSE](./LICENSE) para obter mais detalhes.

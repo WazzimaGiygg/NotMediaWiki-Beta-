@@ -28,15 +28,32 @@ import {
   saveAllowedDomainToFirestore,
   deleteAllowedDomainFromFirestore,
   subscribeToAllowedDomainsFromFirestore,
+  auth,
 } from './firebase';
 
 const BASE_URL = '/api/v1';
 
 /**
- * Robust fetch helper that guards against HTML responses and JSON syntax errors
+ * Robust fetch helper that guards against HTML responses and JSON syntax errors,
+ * injecting Firebase ID Token when user is signed in.
  */
 async function safeFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type') && init?.method && ['POST', 'PUT', 'PATCH'].includes(init.method)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  // Inject Firebase JWT token if user is signed in
+  if (auth.currentUser && !headers.has('Authorization')) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      headers.set('Authorization', `Bearer ${token}`);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const res = await fetch(url, { ...init, headers });
   const text = await res.text();
   const contentType = res.headers.get('content-type') || '';
 
@@ -363,23 +380,16 @@ export const api = {
   },
 
   async switchUser(userId: string): Promise<UserSession> {
-    try {
-      const data = await safeFetch<{ user: UserSession }>(`${BASE_URL}/auth/switch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      return data.user;
-    } catch {
-      const users = await this.getUsers();
-      return users.find(u => u.id === userId) || {
+    const users = await this.getUsers();
+    return (
+      users.find(u => u.id === userId) || {
         id: userId,
         username: userId,
         role: 'editor',
         editCount: 1,
         avatar: 'U',
-      };
-    }
+      }
+    );
   },
 
   async updateUser(userId: string, data: Partial<UserSession>): Promise<UserSession> {

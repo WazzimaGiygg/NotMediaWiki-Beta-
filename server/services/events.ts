@@ -5,16 +5,26 @@ export class EventStreamService {
   private events: WikiEvent[] = [...INITIAL_EVENTS];
   private clients: Set<Response> = new Set();
   private maxHistory: number = 200;
+  private maxClients: number = 50;
 
   public getHistory(limit: number = 50): WikiEvent[] {
-    return this.events.slice(-limit).reverse();
+    const clamped = Math.max(1, Math.min(limit, 100));
+    return this.events.slice(-clamped).reverse();
   }
 
-  public registerClient(res: Response) {
+  /**
+   * Registers a client response for Server-Sent Events.
+   * Returns false if max simultaneous connections limit is reached.
+   */
+  public registerClient(res: Response): boolean {
+    if (this.clients.size >= this.maxClients) {
+      return false;
+    }
     this.clients.add(res);
     res.on('close', () => {
       this.clients.delete(res);
     });
+    return true;
   }
 
   public publish(event: Omit<WikiEvent, 'id' | 'meta'> & { traceId?: string }): WikiEvent {

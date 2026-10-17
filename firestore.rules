@@ -1,223 +1,268 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default-deny safety net
-    match /{document=**} {
-      allow read, write: if false;
-    }
 
+    // --- Helper Functions ---
     function isValidId(id) {
-      return id is string && id.size() <= 255;
+      return id is string && id.size() > 0 && id.size() <= 255;
     }
 
-    // MediaWiki Articles: Public read (get and list), validated write
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userRole() {
+      return hasUserDoc() && ('role' in getUserData()) ? getUserData().role : 'editor';
+    }
+
+    function isNotBanned() {
+      return isSignedIn() && (!hasUserDoc() || !('isBanned' in getUserData()) || getUserData().isBanned != true);
+    }
+
+    function isSuperAdminEmail() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email in [
+          'pedrohenriquecardonaperes@gmail.com',
+          'pedrohenriquecaronaperes@gmail.com',
+          'mafersao1100@gmail.com'
+        ];
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSuperAdminEmail() ||
+        userRole() in ['sysop', 'bureaucrat', 'admin'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isMod() {
+      return isAdmin() || (isSignedIn() && userRole() in ['moderator']);
+    }
+
+    // --- 1. Articles Collection ---
     match /articles/{articleSlug} {
-      allow get: if isValidId(articleSlug);
-      allow list: if true;
-      allow create, update: if isValidId(articleSlug) &&
-        request.resource.data.slug is string &&
-        request.resource.data.title is string &&
-        request.resource.data.wikitext is string;
-      allow delete: if false;
+      allow get, list: if true;
+
+      allow create: if isSignedIn() && isNotBanned() && isValidId(articleSlug) &&
+        request.resource.data.slug == articleSlug &&
+        request.resource.data.keys().hasOnly(['slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy']) &&
+        request.resource.data.title is string && request.resource.data.title.size() <= 255 &&
+        request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
+        (isAdmin() || isMod() || (!('isProtected' in request.resource.data) || request.resource.data.isProtected == false));
+
+      allow update: if isSignedIn() && isNotBanned() && isValidId(articleSlug) &&
+        request.resource.data.slug == articleSlug &&
+        request.resource.data.slug == resource.data.slug &&
+        request.resource.data.keys().hasOnly(['slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy']) &&
+        request.resource.data.title is string && request.resource.data.title.size() <= 255 &&
+        request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
+        (
+          isAdmin() || isMod() || (
+            (!('isProtected' in resource.data) || resource.data.isProtected != true) &&
+            (!('isProtected' in request.resource.data) || request.resource.data.isProtected == resource.data.isProtected)
+          )
+        );
+
+      allow delete: if isMod() || isAdmin();
     }
 
-    // MediaWiki Revisions: Public read, immutable append
+    // --- 2. Revisions (Immutable audit log) ---
     match /revisions/{revisionId} {
-      allow get: if isValidId(revisionId);
-      allow list: if true;
-      allow create: if isValidId(revisionId) &&
-        request.resource.data.id is string &&
-        request.resource.data.articleSlug is string &&
-        request.resource.data.sha256 is string;
+      allow get, list: if true;
+
+      allow create: if isSignedIn() && isNotBanned() && isValidId(revisionId) &&
+        request.resource.data.id == revisionId &&
+        request.resource.data.keys().hasOnly(['id', 'articleSlug', 'parentRevisionId', 'wikitext', 'comment', 'author', 'timestamp', 'sha256', 'byteSize', 'isMinor']) &&
+        request.resource.data.articleSlug is string && request.resource.data.articleSlug.size() <= 255 &&
+        request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
+        request.resource.data.sha256 is string && request.resource.data.sha256.size() <= 128;
+
       allow update, delete: if false;
     }
 
-    // MediaWiki EventStreams: Public read, append only
+    // --- 3. EventStreams / Wiki Events (Immutable) ---
     match /wiki_events/{eventId} {
-      allow get: if isValidId(eventId);
-      allow list: if true;
-      allow create: if isValidId(eventId) &&
-        request.resource.data.id is string &&
-        request.resource.data.page_title is string;
+      allow get, list: if true;
+
+      allow create: if isSignedIn() && isNotBanned() && isValidId(eventId) &&
+        request.resource.data.id == eventId &&
+        request.resource.data.keys().hasOnly(['id', 'page_title', 'page_namespace', 'rev_id', 'rev_timestamp', 'rev_sha1', 'rev_minor_edit', 'rev_len', 'user_text', 'comment', 'type', 'database']) &&
+        request.resource.data.page_title is string && request.resource.data.page_title.size() <= 255;
+
       allow update, delete: if false;
     }
 
-    // MediaWiki Users: Public read of author profiles, write for profile owner or admin
+    // --- 4. Users Profile & Access Control ---
     match /users/{userId} {
-      allow get: if isValidId(userId);
+      // Public read of non-sensitive public user profile data, private data for owner/admin
+      allow get: if isOwner(userId) || isAdmin() || (!('email' in resource.data) || resource.data.email == '');
       allow list: if true;
-      allow create, update: if isValidId(userId) &&
-        request.resource.data.uid is string &&
-        request.resource.data.displayName is string;
-      allow delete: if isValidId(userId);
+
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly(['uid', 'displayName', 'userTag', 'discriminator', 'userPageSlug', 'role', 'editCount', 'avatar', 'email', 'photoURL', 'provider', 'isGoogleUser', 'isBanned', 'banReason', 'bannedAt', 'lastLoginAt', 'syncedToCloudAt']) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100 &&
+        (isAdmin() || (!('role' in request.resource.data) || request.resource.data.role == 'editor')) &&
+        (isAdmin() || (!('isBanned' in request.resource.data) || request.resource.data.isBanned == false)) &&
+        (isAdmin() || (!('editCount' in request.resource.data) || request.resource.data.editCount <= 1));
+
+      allow update: if isSignedIn() && isValidId(userId) && (
+        isAdmin() || (
+          isOwner(userId) && isNotBanned() &&
+          request.resource.data.uid == resource.data.uid &&
+          // Users cannot elevate their own role, change ban state, or manipulate editCount
+          (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
+          (!('isBanned' in request.resource.data) || request.resource.data.isBanned == resource.data.isBanned) &&
+          (!('editCount' in request.resource.data) || request.resource.data.editCount == resource.data.editCount)
+        )
+      );
+
+      allow delete: if isAdmin();
     }
 
-    // General Wiki Information and Metadata: Public read, write updates
+    // --- 5. System Configuration & Allowed Domains ---
+    match /extensions/{extensionId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /allowed_domains/{domainId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     match /wiki_metadata/{metaId} {
-      allow get: if isValidId(metaId);
-      allow list: if true;
-      allow create, update: if isValidId(metaId) &&
-        request.resource.data.id is string;
-      allow delete: if false;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    // Sync Status: Public read, write status updates
     match /sync_status/{statusId} {
-      allow get: if isValidId(statusId);
-      allow list: if true;
-      allow create, update: if isValidId(statusId) &&
-        request.resource.data.status is string;
-      allow delete: if false;
+      allow get, list: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
-    // System and Microservices Logs: Public read for admin dashboard, append allowed
     match /system_logs/{logId} {
-      allow get: if isValidId(logId);
-      allow list: if true;
-      allow create: if isValidId(logId) &&
+      allow get, list: if isMod() || isAdmin();
+      allow create: if isSignedIn() && isValidId(logId) &&
         request.resource.data.id is string &&
         request.resource.data.level is string &&
-        request.resource.data.message is string;
-      allow update, delete: if false;
+        request.resource.data.message is string &&
+        request.resource.data.message.size() <= 2000;
+      allow update, delete: if isAdmin();
     }
 
-    // System Extensions: Public read, creation and updates for extensions configuration
-    match /extensions/{extensionId} {
-      allow get: if isValidId(extensionId);
-      allow list: if true;
-      allow create, update: if isValidId(extensionId) &&
-        request.resource.data.id is string &&
-        request.resource.data.name is string &&
-        request.resource.data.enabled is bool;
-      allow delete: if isValidId(extensionId);
-    }
-
-    // Allowed Domains Whitelist: Managed directly in Firebase by Bureaucrats
-    match /allowed_domains/{domainId} {
-      allow get: if isValidId(domainId);
-      allow list: if true;
-      allow create, update: if isValidId(domainId) &&
-        request.resource.data.id is string &&
-        request.resource.data.domain is string &&
-        request.resource.data.domain.size() <= 255;
-      allow delete: if isValidId(domainId);
-    }
-
-    // Conselho de Arbitragem (ArbCom): Sincronizado no Firestore
-    match /arbitration_cases/{caseId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(caseId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(caseId);
-    }
-
-    // Verificação de Contas (CheckUser & Fantoches): Sincronizado no Firestore
+    // --- 6. Sensitive Administration & Legal Governance Collections ---
     match /checkuser_investigations/{caseId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(caseId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(caseId);
+      allow get, list: if isMod() || isAdmin();
+      allow create, update, delete: if isMod() || isAdmin();
     }
 
-    // Avaliação de Desbloqueio: Sincronizado no Firestore
-    match /unblock_requests/{requestId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(requestId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(requestId);
+    match /vpn_detections/{detectionId} {
+      allow get, list: if isMod() || isAdmin();
+      allow create: if isSignedIn() && isValidId(detectionId);
+      allow update, delete: if isMod() || isAdmin();
     }
 
-    // Pedido de Remoção de Dados (Oversight / LGPD Art. 18): Sincronizado no Firestore
-    match /data_removals/{removalId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(removalId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(removalId);
-    }
-
-    // Contato de Emergência 24/7: Sincronizado no Firestore
-    match /emergency_reports/{reportId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(reportId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(reportId);
-    }
-
-    // Conformidade LGPD e Marco Civil: Sincronizado no Firestore
     match /compliance_records/{recordId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(recordId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(recordId);
+      allow get, list: if isMod() || isAdmin();
+      allow create, update, delete: if isMod() || isAdmin();
     }
 
-    // Páginas Pessoais de Usuários (com tags únicas e prevenção de duplicidades)
+    match /arbitration_cases/{caseId} {
+      allow get, list: if isMod() || isAdmin() || (isSignedIn() && resource.data.requesterId == request.auth.uid);
+      allow create: if isSignedIn() && isNotBanned() && isValidId(caseId) &&
+        request.resource.data.requesterId == request.auth.uid;
+      allow update, delete: if isMod() || isAdmin();
+    }
+
+    match /blp_ethics_cases/{caseId} {
+      allow get, list: if isMod() || isAdmin() || (isSignedIn() && resource.data.reporterId == request.auth.uid);
+      allow create: if isSignedIn() && isNotBanned() && isValidId(caseId) &&
+        request.resource.data.reporterId == request.auth.uid;
+      allow update, delete: if isMod() || isAdmin();
+    }
+
+    // LGPD Art. 18: Personal data removal requests
+    match /data_removals/{removalId} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(removalId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Emergency Contact 24/7
+    match /emergency_reports/{reportId} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(reportId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Unblock Requests
+    match /unblock_requests/{requestId} {
+      allow get, list: if isMod() || isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(requestId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isMod() || isAdmin();
+    }
+
+    // --- 7. User Personal Pages & Discussions ---
     match /user_pages/{pageId} {
       allow get, list: if true;
-      allow create, update: if isValidId(pageId) &&
-        request.resource.data.id is string &&
-        request.resource.data.userId is string;
-      allow delete: if isValidId(pageId);
+      allow create, update: if isAdmin() || (isSignedIn() && isNotBanned() && isValidId(pageId) && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // Verificador de VPN & Auditoria de Conexão
-    match /vpn_detections/{detectionId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(detectionId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(detectionId);
-    }
-
-    // Conselho de Ética: Artigos de Pessoas Vivas e Derivados (WP:BLP)
-    match /blp_ethics_cases/{caseId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(caseId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(caseId);
-    }
-
-    // Chat Comunitário em Tempo Real
+    // --- 8. Direct Chats & Real-Time Messages (Strict Participant Isolation) ---
     match /direct_chats/{chatId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(chatId) &&
-        request.resource.data.id is string;
-      allow delete: if isValidId(chatId);
+      allow get: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow create: if isSignedIn() && isNotBanned() && isValidId(chatId) &&
+        request.auth.uid in request.resource.data.participants;
+      allow update: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.participants);
 
       match /messages/{messageId} {
-        allow get, list: if true;
-        allow create, update: if isValidId(messageId) &&
-          request.resource.data.id is string;
-        allow delete: if isValidId(messageId);
+        allow get, list: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/direct_chats/$(chatId)).data.participants ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && isNotBanned() && isValidId(messageId) &&
+          request.resource.data.userId == request.auth.uid &&
+          request.auth.uid in get(/databases/$(database)/documents/direct_chats/$(chatId)).data.participants;
+        allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       }
     }
 
-    // 3.05.3.af & 3.05.8.b - Checklist Diário de Usuários
+    // --- 9. Gamification, Checklists & Ratings ---
     match /user_daily_checklists/{checklistId} {
       allow get, list: if true;
-      allow create, update: if isValidId(checklistId) &&
-        request.resource.data.id is string &&
-        request.resource.data.userId is string;
-      allow delete: if isValidId(checklistId);
+      allow create, update: if isAdmin() || (isSignedIn() && isValidId(checklistId) && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
-    // 3.05.8.b - Pontos Mensais Acumulados
     match /user_monthly_points/{ledgerId} {
       allow get, list: if true;
-      allow create, update: if isValidId(ledgerId) &&
-        request.resource.data.id is string &&
-        request.resource.data.userId is string;
-      allow delete: if isValidId(ledgerId);
+      allow create, update: if isAdmin() || (isSignedIn() && isValidId(ledgerId) && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
-    // 3.05.8.b.c - Avaliações de Artigos por Usuários
     match /article_ratings/{ratingId} {
       allow get, list: if true;
-      allow create, update: if isValidId(ratingId) &&
-        request.resource.data.id is string &&
-        request.resource.data.articleSlug is string;
-      allow delete: if isValidId(ratingId);
+      allow create: if isSignedIn() && isNotBanned() && isValidId(ratingId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
   }
 }
-
-

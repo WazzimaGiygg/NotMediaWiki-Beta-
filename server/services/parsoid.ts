@@ -1,3 +1,22 @@
+import sanitizeHtml from 'sanitize-html';
+
+export const PARSOID_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'a', 'span', 'div', 'b', 'i', 'strong', 'em', 'strike', 'code', 'pre',
+    'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    'blockquote', 'cite', 'sub', 'sup', 'br', 'hr', 'img', 'section',
+  ],
+  allowedAttributes: {
+    '*': ['class', 'id', 'title', 'data-*'],
+    a: ['href', 'name', 'target', 'rel'],
+    img: ['src', 'alt', 'width', 'height'],
+    td: ['colspan', 'rowspan'],
+    th: ['colspan', 'rowspan', 'scope'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+};
+
 export interface TocItem {
   id: string;
   level: number;
@@ -312,8 +331,10 @@ export class ParsoidService {
 
     const parseTimeMs = Math.round((performance.now() - startTime) * 100) / 100;
 
+    const sanitizedHtml = sanitizeHtml(finalHtml, PARSOID_SANITIZE_OPTIONS);
+
     return {
-      html: finalHtml,
+      html: sanitizedHtml,
       toc,
       categories,
       internalLinks,

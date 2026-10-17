@@ -1,31 +1,14 @@
-import express from 'express';
 import { createServer as createViteServer } from 'vite';
+import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { gatewayRouter } from './server/gateway';
+import app from './server/app';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function bootstrap() {
-  const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-
-  app.use(express.json({ limit: '10mb' }));
-
-  // Mount MediaWiki Microservices API Gateway
-  app.use('/api/v1', gatewayRouter);
-
-  // Health check endpoint
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'healthy', platform: 'MediaWiki-Node-Microservices', timestamp: new Date().toISOString() });
-  });
-
-  // Explicit JSON 404 for any unhandled /api/* routes so it NEVER falls through to HTML SPA
-  app.all('/api/*', (req, res) => {
-    res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
-  });
-
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
@@ -42,11 +25,11 @@ async function bootstrap() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[MediaWiki-Micro] Node.js Microservices Server active on http://0.0.0.0:${PORT}`);
+    console.log(`[NotMediaWiki] Node.js Microservices Server ativo em http://0.0.0.0:${PORT}`);
   });
 }
 
 bootstrap().catch(err => {
-  console.error('Fatal server startup error:', err);
+  console.error('Erro fatal no bootstrap do servidor:', err);
   process.exit(1);
 });

@@ -145,13 +145,18 @@ export async function loginWithGoogle(): Promise<UserSession> {
     let discriminator = '';
     let userPageSlug = '';
 
-    const isBureaucrat = fbUser.email === 'mafersao1100@gmail.com' || fbUser.email === 'pedrohenriquecardonaperes@gmail.com';
+    const userEmailLower = (fbUser.email || '').toLowerCase().trim();
+    const isBureaucrat =
+      userEmailLower === 'mafersao1100@gmail.com' ||
+      userEmailLower === 'pedrohenriquecardonaperes@gmail.com' ||
+      userEmailLower === 'pedrohenriquecaronaperes@gmail.com';
 
     try {
       const existingSnap = await getDoc(userRef);
       if (existingSnap.exists()) {
         const existingData = existingSnap.data();
-        role = isBureaucrat ? 'bureaucrat' : ((existingData.role as UserRole) || 'editor');
+        // Somente administradores determinados pelo Google recebem o cargo de burocrata/admin
+        role = isBureaucrat ? 'bureaucrat' : 'editor';
         editCount = existingData.editCount || 1;
         isBanned = !!existingData.isBanned;
         banReason = existingData.banReason || '';
