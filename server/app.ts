@@ -7,8 +7,9 @@ import { gatewayRouter } from './gateway';
 export function createExpressApp() {
   const app = express();
 
-  // 1. Disable x-powered-by header
+  // 1. Disable x-powered-by header & trust reverse proxies (Cloud Run, Vercel)
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
 
   // 2. Security Headers via Helmet
   app.use(
@@ -46,13 +47,18 @@ export function createExpressApp() {
     })
   );
 
-  // 4. Rate Limiting: 200 requests per 15 minutes window
+  // 4. Rate Limiting: 300 requests per 15 minutes window (configured for reverse proxies)
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 300,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Muitas requisições enviadas. Tente novamente mais tarde.' },
+    validate: {
+      xForwardedForHeader: false,
+      forwardedHeader: false,
+      default: true,
+    },
   });
   app.use('/api/', apiLimiter);
 
