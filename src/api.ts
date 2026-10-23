@@ -295,13 +295,34 @@ export const api = {
       }));
   },
 
-  async suggest(prefix: string): Promise<Array<{ title: string; slug: string }>> {
+  async suggest(prefix: string): Promise<Array<{ title: string; slug: string; snippet?: string; namespace?: number; categories?: string[] }>> {
     const articles = await fetchArticlesFromFirestore();
-    const lower = prefix.toLowerCase();
-    return articles
-      .filter(a => a.title.toLowerCase().startsWith(lower) || a.slug.toLowerCase().startsWith(lower))
-      .slice(0, 8)
-      .map(a => ({ title: a.title, slug: a.slug }));
+    const lower = prefix.toLowerCase().trim();
+    if (!lower) return [];
+
+    const scored = articles
+      .map(a => {
+        const titleLower = a.title.toLowerCase();
+        const slugLower = a.slug.toLowerCase();
+        let score = 0;
+        if (titleLower === lower || slugLower === lower) score = 100;
+        else if (titleLower.startsWith(lower) || slugLower.startsWith(lower)) score = 50;
+        else if (titleLower.includes(lower) || slugLower.includes(lower)) score = 25;
+        else if (a.wikitext && a.wikitext.toLowerCase().includes(lower)) score = 10;
+        return {
+          title: a.title,
+          slug: a.slug,
+          snippet: a.summary || (a.wikitext ? a.wikitext.replace(/[\[\]{}'#*]/g, '').substring(0, 90).trim() + '...' : ''),
+          namespace: a.namespace,
+          categories: a.categories || [],
+          score,
+        };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+
+    return scored;
   },
 
   // ---------------------------------------------------------------------------

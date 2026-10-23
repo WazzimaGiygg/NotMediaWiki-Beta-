@@ -24,6 +24,9 @@ import {
   AlertTriangle,
   X,
   Award,
+  FileText,
+  CornerDownLeft,
+  Loader2,
 } from 'lucide-react';
 import { UserSession, VpnDetectionLog } from '../types';
 import { api } from '../api';
@@ -74,12 +77,15 @@ export const Header: React.FC<HeaderProps> = ({
   const [internalProgress, setInternalProgress] = useState<number>(0);
   const activeProgress = readingProgress !== undefined ? readingProgress : internalProgress;
   const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<Array<{ title: string; slug: string }>>([]);
+  const [suggestions, setSuggestions] = useState<Array<{ title: string; slug: string; snippet?: string; namespace?: number; categories?: string[]; score?: number }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleUserEmail, setGoogleUserEmail] = useState<string | null>(null);
   const [monthlyPoints, setMonthlyPoints] = useState<number>(0);
   const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Subscribe to user monthly points for live counter in header
   useEffect(() => {
@@ -142,15 +148,51 @@ export const Header: React.FC<HeaderProps> = ({
     return () => unsubscribe();
   }, []);
 
+  // Global keyboard shortcut: Ctrl+K / Cmd+K or / to focus search
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+        setShowSuggestions(true);
+      }
+      if (
+        e.key === '/' &&
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA' &&
+        !(document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setShowSuggestions(true);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSuggestions([]);
+      setIsSearching(false);
+      setSelectedIndex(-1);
       return;
     }
+    setIsSearching(true);
     const timer = setTimeout(() => {
       api.suggest(searchQuery)
-        .then(res => setSuggestions(res))
-        .catch(() => setSuggestions([]));
+        .then(res => {
+          setSuggestions(res);
+          setSelectedIndex(-1);
+        })
+        .catch(() => {
+          setSuggestions([]);
+          setSelectedIndex(-1);
+        })
+        .finally(() => {
+          setIsSearching(false);
+        });
     }, 150);
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -159,6 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
     function handleClickOutside(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
+        setSelectedIndex(-1);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -261,16 +304,90 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    const parts = text.split(regex);
+    return parts.map((part, i) =>
+      regex.test(part) ? (
+        <span key={i} className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/70 px-0.5 rounded">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+
+  const getNamespaceBadge = (ns?: number) => {
+    switch (ns) {
+      case 0:
+        return 'Artigo';
+      case 1:
+        return 'Discussão';
+      case 2:
+        return 'Usuário';
+      case 4:
+        return 'Projeto';
+      case 6:
+        return 'Ficheiro';
+      case 10:
+        return 'Predefinição';
+      case 14:
+        return 'Categoria';
+      default:
+        return 'Página';
+    }
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      setShowSuggestions(true);
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        e.preventDefault();
+        const chosen = suggestions[selectedIndex];
+        onNavigateArticle(chosen.slug);
+        setSearchQuery('');
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowSuggestions(false);
+      setSelectedIndex(-1);
+      inputRef.current?.blur();
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setShowSuggestions(false);
-    const exact = suggestions.find(s => s.title.toLowerCase() === searchQuery.toLowerCase());
+    if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+      onNavigateArticle(suggestions[selectedIndex].slug);
+      setSearchQuery('');
+      setSelectedIndex(-1);
+      return;
+    }
+    const exact = suggestions.find(s => s.title.toLowerCase() === searchQuery.toLowerCase().trim());
     if (exact) {
       onNavigateArticle(exact.slug);
+      setSearchQuery('');
     } else {
       onOpenSearch(searchQuery);
     }
+    setSelectedIndex(-1);
   };
 
   const handleGoogleLogin = async () => {
@@ -406,6 +523,7 @@ export const Header: React.FC<HeaderProps> = ({
           <form onSubmit={handleSearchSubmit} className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
+              ref={inputRef}
               type="text"
               value={searchQuery}
               onChange={e => {
@@ -413,42 +531,134 @@ export const Header: React.FC<HeaderProps> = ({
                 setShowSuggestions(true);
               }}
               onFocus={() => setShowSuggestions(true)}
-              placeholder="Pesquisar no NotMediaWiki..."
-              className="w-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100/80 dark:hover:bg-slate-750 focus:bg-white dark:focus:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 pl-9 pr-4 py-1.5 rounded border border-slate-200 dark:border-slate-700 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 font-sans"
+              onKeyDown={handleInputKeyDown}
+              placeholder="Pesquisar artigos no NotMediaWiki..."
+              className="w-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100/80 dark:hover:bg-slate-750 focus:bg-white dark:focus:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 pl-9 pr-14 py-1.5 rounded border border-slate-200 dark:border-slate-700 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 font-sans"
             />
+            {isSearching ? (
+              <Loader2 className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 animate-spin" />
+            ) : searchQuery ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSuggestions([]);
+                  setSelectedIndex(-1);
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                title="Limpar pesquisa"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 pointer-events-none select-none">
+                <kbd className="text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-700 px-1 py-0.5 rounded leading-none">
+                  Ctrl
+                </kbd>
+                <kbd className="text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-700 px-1 py-0.5 rounded leading-none">
+                  K
+                </kbd>
+              </div>
+            )}
           </form>
 
           {/* Autocomplete Dropdown */}
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded shadow-lg py-1.5 z-50">
-              <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                CirrusSearch Prefix Suggestions
+          {showSuggestions && searchQuery.trim().length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-1.5 z-50 overflow-hidden backdrop-blur-md">
+              <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span>Resultados da Busca Rápida</span>
+                {isSearching ? (
+                  <span className="flex items-center gap-1 text-blue-500 font-normal normal-case">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Pesquisando...
+                  </span>
+                ) : (
+                  <span>{suggestions.length} resultado{suggestions.length !== 1 ? 's' : ''}</span>
+                )}
               </div>
-              {suggestions.map(s => (
+
+              {suggestions.length > 0 ? (
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {suggestions.map((s, idx) => {
+                    const isSelected = idx === selectedIndex;
+                    return (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        onClick={() => {
+                          onNavigateArticle(s.slug);
+                          setSearchQuery('');
+                          setShowSuggestions(false);
+                          setSelectedIndex(-1);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors flex flex-col gap-0.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-100 border-l-2 border-blue-600 pl-2.5'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-800 dark:text-slate-200 border-l-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
+                            <span className="font-medium truncate">{highlightMatch(s.title, searchQuery)}</span>
+                            <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shrink-0">
+                              {getNamespaceBadge(s.namespace)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`text-[11px] font-mono ${isSelected ? 'text-blue-600 dark:text-blue-300' : 'text-slate-400'}`}>
+                              /wiki/{s.slug}
+                            </span>
+                            {isSelected && (
+                              <CornerDownLeft className="w-3 h-3 text-blue-600 dark:text-blue-400 animate-pulse" />
+                            )}
+                          </div>
+                        </div>
+                        {s.snippet && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 pl-5">
+                            {s.snippet}
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : !isSearching ? (
+                <div className="px-4 py-5 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    Nenhum artigo encontrado com o título &ldquo;<span className="font-semibold text-slate-700 dark:text-slate-300">{searchQuery}</span>&rdquo;
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSuggestions(false);
+                      onOpenNewArticle();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Criar página &ldquo;{searchQuery}&rdquo;
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-3 py-2 flex items-center justify-between text-xs">
                 <button
-                  key={s.slug}
+                  type="button"
                   onClick={() => {
-                    onNavigateArticle(s.slug);
-                    setSearchQuery('');
+                    onOpenSearch(searchQuery);
                     setShowSuggestions(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm text-slate-800 dark:text-slate-200 hover:bg-blue-50/70 dark:hover:bg-slate-800 hover:text-blue-700 dark:hover:text-blue-400 flex items-center justify-between group transition-colors"
+                  className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <span className="font-medium">{s.title}</span>
-                  <span className="text-xs text-slate-400 font-mono group-hover:text-blue-500">
-                    /wiki/{s.slug}
-                  </span>
+                  <span>Buscar em todo o texto completo</span>
+                  <span>→</span>
                 </button>
-              ))}
-              <button
-                onClick={() => {
-                  onOpenSearch(searchQuery);
-                  setShowSuggestions(false);
-                }}
-                className="w-full text-left px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-t border-slate-100 dark:border-slate-800"
-              >
-                Search all pages containing &ldquo;{searchQuery}&rdquo; →
-              </button>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">
+                  <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">↑↓</kbd> navegar <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Enter</kbd> abrir <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Esc</kbd> fechar
+                </span>
+              </div>
             </div>
           )}
         </div>
