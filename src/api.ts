@@ -330,39 +330,40 @@ export const api = {
     }
   },
 
-  async getCurrentUser(): Promise<UserSession> {
-    try {
-      const data = await safeFetch<{ user: UserSession }>(`${BASE_URL}/auth/me`);
-      if (data.user && !data.user.id.startsWith('usr-')) {
-        return data.user;
+  async getCurrentUser(): Promise<UserSession | null> {
+    if (auth.currentUser) {
+      try {
+        const cloudUsers = await fetchUsersFromFirestore();
+        const found = cloudUsers.find(u => u.id === auth.currentUser?.uid);
+        if (found) {
+          return found;
+        }
+      } catch (e) {
+        console.warn('Notice: Error resolving user from Firestore:', e);
       }
-    } catch {
-      // Fallback to Firestore registered accounts
+
+      const email = auth.currentUser.email || '';
+      const emailLower = email.toLowerCase().trim();
+      const isBureaucrat =
+        emailLower === 'mafersao1100@gmail.com' ||
+        emailLower === 'pedrohenriquecardonaperes@gmail.com' ||
+        emailLower === 'pedrohenriquecaronaperes@gmail.com';
+      const username = auth.currentUser.displayName || email.split('@')[0] || 'Wikipedian';
+
+      return {
+        id: auth.currentUser.uid,
+        username,
+        role: isBureaucrat ? 'bureaucrat' : 'editor',
+        editCount: 1,
+        avatar: username.substring(0, 2).toUpperCase(),
+        email: email || undefined,
+        isGoogleUser: true,
+        photoURL: auth.currentUser.photoURL || undefined,
+        provider: 'google.com',
+      };
     }
 
-    try {
-      const cloudUsers = await fetchUsersFromFirestore();
-      const registeredUser =
-        cloudUsers.find(u => u.email === 'mafersao1100@gmail.com') ||
-        cloudUsers.find(u => u.email === 'pedrohenriquecardonaperes@gmail.com') ||
-        cloudUsers[0];
-      if (registeredUser) {
-        return registeredUser;
-      }
-    } catch (e) {
-      console.warn('Notice: Error resolving user from Firestore:', e);
-    }
-
-    return {
-      id: 'mafersao1100',
-      username: 'Mafersao',
-      role: 'bureaucrat',
-      editCount: 5,
-      avatar: 'MA',
-      email: 'mafersao1100@gmail.com',
-      isGoogleUser: true,
-      provider: 'google.com',
-    };
+    return null;
   },
 
   async deleteUser(userId: string): Promise<boolean> {

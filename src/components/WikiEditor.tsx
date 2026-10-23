@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles } from 'lucide-react';
 import { Article, UserSession } from '../types';
 import { api } from '../api';
-import { syncMediaWikiToFirestore, recordDailyChecklistAction } from '../firebase';
+import { syncMediaWikiToFirestore, recordDailyChecklistAction, loginWithGoogle, auth } from '../firebase';
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
 
 interface WikiEditorProps {
@@ -105,6 +105,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     setSaving(true);
 
     try {
+      let activeUser = currentUser;
+      if (!auth.currentUser) {
+        setErrorMessage('Para salvar alterações ou criar artigos, conecte-se com sua conta Google...');
+        activeUser = await loginWithGoogle();
+      }
+
       const cleanSlug = title.trim().replace(/\s+/g, '_');
       const res = await api.saveArticle({
         slug: cleanSlug,
@@ -112,12 +118,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         wikitext,
         comment: summary.trim() || 'Updated wikitext via Node.js Parsoid editor',
         isMinor,
-        authorUser: currentUser,
+        authorUser: activeUser,
       });
 
       // 3.05.8.b.b: Conceder 0.20 ponto diário por contribuição
-      if (currentUser) {
-        recordDailyChecklistAction(currentUser.id, currentUser.username, 'contribution', {
+      if (activeUser) {
+        recordDailyChecklistAction(activeUser.id, activeUser.username, 'contribution', {
           articleSlug: cleanSlug,
         }).catch(console.warn);
       }
@@ -210,6 +216,31 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {!currentUser && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs rounded-lg flex items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span>
+              Você está editando como visitante. Para publicar alterações ou criar novos artigos no NotMediaWiki, autentique-se com sua conta Google.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setErrorMessage(null);
+                await loginWithGoogle();
+              } catch (err: any) {
+                setErrorMessage('Falha ao autenticar com Google: ' + err.message);
+              }
+            }}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium shrink-0 cursor-pointer transition-colors shadow-2xs"
+          >
+            Fazer Login com Google
+          </button>
         </div>
       )}
 
@@ -371,7 +402,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
           <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs text-slate-500">
-              Author: <span className="font-semibold text-slate-800">{currentUser?.username}</span> · Role: <span className="font-mono text-slate-700">{currentUser?.role}</span>
+              Autor: <span className="font-semibold text-slate-800 dark:text-slate-200">{currentUser?.username || 'Visitante (autentique-se com Google para salvar)'}</span> · Papel: <span className="font-mono text-slate-700 dark:text-slate-300">{currentUser?.role || 'editor'}</span>
             </div>
 
             <div className="flex items-center gap-2">

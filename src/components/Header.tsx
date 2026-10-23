@@ -44,7 +44,7 @@ interface HeaderProps {
   currentView: string;
   onSelectView: (view: string) => void;
   currentUser: UserSession | null;
-  onUserChanged: (user: UserSession) => void;
+  onUserChanged: (user: UserSession | null) => void;
   onNavigateArticle: (slug: string) => void;
   onOpenSearch: (query: string) => void;
   onOpenNewArticle: () => void;
@@ -314,12 +314,23 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const isSuperAdminEmail =
+    googleUserEmail &&
+    ['pedrohenriquecardonaperes@gmail.com', 'pedrohenriquecaronaperes@gmail.com', 'mafersao1100@gmail.com'].includes(
+      googleUserEmail.toLowerCase().trim()
+    );
+
+  const isAdminOrBureaucrat =
+    Boolean(isSuperAdminEmail) ||
+    currentUser?.role === 'bureaucrat' ||
+    currentUser?.role === 'sysop';
+
   const navItems = [
     { id: 'home', label: 'Página Inicial (Início)' },
     { id: 'reader', label: 'Artigos (Reader)' },
     { id: 'directory', label: 'Diretório de Usuários' },
     { id: 'editor', label: 'Wikitext Editor' },
-    { id: 'dev_admin', label: 'Desenvolvedor e Administrador' },
+    ...(isAdminOrBureaucrat ? [{ id: 'dev_admin', label: 'Desenvolvedor e Administrador' }] : []),
   ];
 
   return (
@@ -512,173 +523,176 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 3.05.3.af & 3.05.8.b - Checklist Diário & Pontos Mensais Trigger Button */}
-          <button
-            onClick={onOpenChecklist}
-            className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
-            title="Abrir Checklist Diário e Pontos Mensais (3.05.3.af / 3.05.8.b)"
-          >
-            <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            <span className="hidden sm:inline">Checklist</span>
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
-              ⭐ {monthlyPoints.toFixed(1)}
-            </span>
-          </button>
+          {/* Authenticated user actions & profile */}
+          {googleUserEmail && currentUser && (
+            <>
+              {/* 3.05.3.af & 3.05.8.b - Checklist Diário & Pontos Mensais Trigger Button */}
+              <button
+                onClick={onOpenChecklist}
+                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                title="Abrir Checklist Diário e Pontos Mensais (3.05.3.af / 3.05.8.b)"
+              >
+                <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="hidden sm:inline">Checklist</span>
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                  ⭐ {monthlyPoints.toFixed(1)}
+                </span>
+              </button>
 
-          {/* Real-time Chat Trigger Button */}
-          <button
-            onClick={onOpenChat}
-            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
-            title="Abrir Chat em Tempo Real com outros usuários"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Chat</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          </button>
+              {/* Real-time Chat Trigger Button */}
+              <button
+                onClick={onOpenChat}
+                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                title="Abrir Chat em Tempo Real com outros usuários"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Chat</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </button>
 
-          {/* Current User Profile Badge with Dropdown */}
-          <div ref={userMenuRef} className="relative">
-            <button
-              onClick={() => setIsUserMenuOpen(prev => !prev)}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs text-slate-800 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
-            >
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
-                {currentUser?.avatar || 'U'}
-              </div>
-              <div className="text-left hidden lg:block">
-                <div className="font-semibold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1">
-                  <span>{currentUser?.username || 'User'}</span>
-                  {currentUser?.userTag && (
-                    <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400 font-bold">
-                      {currentUser.userTag}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[10px] text-slate-400 leading-tight capitalize">
-                  {currentUser?.role || 'editor'}
-                </div>
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {/* User Dropdown Menu */}
-            {isUserMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-2 z-50 text-xs animate-fade-in space-y-1">
-                <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                      {currentUser?.username}
-                    </span>
-                    <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/70 border border-purple-200 dark:border-purple-800 px-1.5 py-0.2 rounded">
-                      {currentUser?.userTag || '#1100'}
-                    </span>
+              {/* Current User Profile Badge with Dropdown */}
+              <div ref={userMenuRef} className="relative">
+                <button
+                  onClick={() => setIsUserMenuOpen(prev => !prev)}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs text-slate-800 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+                    {currentUser?.avatar || 'U'}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                    {currentUser?.email || 'Usuário Autenticado'}
+                  <div className="text-left hidden lg:block">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1">
+                      <span>{currentUser?.username || 'User'}</span>
+                      {currentUser?.userTag && (
+                        <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400 font-bold">
+                          {currentUser.userTag}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 leading-tight capitalize">
+                      {currentUser?.role || 'editor'}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    Papel: <strong className="text-slate-700 dark:text-slate-300 capitalize">{currentUser?.role}</strong>
-                  </div>
-                </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
 
-                <div className="px-1 py-1 space-y-0.5">
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      onOpenMyUserPage?.();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                  >
-                    <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                    <span>Minha Página Pessoal</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      onOpenDirectory?.();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                  >
-                    <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                    <span>Diretório Público de Usuários</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      onOpenChat?.();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Chat Comunitário em Tempo Real</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      onOpenChecklist?.();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                  >
-                    <Award className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Checklist Diário & Pontos (3.05.8.b)</span>
-                  </button>
-                </div>
-
-                {/* Network / VPN Verification Status */}
-                <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850/60 text-[11px] space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Auditoria de VPN / Rede:</span>
-                    <button
-                      onClick={runVpnCheck}
-                      disabled={isTestingVpn}
-                      className="text-[10px] text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
-                    >
-                      {isTestingVpn ? 'Auditando...' : 'Reavaliar'}
-                    </button>
-                  </div>
-
-                  {vpnStatus ? (
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        {vpnStatus.isVpn ? (
-                          <span className="text-rose-600 font-bold flex items-center gap-1">
-                            <ShieldAlert className="w-3 h-3" /> VPN/Proxy Detectado ({vpnStatus.riskScore}%)
-                          </span>
-                        ) : (
-                          <span className="text-emerald-600 font-bold flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" /> Conexão Residencial Limpa
-                          </span>
-                        )}
+                {/* User Dropdown Menu */}
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-2 z-50 text-xs animate-fade-in space-y-1">
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                          {currentUser?.username}
+                        </span>
+                        <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/70 border border-purple-200 dark:border-purple-800 px-1.5 py-0.2 rounded">
+                          {currentUser?.userTag || '#1100'}
+                        </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono truncate">
-                        IP: {vpnStatus.ip} • {vpnStatus.country || 'BR'}
+                      <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                        {currentUser?.email || 'Usuário Autenticado'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Papel: <strong className="text-slate-700 dark:text-slate-300 capitalize">{currentUser?.role}</strong>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-slate-400 text-[10px]">Clique em Reavaliar para checar IP e proxy.</div>
-                  )}
-                </div>
 
-                {googleUserEmail && (
-                  <div className="px-1 pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        handleGoogleLogout();
-                      }}
-                      className="w-full text-left px-3 py-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Desconectar Conta Google</span>
-                    </button>
+                    <div className="px-1 py-1 space-y-0.5">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenMyUserPage?.();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Minha Página Pessoal</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenDirectory?.();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                        <span>Diretório Público de Usuários</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenChat?.();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Chat Comunitário em Tempo Real</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenChecklist?.();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <Award className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Checklist Diário & Pontos (3.05.8.b)</span>
+                      </button>
+                    </div>
+
+                    {/* Network / VPN Verification Status */}
+                    <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850/60 text-[11px] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Auditoria de VPN / Rede:</span>
+                        <button
+                          onClick={runVpnCheck}
+                          disabled={isTestingVpn}
+                          className="text-[10px] text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
+                        >
+                          {isTestingVpn ? 'Auditando...' : 'Reavaliar'}
+                        </button>
+                      </div>
+
+                      {vpnStatus ? (
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            {vpnStatus.isVpn ? (
+                              <span className="text-rose-600 font-bold flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3" /> VPN/Proxy Detectado ({vpnStatus.riskScore}%)
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3" /> Conexão Residencial Limpa
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                            IP: {vpnStatus.ip} • {vpnStatus.country || 'BR'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-400 text-[10px]">Clique em Reavaliar para checar IP e proxy.</div>
+                      )}
+                    </div>
+
+                    <div className="px-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          handleGoogleLogout();
+                        }}
+                        className="w-full text-left px-3 py-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Desconectar Conta Google</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
 

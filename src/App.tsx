@@ -15,7 +15,7 @@ import { MessageSquare } from 'lucide-react';
 import { UserSession } from './types';
 import { api } from './api';
 import { wrapExternalUrl } from './utils/urlHelper';
-import { fetchUsersFromFirestore } from './firebase';
+import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
@@ -32,10 +32,25 @@ export default function App() {
   const [chatTargetUser, setChatTargetUser] = useState<UserSession | null>(null);
   const [selectedUserForPage, setSelectedUserForPage] = useState<UserSession | null>(null);
 
-  // Initial load: current user & check URL hash & sync extensions from Firebase
+  // Listen to Google Firebase Authentication state
   useEffect(() => {
-    api.getCurrentUser().then(setCurrentUser).catch(console.error);
+    const unsubAuth = onAuthStateChanged(auth, async (fbUser: any) => {
+      if (fbUser) {
+        try {
+          const user = await api.getCurrentUser();
+          setCurrentUser(user);
+        } catch {
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    });
 
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
     // Sincronização de extensões com o Firebase Firestore ao acessar o Wiki
     api.initExtensionsOnWikiAccess().then(exts => {
       console.log(`[Firebase Cloud] ${exts.length} extensões sincronizadas no acesso ao Wiki.`);

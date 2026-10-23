@@ -64,7 +64,8 @@ export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 export const auth = getAuth(app);
 
 // Export unified connection metadata
-export { firebaseConfig, FIRESTORE_DATABASE_ID, FIREBASE_PROJECT_ID, getFirebaseConnectionInfo };
+export { firebaseConfig, FIRESTORE_DATABASE_ID, FIREBASE_PROJECT_ID, getFirebaseConnectionInfo, onAuthStateChanged };
+export type { FirebaseUser };
 
 // Google Auth Provider configured for popup sign-in
 const googleProvider = new GoogleAuthProvider();
@@ -935,8 +936,13 @@ export async function saveArticleToFirestore(payload: {
     ? extractedCategories
     : (payload.categories || existingArticle?.categories || []);
 
+  // Check authentication prior to Firestore writes
+  if (!auth.currentUser) {
+    throw new Error('Você precisa fazer login com sua conta Google para criar ou editar artigos.');
+  }
+
   // 3. Build article document
-  const article: Article = {
+  const articleDocData = {
     id: existingArticle?.id || `art-${cleanSlug.toLowerCase()}`,
     slug: cleanSlug,
     title: payload.title.trim(),
@@ -949,6 +955,12 @@ export async function saveArticleToFirestore(payload: {
     views: (existingArticle?.views || 0) + 1,
     isProtected: existingArticle?.isProtected || false,
     wikitext: payload.wikitext,
+    lastEditedBy: authorName,
+    syncedToCloudAt: timestamp,
+  };
+
+  const article: Article = {
+    ...articleDocData,
   };
 
   // 4. Build wiki event document
@@ -976,23 +988,34 @@ export async function saveArticleToFirestore(payload: {
   };
 
   // 5. Persist to Firestore: Article, Revision, Event
-  await setDoc(doc(db, pathArticles, cleanSlug), article, { merge: true });
-  await setDoc(doc(db, pathRevisions, revId), revision);
-  await setDoc(doc(db, pathEvents, eventId), {
-    id: event.id,
-    page_title: event.page_title,
-    page_namespace: event.page_namespace,
-    rev_id: event.rev_id,
-    rev_timestamp: event.rev_timestamp,
-    rev_sha1: event.rev_sha1,
-    rev_minor_edit: event.rev_minor_edit,
-    rev_len: event.rev_len,
-    user_text: event.user_text,
-    comment: event.comment,
-    type: event.type,
-    database: event.database,
-    syncedToCloudAt: timestamp,
-  });
+  try {
+    await setDoc(doc(db, pathArticles, cleanSlug), articleDocData);
+    await setDoc(doc(db, pathRevisions, revId), {
+      ...revision,
+      syncedToCloudAt: timestamp,
+    });
+    await setDoc(doc(db, pathEvents, eventId), {
+      id: event.id,
+      page_title: event.page_title,
+      page_namespace: event.page_namespace,
+      rev_id: event.rev_id,
+      rev_timestamp: event.rev_timestamp,
+      rev_sha1: event.rev_sha1,
+      rev_minor_edit: event.rev_minor_edit,
+      rev_len: event.rev_len,
+      user_text: event.user_text,
+      comment: event.comment,
+      type: event.type,
+      database: event.database,
+      syncedToCloudAt: timestamp,
+    });
+  } catch (err: any) {
+    console.error('Firestore article save error:', err);
+    if (err.code === 'permission-denied' || (err.message && err.message.toLowerCase().includes('permission'))) {
+      throw new Error('Permissão negada pelo Firebase Firestore: certifique-se de estar conectado com sua conta Google e que a página não esteja protegida.');
+    }
+    throw new Error(`Erro ao salvar no Firestore: ${err.message || 'Falha de comunicação com o banco'}`);
+  }
 
   // 6. Update user's editCount and profile in Firestore
   if (payload.authorUser && payload.authorUser.id) {

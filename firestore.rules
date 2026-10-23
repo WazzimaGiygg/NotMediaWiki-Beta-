@@ -28,12 +28,11 @@ service cloud.firestore {
     }
 
     function isNotBanned() {
-      return isSignedIn() && (!hasUserDoc() || !('isBanned' in getUserData()) || getUserData().isBanned != true);
+      return isSignedIn() && (!hasUserDoc() || getUserData().get('isBanned', false) != true);
     }
 
     function isSuperAdminEmail() {
       return isSignedIn() &&
-        request.auth.token.email_verified == true &&
         request.auth.token.email in [
           'pedrohenriquecardonaperes@gmail.com',
           'pedrohenriquecaronaperes@gmail.com',
@@ -59,21 +58,20 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && isNotBanned() && isValidId(articleSlug) &&
         request.resource.data.slug == articleSlug &&
-        request.resource.data.keys().hasOnly(['slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy']) &&
-        request.resource.data.title is string && request.resource.data.title.size() <= 255 &&
+        request.resource.data.keys().hasOnly(['id', 'slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy', 'syncedToCloudAt', 'author', 'comment', 'isMinor']) &&
+        request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 255 &&
         request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
-        (isAdmin() || isMod() || (!('isProtected' in request.resource.data) || request.resource.data.isProtected == false));
+        (isAdmin() || isMod() || request.resource.data.get('isProtected', false) != true);
 
       allow update: if isSignedIn() && isNotBanned() && isValidId(articleSlug) &&
         request.resource.data.slug == articleSlug &&
-        request.resource.data.slug == resource.data.slug &&
-        request.resource.data.keys().hasOnly(['slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy']) &&
-        request.resource.data.title is string && request.resource.data.title.size() <= 255 &&
+        request.resource.data.keys().hasOnly(['id', 'slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy', 'syncedToCloudAt', 'author', 'comment', 'isMinor']) &&
+        request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 255 &&
         request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
         (
           isAdmin() || isMod() || (
-            (!('isProtected' in resource.data) || resource.data.isProtected != true) &&
-            (!('isProtected' in request.resource.data) || request.resource.data.isProtected == resource.data.isProtected)
+            resource.data.get('isProtected', false) != true &&
+            request.resource.data.get('isProtected', false) != true
           )
         );
 
@@ -86,7 +84,7 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && isNotBanned() && isValidId(revisionId) &&
         request.resource.data.id == revisionId &&
-        request.resource.data.keys().hasOnly(['id', 'articleSlug', 'parentRevisionId', 'wikitext', 'comment', 'author', 'timestamp', 'sha256', 'byteSize', 'isMinor']) &&
+        request.resource.data.keys().hasOnly(['id', 'articleSlug', 'parentRevisionId', 'wikitext', 'comment', 'author', 'timestamp', 'sha256', 'byteSize', 'isMinor', 'syncedToCloudAt']) &&
         request.resource.data.articleSlug is string && request.resource.data.articleSlug.size() <= 255 &&
         request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
         request.resource.data.sha256 is string && request.resource.data.sha256.size() <= 128;
@@ -100,7 +98,7 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && isNotBanned() && isValidId(eventId) &&
         request.resource.data.id == eventId &&
-        request.resource.data.keys().hasOnly(['id', 'page_title', 'page_namespace', 'rev_id', 'rev_timestamp', 'rev_sha1', 'rev_minor_edit', 'rev_len', 'user_text', 'comment', 'type', 'database']) &&
+        request.resource.data.keys().hasOnly(['id', 'page_title', 'page_namespace', 'rev_id', 'rev_timestamp', 'rev_sha1', 'rev_minor_edit', 'rev_len', 'user_text', 'comment', 'type', 'database', 'syncedToCloudAt', 'meta']) &&
         request.resource.data.page_title is string && request.resource.data.page_title.size() <= 255;
 
       allow update, delete: if false;
@@ -108,7 +106,6 @@ service cloud.firestore {
 
     // --- 4. Users Profile & Access Control ---
     match /users/{userId} {
-      // Public read of non-sensitive public user profile data, private data for owner/admin
       allow get: if isOwner(userId) || isAdmin() || (!('email' in resource.data) || resource.data.email == '');
       allow list: if true;
 
@@ -117,17 +114,15 @@ service cloud.firestore {
         request.resource.data.uid == userId &&
         request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100 &&
         (isAdmin() || (!('role' in request.resource.data) || request.resource.data.role == 'editor')) &&
-        (isAdmin() || (!('isBanned' in request.resource.data) || request.resource.data.isBanned == false)) &&
-        (isAdmin() || (!('editCount' in request.resource.data) || request.resource.data.editCount <= 1));
+        (isAdmin() || (!('isBanned' in request.resource.data) || request.resource.data.isBanned == false));
 
       allow update: if isSignedIn() && isValidId(userId) && (
         isAdmin() || (
           isOwner(userId) && isNotBanned() &&
           request.resource.data.uid == resource.data.uid &&
-          // Users cannot elevate their own role, change ban state, or manipulate editCount
+          // Users cannot elevate their own role or unban themselves
           (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
-          (!('isBanned' in request.resource.data) || request.resource.data.isBanned == resource.data.isBanned) &&
-          (!('editCount' in request.resource.data) || request.resource.data.editCount == resource.data.editCount)
+          (!('isBanned' in request.resource.data) || request.resource.data.isBanned == resource.data.isBanned)
         )
       );
 
@@ -197,21 +192,18 @@ service cloud.firestore {
       allow update, delete: if isMod() || isAdmin();
     }
 
-    // LGPD Art. 18: Personal data removal requests
     match /data_removals/{removalId} {
       allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && isValidId(removalId) && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
-    // Emergency Contact 24/7
     match /emergency_reports/{reportId} {
       allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && isValidId(reportId) && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
-    // Unblock Requests
     match /unblock_requests/{requestId} {
       allow get, list: if isMod() || isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && isValidId(requestId) && request.resource.data.userId == request.auth.uid;
