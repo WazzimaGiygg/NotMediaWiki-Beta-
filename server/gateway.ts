@@ -7,6 +7,7 @@ import { searchService } from './services/search';
 import { eventStreamService } from './services/events';
 import { centralAuthService, UserRole } from './services/auth';
 import { telemetryService } from './services/telemetry';
+import { botEngine } from './services/botEngine';
 import { authenticateToken, requireAuth, requireRole, isSuperAdmin } from './middleware/auth';
 import {
   articleSaveSchema,
@@ -738,6 +739,15 @@ gatewayRouter.post('/bots/auto-revert', async (req: Request, res: Response) => {
       isMinor: true,
     });
 
+    botEngine.addLog({
+      botId: 'antivandal_bot',
+      botName: 'AntiVandalBot',
+      action: 'AUTO_REVERT_VANDALISM',
+      severity: 'critical',
+      targetArticleSlug: articleSlug,
+      summary: `Artigo "${articleSlug}" revertido automaticamente para revisão ${previousRev.id}.`,
+    });
+
     return res.json({
       success: true,
       message: `Artigo "${articleSlug}" revertido com sucesso por AntiVandalBot`,
@@ -747,4 +757,70 @@ gatewayRouter.post('/bots/auto-revert', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Falha na reversão automática: ' + err.message });
   }
 });
+
+// Bot Users Endpoint (4.1.1.PN.1)
+gatewayRouter.get('/bots/users', (_req: Request, res: Response) => {
+  res.json({ users: botEngine.getBotUsers() });
+});
+
+gatewayRouter.post('/bots/users', (req: Request, res: Response) => {
+  try {
+    const user = botEngine.upsertBotUser(req.body);
+    res.json({ success: true, user });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+gatewayRouter.delete('/bots/users/:id', (req: Request, res: Response) => {
+  const success = botEngine.deleteBotUser(req.params.id);
+  res.json({ success });
+});
+
+// Bot Activity Logs Endpoint
+gatewayRouter.get('/bots/logs', (_req: Request, res: Response) => {
+  res.json({ logs: botEngine.getLogs() });
+});
+
+// Server-Side Heavy Scan Execution (Cloud Functions simulation)
+gatewayRouter.post('/bots/scan', async (req: Request, res: Response) => {
+  try {
+    const { articles, selectedBots = ['antivandal_bot', 'citation_bot', 'lgpd_bot', 'quality_bot', 'category_bot', 'link_checker_bot'] } = req.body || {};
+    const targetArticles = articles && articles.length > 0 ? articles : contentService.getAllArticles();
+    const findings = await botEngine.executeServerScan(targetArticles, selectedBots);
+    res.json({
+      success: true,
+      analyzedCount: targetArticles.length,
+      findings,
+      logs: botEngine.getLogs(20),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Falha na varredura pesada do backend: ' + err.message });
+  }
+});
+
+// LGPD Moderation Check (4.1.1.E0.1)
+gatewayRouter.post('/bots/check-lgpd', (req: Request, res: Response) => {
+  const { wikitext } = req.body || {};
+  if (typeof wikitext !== 'string') {
+    return res.status(400).json({ error: 'wikitext é obrigatório' });
+  }
+  const result = botEngine.checkLgpdCompliance(wikitext);
+  res.json(result);
+});
+
+// User Abuse Behavior Audit (4.1.1.18C.1)
+gatewayRouter.post('/bots/audit-user', (req: Request, res: Response) => {
+  const { userId, username, action } = req.body || {};
+  if (!userId || !username) {
+    return res.status(400).json({ error: 'userId e username são obrigatórios' });
+  }
+  const report = botEngine.auditUserBehavior(userId, username, action);
+  res.json({ success: true, report });
+});
+
+gatewayRouter.get('/bots/user-audits', (_req: Request, res: Response) => {
+  res.json({ audits: botEngine.getAllUserAudits() });
+});
+
 

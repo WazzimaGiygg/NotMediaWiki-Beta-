@@ -110,6 +110,34 @@ export class BotExecutionService {
       'lgpd_bot',
     ];
 
+    // 7. Backend Cloud Functions (Fase 2 / Fase 3) -> Executa lógica pesada no servidor
+    try {
+      const res = await fetch('/api/v1/bots/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articles: targets.map(t => ({ slug: t.slug, title: t.title, wikitext: t.wikitext })),
+          selectedBots: selected,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.findings) && data.findings.length > 0) {
+          await this.logActivity({
+            botId: 'antivandal_bot',
+            botName: 'Cloud Functions Bot Cluster',
+            action: 'BACKEND_SCAN_COMPLETE',
+            severity: data.findings.some((r: any) => r.severity === 'critical') ? 'warning' : 'info',
+            summary: `Varredura backend executada em ${targets.length} artigo(s). ${data.findings.length} achado(s) reportado(s).`,
+          });
+          return data.findings;
+        }
+      }
+    } catch (e) {
+      console.warn('Backend Cloud Functions unavailable, falling back to local inspection:', e);
+    }
+
+    // Fallback: Local Client-side inspection
     for (const article of targets) {
       if (selected.includes('antivandal_bot')) {
         results.push(...antiVandalismBot.inspect(article));
@@ -189,6 +217,26 @@ export class BotExecutionService {
     existing.lastAuditAt = new Date().toISOString();
     this.userAudits[user.id] = existing;
     this.saveAudits();
+
+    try {
+      const res = await fetch('/api/v1/bots/audit-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          username: user.username,
+          action,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.report) {
+          this.userAudits[user.id] = data.report;
+          this.saveAudits();
+          return data.report;
+        }
+      }
+    } catch {}
 
     try {
       await setDoc(doc(db, 'user_abuse_audits', user.id), existing, { merge: true });

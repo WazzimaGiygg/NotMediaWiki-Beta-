@@ -563,6 +563,7 @@ export interface BotUser {
   avatar: string;
   description: string;
   botFlag: boolean;
+  isBot?: boolean;
   role: 'bot';
   status: 'active' | 'paused' | 'disabled';
   permissions: string[];

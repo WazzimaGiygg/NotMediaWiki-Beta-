@@ -494,8 +494,16 @@ export const BotManagementView: React.FC<BotManagementViewProps> = ({
                   return (
                     <tr key={user.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-3">
-                        <div className="font-mono font-bold text-slate-900">{user.username}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{user.id}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-mono font-bold text-slate-900">{user.username}</div>
+                          <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded bg-indigo-50 border border-indigo-200 text-indigo-700">
+                            isBot: true
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200 text-slate-700">
+                            role: {user.role}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">{user.id}</div>
                       </td>
                       <td className="py-3 px-3">
                         <span className="font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 font-medium">
