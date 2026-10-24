@@ -4,6 +4,7 @@ import { eventStreamsExtension, EXTENSION_EVENT_STREAMS_ENABLED } from './eventS
 import { phpMigrationExtension, EXTENSION_PHP_MIGRATION_ENABLED } from './phpMigrationExtension';
 import { apiWorkbenchExtension, EXTENSION_API_WORKBENCH_ENABLED } from './apiWorkbenchExtension';
 import { dailyChecklistExtension, EXTENSION_DAILY_CHECKLIST_ENABLED } from './dailyChecklistExtension';
+import { botAgentExtension, EXTENSION_BOT_AGENT_ENABLED } from './botAgentExtension';
 
 export {
   systemLogsExtension,
@@ -18,6 +19,8 @@ export {
   EXTENSION_API_WORKBENCH_ENABLED,
   dailyChecklistExtension,
   EXTENSION_DAILY_CHECKLIST_ENABLED,
+  botAgentExtension,
+  EXTENSION_BOT_AGENT_ENABLED,
 };
 
 export const MANAGED_FEATURE_EXTENSIONS = [
@@ -27,6 +30,7 @@ export const MANAGED_FEATURE_EXTENSIONS = [
   phpMigrationExtension,
   apiWorkbenchExtension,
   dailyChecklistExtension,
+  botAgentExtension,
 ];
 
 /**
@@ -34,7 +38,7 @@ export const MANAGED_FEATURE_EXTENSIONS = [
  * prioritariamente as extensões ativas (seja no arquivo ou no estado persistido).
  */
 export function isFeatureExtensionEnabled(
-  featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist',
+  featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist' | 'bots',
   runtimeExtensions?: { id: string; enabled: boolean }[]
 ): boolean {
   const idMap: Record<string, { fileEnabled: boolean; extId: string }> = {
@@ -44,6 +48,7 @@ export function isFeatureExtensionEnabled(
     migration: { fileEnabled: EXTENSION_PHP_MIGRATION_ENABLED, extId: phpMigrationExtension.id },
     workbench: { fileEnabled: EXTENSION_API_WORKBENCH_ENABLED, extId: apiWorkbenchExtension.id },
     checklist: { fileEnabled: EXTENSION_DAILY_CHECKLIST_ENABLED, extId: dailyChecklistExtension.id },
+    bots: { fileEnabled: EXTENSION_BOT_AGENT_ENABLED, extId: botAgentExtension.id },
   };
 
   const meta = idMap[featureId];

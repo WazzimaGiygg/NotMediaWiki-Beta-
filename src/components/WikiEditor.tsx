@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert } from 'lucide-react';
 import { Article, UserSession } from '../types';
 import { api } from '../api';
+import { botAgentService } from '../services/botAgentService';
 import { syncMediaWikiToFirestore, recordDailyChecklistAction, loginWithGoogle, auth } from '../firebase';
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
 
@@ -26,6 +27,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [initialWikitext, setInitialWikitext] = useState<string>('');
+  const [botNotice, setBotNotice] = useState<{ title: string; text: string; type: 'info' | 'warning' } | null>(null);
+  const [isCheckingGemini, setIsCheckingGemini] = useState<boolean>(false);
 
   // Live Parsoid Preview state
   const [activeTab, setActiveTab] = useState<'split' | 'edit' | 'preview'>('split');
@@ -42,6 +46,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         if (isMounted) {
           setTitle(art.title);
           setWikitext(art.wikitext);
+          setInitialWikitext(art.wikitext);
           setLoading(false);
         }
       })
@@ -49,7 +54,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         // New article template
         if (isMounted) {
           setTitle(slug.replace(/_/g, ' '));
-          setWikitext(`'''${slug.replace(/_/g, ' ')}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`);
+          const template = `'''${slug.replace(/_/g, ' ')}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`;
+          setWikitext(template);
+          setInitialWikitext('');
           setLoading(false);
         }
       });
@@ -98,6 +105,30 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     }, 0);
   };
 
+  const handleCheckCitationsInline = async () => {
+    setIsCheckingGemini(true);
+    setBotNotice(null);
+    try {
+      const res = await api.verifyCitationsWithGemini(title, wikitext);
+      if (res && res.analysis) {
+        const hasMissing = res.analysis.hasMissingCitations;
+        setBotNotice({
+          title: hasMissing ? 'CitationBot (Gemini 3.8 Flash): Fontes Necessárias' : 'CitationBot: Citações Adequadas',
+          text: res.analysis.summary || 'Análise de citações concluída com sucesso.',
+          type: hasMissing ? 'warning' : 'info',
+        });
+      }
+    } catch (e: any) {
+      setBotNotice({
+        title: 'CitationBot',
+        text: 'Não foi possível verificar com o Gemini no momento.',
+        type: 'info',
+      });
+    } finally {
+      setIsCheckingGemini(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -112,6 +143,38 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       }
 
       const cleanSlug = title.trim().replace(/\s+/g, '_');
+      const tempArticle: Article = {
+        id: 'tmp',
+        slug: cleanSlug,
+        title: title.trim(),
+        namespace: 0,
+        wikitext,
+        summary: summary.trim(),
+        latestRevisionId: 'rev_tmp',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        categories: [],
+        views: 1,
+      };
+
+      // 4.1.1.E0.1: Análise prévia por LgpdBot (Bloqueio de PII/CPF)
+      const lgpdIssues = botAgentService.inspectLgpd(tempArticle);
+      const criticalPii = lgpdIssues.find(i => i.severity === 'critical');
+      if (criticalPii) {
+        setErrorMessage(`Alerta LgpdBot (4.1.1.E0.1): ${criticalPii.title}. ${criticalPii.details}`);
+        setSaving(false);
+        return;
+      }
+
+      // 4.1.1.11E.1: Análise prévia por AntiVandalBot
+      const vandalIssues = botAgentService.inspectVandalism(tempArticle, initialWikitext);
+      const criticalVandal = vandalIssues.find(i => i.severity === 'critical');
+      if (criticalVandal) {
+        setErrorMessage(`Alerta AntiVandalBot (4.1.1.11E.1): ${criticalVandal.title}. ${criticalVandal.details}`);
+        setSaving(false);
+        return;
+      }
+
       const res = await api.saveArticle({
         slug: cleanSlug,
         title: title.trim(),
@@ -121,8 +184,15 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         authorUser: activeUser,
       });
 
-      // 3.05.8.b.b: Conceder 0.20 ponto diário por contribuição
+      // 4.1.1.18C.1: Auditoria contínua de contribuições de usuário
       if (activeUser) {
+        botAgentService.auditUserContributions(activeUser, {
+          articleSlug: cleanSlug,
+          charDelta: wikitext.length - initialWikitext.length,
+          isVandal: false,
+        }).catch(console.warn);
+
+        // 3.05.8.b.b: Conceder 0.20 ponto diário por contribuição
         recordDailyChecklistAction(activeUser.id, activeUser.username, 'contribution', {
           articleSlug: cleanSlug,
         }).catch(console.warn);
@@ -258,6 +328,29 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         </div>
       )}
 
+      {botNotice && (
+        <div
+          className={`mb-4 p-3 rounded-lg border text-xs flex items-start gap-2.5 shadow-2xs ${
+            botNotice.type === 'warning'
+              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+              : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200'
+          }`}
+        >
+          <Bot className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <strong className="block font-semibold">{botNotice.title}</strong>
+            <span>{botNotice.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBotNotice(null)}
+            className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSave}>
         {/* Wikitext Syntax Quick-Bar */}
         <div className="bg-slate-50 border border-slate-200 rounded-t p-2 flex flex-wrap items-center gap-1 text-xs">
@@ -325,6 +418,16 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             title="Inserir bloco de código formatado com realce de sintaxe"
           >
             &lt;code&gt; Syntax
+          </button>
+          <button
+            type="button"
+            onClick={handleCheckCitationsInline}
+            disabled={isCheckingGemini}
+            className="px-2 py-1 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+            title="4.1.1.WV.1: Verificar fontes e citações faltantes com CitationBot (Gemini 3.8 Flash)"
+          >
+            <Sparkles className="w-3 h-3 text-purple-600 animate-pulse" />
+            <span>{isCheckingGemini ? 'Checando...' : 'CitationBot (Gemini)'}</span>
           </button>
 
           <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500 font-mono">

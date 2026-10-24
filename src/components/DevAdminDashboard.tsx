@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   HeartHandshake,
   Award,
+  Bot,
 } from 'lucide-react';
 import { HistoryDiff } from './HistoryDiff';
 import { MeshTopology } from './MeshTopology';
@@ -44,6 +45,7 @@ import { LgpdMarcoCivilRules } from './admin/LgpdMarcoCivilRules';
 import { VpnAdminChecker } from './admin/VpnAdminChecker';
 import { BlpEthicsCouncil } from './admin/BlpEthicsCouncil';
 import { ChecklistGamificationAdmin } from './admin/ChecklistGamificationAdmin';
+import { BotAgentManager } from './admin/BotAgentManager';
 import { UserSession, Article, WikiExtension } from '../types';
 import { api } from '../api';
 import { isFeatureExtensionEnabled } from '../extensions';
@@ -106,6 +108,7 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
   const isEventsEnabled = isFeatureExtensionEnabled('events', extensions);
   const isMigrationEnabled = isFeatureExtensionEnabled('migration', extensions);
   const isWorkbenchEnabled = isFeatureExtensionEnabled('workbench', extensions);
+  const isBotsEnabled = isFeatureExtensionEnabled('bots', extensions);
 
   const adminTabs = [
     // Governança, Jurídico & Compliance (Solicitados pelo usuário)
@@ -120,6 +123,7 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
     { id: 'users', label: 'Gerenciamento de Usuários', icon: Users, badge: 'Moderação', category: 'governanca', enabled: true },
     { id: 'domains', label: 'Domínios Permitidos', icon: Globe, badge: 'Burocrata', category: 'governanca', enabled: true },
     // Sistema, Extensões & Infraestrutura
+    { id: 'bots', label: 'Agente de Bots (4.1.1.8T.1)', icon: Bot, badge: isBotsEnabled ? '4.1.1.8T' : 'Desativado', category: 'sistema', enabled: isBotsEnabled },
     { id: 'daily_checklist', label: 'Checklist Diário & Pontos', icon: Award, badge: '3.05.8.b', category: 'sistema', enabled: true },
     { id: 'vpn_checker', label: 'Verificador de VPN e Redes', icon: ShieldAlert, badge: 'Anti-Proxy', category: 'sistema', enabled: true },
     { id: 'extensions', label: 'Extensões do Sistema', icon: Puzzle, badge: 'Special:Version', category: 'sistema', enabled: true },
@@ -375,6 +379,22 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
               title="PHP Migration"
               extensionName="PhpMigrationRosetta"
               file="src/extensions/phpMigrationExtension.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
+        )}
+
+        {activeTab === 'bots' && (
+          isBotsEnabled ? (
+            <BotAgentManager
+              currentUser={currentUser}
+              onNavigateArticle={onNavigateArticle}
+            />
+          ) : (
+            <DisabledFeatureNotice
+              title="Agente de Bots"
+              extensionName="BotAgent"
+              file="src/extensions/botAgentExtension.ts"
               onManageExtensions={() => setActiveTab('extensions')}
             />
           )

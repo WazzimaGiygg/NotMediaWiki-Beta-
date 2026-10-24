@@ -10,7 +10,15 @@ import {
   SearchMatch,
   WikiExtension,
   AllowedDomain,
+  BotAgentConfig,
+  BotAgentId,
+  BotUser,
+  BotScanCondition,
+  BotScanResult,
+  BotActivityLog,
+  UserAbuseAudit,
 } from './types';
+import { botAgentService } from './services/botAgentService';
 import { clientParsoid } from './services/parsoid';
 import {
   fetchArticlesFromFirestore,
@@ -624,5 +632,102 @@ export const api = {
 
   subscribeAllowedDomains(callback: (domains: AllowedDomain[]) => void, onError?: (err: any) => void) {
     return subscribeToAllowedDomainsFromFirestore(callback, onError);
+  },
+
+  // ---------------------------------------------------------------------------
+  // 11. Bot Agent & Automation (4.1.1.8T.1 - 4.1.1.E0.1)
+  // ---------------------------------------------------------------------------
+  async getBotConfigs(): Promise<BotAgentConfig[]> {
+    return botAgentService.getBotConfigs();
+  },
+
+  async updateBotConfig(botId: BotAgentId, updates: Partial<BotAgentConfig>): Promise<BotAgentConfig> {
+    return botAgentService.updateBotConfig(botId, updates);
+  },
+
+  async toggleBot(botId: BotAgentId, enabled: boolean): Promise<BotAgentConfig> {
+    return botAgentService.toggleBot(botId, enabled);
+  },
+
+  async getBotUsers(): Promise<BotUser[]> {
+    return botAgentService.getBotUsers();
+  },
+
+  async upsertBotUser(botUser: Partial<BotUser> & { id: string }): Promise<BotUser> {
+    return botAgentService.upsertBotUser(botUser);
+  },
+
+  async deleteBotUser(id: string): Promise<boolean> {
+    return botAgentService.deleteBotUser(id);
+  },
+
+  async runBotScan(articles: Article[], conditions?: BotScanCondition): Promise<BotScanResult[]> {
+    return botAgentService.runScan(articles, conditions);
+  },
+
+  async auditUserContributions(user: UserSession, recentAction?: { articleSlug: string; charDelta: number; isVandal?: boolean }): Promise<UserAbuseAudit> {
+    return botAgentService.auditUserContributions(user, recentAction);
+  },
+
+  async getUserAudits(): Promise<UserAbuseAudit[]> {
+    return botAgentService.getUserAudits();
+  },
+
+  async getBotActivityLogs(): Promise<BotActivityLog[]> {
+    return botAgentService.getActivityLogs();
+  },
+
+  async verifyCitationsWithGemini(title: string, wikitext: string): Promise<any> {
+    try {
+      return await safeFetch(`${BASE_URL}/bots/verify-citations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, wikitext }),
+      });
+    } catch {
+      // Fallback to client heuristics
+      const mockArticle: Article = {
+        id: 'tmp',
+        slug: title.toLowerCase().replace(/\s+/g, '_'),
+        title,
+        namespace: 0,
+        wikitext,
+        summary: '',
+        latestRevisionId: 'rev1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        categories: [],
+        views: 1,
+      };
+      const results = await botAgentService.inspectCitations(mockArticle);
+      return {
+        success: true,
+        source: 'client_fallback',
+        analysis: {
+          hasMissingCitations: results.length > 0,
+          confidenceScore: 75,
+          claimsNeedingCitations: results.map(r => ({
+            claim: r.details,
+            issue: r.title,
+            suggestedMarkup: r.suggestedMarkup,
+          })),
+          recommendations: ['Inserir referências bibliográficas comprobatórias.'],
+          summary: `Identificado(s) ${results.length} ponto(s) sem citação.`,
+        },
+      };
+    }
+  },
+
+  async autoRevertWithBot(articleSlug: string, targetRevId?: string, reason?: string): Promise<any> {
+    try {
+      return await safeFetch(`${BASE_URL}/bots/auto-revert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articleSlug, targetRevId, reason }),
+      });
+    } catch (err: any) {
+      console.warn('Auto-revert gateway error, executing local fallback:', err);
+      return { success: false, error: err.message };
+    }
   },
 };

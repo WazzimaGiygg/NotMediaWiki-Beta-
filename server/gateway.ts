@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { GoogleGenAI } from '@google/genai';
 import { contentService } from './services/content';
 import { parsoidService } from './services/parsoid';
 import { revisionService } from './services/revisions';
@@ -587,3 +588,163 @@ gatewayRouter.post('/migration/parity-test', requireAuth, (_req: Request, res: R
     results: testResults,
   });
 });
+
+// -----------------------------------------------------------------------------
+// 10. BOT AGENT ROUTES (4.1.1.8T.1 - 4.1.1.E0.1)
+// -----------------------------------------------------------------------------
+
+gatewayRouter.post('/bots/verify-citations', async (req: Request, res: Response) => {
+  const { title, wikitext } = req.body || {};
+  if (!wikitext || typeof wikitext !== 'string') {
+    return res.status(400).json({ error: 'Parâmetro wikitext é obrigatório' });
+  }
+
+  // 4.1.1.WV.1: Análise com Gemini 3.8 Flash
+  try {
+    if (process.env.GEMINI_API_KEY) {
+      const ai = new GoogleGenAI();
+      const prompt = `Você é o CitationBot (4.1.1.WV.1), um robô de checagem e integridade bibliográfica do NotMediaWiki.
+Analise o wikitext do artigo "${title || 'Artigo'}".
+Identifique afirmações factuais, estatísticas, datas históricas ou alegações sem fontes bibliográficas (<ref>).
+Gere sugestões para inserção de fontes e tags de citação.
+
+Responda em formato JSON válido:
+{
+  "hasMissingCitations": boolean,
+  "confidenceScore": number,
+  "claimsNeedingCitations": [
+    {
+      "claim": "trecho sem fonte",
+      "issue": "motivo da necessidade de fonte",
+      "suggestedMarkup": "sugestão com <ref> ou {{Carece de fontes}}"
+    }
+  ],
+  "recommendations": ["sugestão 1", "sugestão 2"],
+  "summary": "resumo geral"
+}
+
+Wikitext do artigo:
+${wikitext.substring(0, 10000)}`;
+
+      const geminiRes = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const responseText = geminiRes.text;
+      if (responseText) {
+        try {
+          const parsed = JSON.parse(responseText);
+          return res.json({
+            success: true,
+            source: 'gemini-3.8-flash',
+            analysis: parsed,
+          });
+        } catch {
+          // Fallback if not valid JSON
+          return res.json({
+            success: true,
+            source: 'gemini-3.8-flash',
+            analysis: {
+              hasMissingCitations: true,
+              confidenceScore: 85,
+              claimsNeedingCitations: [],
+              recommendations: [responseText.substring(0, 300)],
+              summary: responseText.substring(0, 300),
+            },
+          });
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('[CitationBot Gemini Error]:', err.message);
+  }
+
+  // Fallback heurístico resiliente se offline ou chave indisponível
+  const refCount = (wikitext.match(/<ref[\s>]/gi) || []).length;
+  const statRegex = /\b(\d+(?:\.\d+)?%|\bno ano de \d{4}\b|\bsegundo estudos\b|\bestatisticamente\b|\bpesquisas apontam\b)/i;
+  const paragraphs = wikitext
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 50 && !p.startsWith('=='));
+
+  const claimsNeedingCitations: any[] = [];
+  for (const p of paragraphs) {
+    if (statRegex.test(p) && !p.includes('<ref')) {
+      claimsNeedingCitations.push({
+        claim: p.substring(0, 120),
+        issue: 'Afirmação estatística ou factual desacompanhada de referência bibliográfica',
+        suggestedMarkup: `${p} {{Carece de fontes}}`,
+      });
+    }
+  }
+
+  return res.json({
+    success: true,
+    source: 'heuristic_fallback',
+    analysis: {
+      hasMissingCitations: claimsNeedingCitations.length > 0 || refCount === 0,
+      confidenceScore: 78,
+      totalReferencesFound: refCount,
+      claimsNeedingCitations,
+      recommendations: [
+        refCount === 0
+          ? 'O artigo não possui nenhuma nota <ref>. Inserir seção == Referências == com <references />.'
+          : 'Verificar se todas as alegações estatísticas possuem fontes verificáveis.',
+      ],
+      summary: `Análise concluída com ${refCount} referência(s) detectada(s) e ${claimsNeedingCitations.length} afirmação(ões) pendente(s) de fonte.`,
+    },
+  });
+});
+
+gatewayRouter.post('/bots/auto-revert', async (req: Request, res: Response) => {
+  const { articleSlug, targetRevId, reason } = req.body || {};
+  if (!articleSlug) {
+    return res.status(400).json({ error: 'articleSlug é obrigatório' });
+  }
+
+  try {
+    const revisions = revisionService.getRevisionsForArticle(articleSlug);
+    if (!revisions || revisions.length < 2) {
+      return res.status(400).json({ error: 'Histórico insuficiente para reversão automática' });
+    }
+
+    const previousRev = targetRevId
+      ? revisions.find(r => r.id === targetRevId)
+      : revisions[revisions.length - 2];
+
+    if (!previousRev) {
+      return res.status(404).json({ error: 'Revisão anterior não encontrada' });
+    }
+
+    const botUser = {
+      id: 'bot_antivandal_0002',
+      username: 'AntiVandalBot#0002',
+      role: 'bot' as UserRole,
+      editCount: 1,
+      avatar: 'AV',
+      isBanned: false,
+    };
+
+    const saveResult = contentService.saveArticle({
+      slug: articleSlug,
+      title: articleSlug.replace(/_/g, ' '),
+      wikitext: previousRev.wikitext,
+      comment: reason || 'Reversão automática de vandalismo por AntiVandalBot (4.1.1.11E.1)',
+      user: botUser,
+      isMinor: true,
+    });
+
+    return res.json({
+      success: true,
+      message: `Artigo "${articleSlug}" revertido com sucesso por AntiVandalBot`,
+      revision: saveResult.revision,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Falha na reversão automática: ' + err.message });
+  }
+});
+

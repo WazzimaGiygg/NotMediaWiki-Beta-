@@ -256,5 +256,28 @@ service cloud.firestore {
       allow create: if isSignedIn() && isNotBanned() && isValidId(ratingId) && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
+
+    // --- 10. Bot Agents, Bot Users & Activity Logs (4.1.1.8T.1 - 4.1.1.E0.1) ---
+    match /bot_agents_config/{botId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin() || (isSignedIn() && userRole() in ['sysop', 'bureaucrat', 'admin']);
+    }
+
+    match /bot_users/{botUserId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin() || (isSignedIn() && userRole() in ['sysop', 'bureaucrat', 'admin']);
+    }
+
+    match /bot_activity_logs/{logId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(logId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /user_abuse_audits/{auditId} {
+      allow get, list: if isMod() || isAdmin() || (isSignedIn() && auditId == request.auth.uid);
+      allow create, update: if isSignedIn() && isValidId(auditId);
+      allow delete: if isAdmin();
+    }
   }
 }

@@ -5,6 +5,7 @@ import { eventStreamsExtension } from '../extensions/eventStreamsExtension';
 import { phpMigrationExtension } from '../extensions/phpMigrationExtension';
 import { apiWorkbenchExtension } from '../extensions/apiWorkbenchExtension';
 import { dailyChecklistExtension } from '../extensions/dailyChecklistExtension';
+import { botAgentExtension } from '../extensions/botAgentExtension';
 
 export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   {
@@ -506,4 +507,5 @@ export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   phpMigrationExtension,
   apiWorkbenchExtension,
   dailyChecklistExtension,
+  botAgentExtension,
 ];

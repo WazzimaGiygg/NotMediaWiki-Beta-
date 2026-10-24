@@ -514,4 +514,121 @@ export interface ArticleRating {
   createdAt: string;
 }
 
+// =============================================================================
+// BOT AGENT & AUTOMATION TYPES (4.1.1.8T.1 - 4.1.1.E0.1)
+// =============================================================================
+
+export type BotAgentId =
+  | 'citation_bot'
+  | 'antivandal_bot'
+  | 'category_bot'
+  | 'quality_bot'
+  | 'link_checker_bot'
+  | 'lgpd_bot'
+  | 'user_audit_bot';
+
+export interface BotAgentConfig {
+  id: BotAgentId;
+  code: string; // e.g. '4.1.1.WV.1'
+  name: string;
+  namePt: string;
+  enabled: boolean;
+  description: string;
+  assignedUserId: string;
+  assignedUsername: string;
+  mode: 'automatic' | 'manual' | 'dry_run';
+  settings: {
+    useGemini?: boolean;
+    autoRevertVandalism?: boolean;
+    byteDropThresholdPercent?: number;
+    sensitivityLevel?: 'baixo' | 'medio' | 'alto';
+    scanRecentHours?: number; // 4.1.1.1IT.1 (Descontinuado mas configurável)
+    autoApplyCategories?: boolean;
+    notifyAdminsOnCritical?: boolean;
+    minQualityScoreRequired?: number;
+  };
+  stats: {
+    totalRuns: number;
+    actionsTaken: number;
+    flagsRaised: number;
+    lastRunAt?: string;
+  };
+}
+
+export interface BotUser {
+  id: string;
+  username: string;
+  userTag: string;
+  displayName: string;
+  avatar: string;
+  description: string;
+  botFlag: boolean;
+  role: 'bot';
+  status: 'active' | 'paused' | 'disabled';
+  permissions: string[];
+  assignedBotAgentId: BotAgentId;
+  createdAt: string;
+  totalEdits: number;
+  lastActiveAt?: string;
+}
+
+export interface BotScanCondition {
+  namespace?: number;
+  category?: string;
+  query?: string;
+  articleSlug?: string;
+  authorId?: string;
+  recentHours?: number; // 4.1.1.1IT.1
+  limit?: number;
+  selectedBots?: BotAgentId[];
+}
+
+export interface BotScanResult {
+  id: string;
+  articleSlug: string;
+  articleTitle: string;
+  botId: BotAgentId;
+  botName: string;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  details: string;
+  suggestion?: string;
+  suggestedMarkup?: string;
+  autoFixAvailable?: boolean;
+  actionTaken?: 'none' | 'flagged' | 'reverted' | 'suggested' | 'fixed';
+  detectedAt: string;
+  metadata?: Record<string, any>;
+}
+
+export interface BotActivityLog {
+  id: string;
+  botId: BotAgentId;
+  botName: string;
+  action: string;
+  targetArticleSlug?: string;
+  targetUserId?: string;
+  severity: 'info' | 'warning' | 'critical';
+  summary: string;
+  details?: string;
+  metadata?: Record<string, any>;
+  timestamp: string;
+}
+
+export interface UserAbuseAudit {
+  id: string;
+  userId: string;
+  username: string;
+  riskScore: number; // 0 - 100
+  status: 'clean' | 'suspicious' | 'flagged' | 'restricted';
+  flags: string[];
+  recentEditsCount: number;
+  revertCount: number;
+  burstEditsCount: number;
+  massDeletionsCount: number;
+  profanityDetections: number;
+  lastAuditAt: string;
+  details: string;
+}
+
+
 
