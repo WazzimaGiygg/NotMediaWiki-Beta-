@@ -46,6 +46,7 @@ import { VpnAdminChecker } from './admin/VpnAdminChecker';
 import { BlpEthicsCouncil } from './admin/BlpEthicsCouncil';
 import { ChecklistGamificationAdmin } from './admin/ChecklistGamificationAdmin';
 import { BotAgentManager } from './admin/BotAgentManager';
+import { BotManagementView } from './admin/BotManagementView';
 import { UserSession, Article, WikiExtension } from '../types';
 import { api } from '../api';
 import { isFeatureExtensionEnabled } from '../extensions';
@@ -386,15 +387,15 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
 
         {activeTab === 'bots' && (
           isBotsEnabled ? (
-            <BotAgentManager
+            <BotManagementView
               currentUser={currentUser}
               onNavigateArticle={onNavigateArticle}
             />
           ) : (
             <DisabledFeatureNotice
               title="Agente de Bots"
-              extensionName="BotAgent"
-              file="src/extensions/botAgentExtension.ts"
+              extensionName="BotManager"
+              file="src/extensions/bots/BotManagerExtension.ts"
               onManageExtensions={() => setActiveTab('extensions')}
             />
           )

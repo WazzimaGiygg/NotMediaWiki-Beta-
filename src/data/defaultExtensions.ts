@@ -6,6 +6,7 @@ import { phpMigrationExtension } from '../extensions/phpMigrationExtension';
 import { apiWorkbenchExtension } from '../extensions/apiWorkbenchExtension';
 import { dailyChecklistExtension } from '../extensions/dailyChecklistExtension';
 import { botAgentExtension } from '../extensions/botAgentExtension';
+import { botManagerExtension } from '../extensions/bots/BotManagerExtension';
 
 export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   {
@@ -508,4 +509,5 @@ export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   apiWorkbenchExtension,
   dailyChecklistExtension,
   botAgentExtension,
+  botManagerExtension,
 ];

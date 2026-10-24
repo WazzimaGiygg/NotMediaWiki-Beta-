@@ -5,6 +5,7 @@ import { phpMigrationExtension, EXTENSION_PHP_MIGRATION_ENABLED } from './phpMig
 import { apiWorkbenchExtension, EXTENSION_API_WORKBENCH_ENABLED } from './apiWorkbenchExtension';
 import { dailyChecklistExtension, EXTENSION_DAILY_CHECKLIST_ENABLED } from './dailyChecklistExtension';
 import { botAgentExtension, EXTENSION_BOT_AGENT_ENABLED } from './botAgentExtension';
+import { botManagerExtension, EXTENSION_BOT_MANAGER_ENABLED } from './bots/BotManagerExtension';
 
 export {
   systemLogsExtension,
@@ -21,6 +22,8 @@ export {
   EXTENSION_DAILY_CHECKLIST_ENABLED,
   botAgentExtension,
   EXTENSION_BOT_AGENT_ENABLED,
+  botManagerExtension,
+  EXTENSION_BOT_MANAGER_ENABLED,
 };
 
 export const MANAGED_FEATURE_EXTENSIONS = [
@@ -31,6 +34,7 @@ export const MANAGED_FEATURE_EXTENSIONS = [
   apiWorkbenchExtension,
   dailyChecklistExtension,
   botAgentExtension,
+  botManagerExtension,
 ];
 
 /**
@@ -48,7 +52,7 @@ export function isFeatureExtensionEnabled(
     migration: { fileEnabled: EXTENSION_PHP_MIGRATION_ENABLED, extId: phpMigrationExtension.id },
     workbench: { fileEnabled: EXTENSION_API_WORKBENCH_ENABLED, extId: apiWorkbenchExtension.id },
     checklist: { fileEnabled: EXTENSION_DAILY_CHECKLIST_ENABLED, extId: dailyChecklistExtension.id },
-    bots: { fileEnabled: EXTENSION_BOT_AGENT_ENABLED, extId: botAgentExtension.id },
+    bots: { fileEnabled: EXTENSION_BOT_MANAGER_ENABLED && EXTENSION_BOT_AGENT_ENABLED, extId: botManagerExtension.id },
   };
 
   const meta = idMap[featureId];
@@ -59,7 +63,7 @@ export function isFeatureExtensionEnabled(
 
   // Se há extensões em tempo de execução fornecidas (do localStorage ou Firestore), respeitamos também seu toggle
   if (runtimeExtensions && runtimeExtensions.length > 0) {
-    const found = runtimeExtensions.find(e => e.id === meta.extId);
+    const found = runtimeExtensions.find(e => e.id === meta.extId || (featureId === 'bots' && e.id === botAgentExtension.id));
     if (found !== undefined) {
       return Boolean(found.enabled);
     }

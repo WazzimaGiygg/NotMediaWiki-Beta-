@@ -11,6 +11,25 @@ export function createExpressApp() {
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
 
+  // 1.1. Security Rule Shield (4.1.1.23B.2): Block direct access to firestore.rules and internal configurations
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const rawPath = (req.path || '').toLowerCase();
+    if (
+      rawPath.includes('firestore.rules') ||
+      rawPath.endsWith('.rules') ||
+      rawPath.includes('firebase-applet-config.json') ||
+      rawPath.includes('.env') ||
+      rawPath.includes('tsconfig') ||
+      rawPath === '/metadata.json'
+    ) {
+      return res.status(403).json({
+        error: 'Acesso Proibido (4.1.1.23B.2): Regras do firestore.rules e arquivos de credenciais são protegidos e criptografados contra leitura pública.',
+        code: 'SECURITY_RULES_ENCRYPTED_ACCESS_RESTRICTED',
+      });
+    }
+    next();
+  });
+
   // 2. Security Headers via Helmet
   app.use(
     helmet({

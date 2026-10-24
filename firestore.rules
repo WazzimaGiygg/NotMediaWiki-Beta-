@@ -52,7 +52,7 @@ service cloud.firestore {
       return isAdmin() || (isSignedIn() && userRole() in ['moderator']);
     }
 
-    // --- 1. Articles Collection ---
+    // --- 1. Articles Collection (4.1.1.1SK.2 Hardened) ---
     match /articles/{articleSlug} {
       allow get, list: if true;
 
@@ -61,34 +61,68 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly(['id', 'slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy', 'syncedToCloudAt', 'author', 'comment', 'isMinor']) &&
         request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 255 &&
         request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
+        request.resource.data.latestRevisionId is string && request.resource.data.latestRevisionId.size() > 0 &&
+        // System and project namespaces (4, 8) require administrator or moderator
+        (isAdmin() || isMod() || !(request.resource.data.get('namespace', 0) in [4, 8])) &&
+        // Protected flag cannot be set by standard readers/editors
         (isAdmin() || isMod() || request.resource.data.get('isProtected', false) != true);
 
       allow update: if isSignedIn() && isNotBanned() && isValidId(articleSlug) &&
         request.resource.data.slug == articleSlug &&
+        // Slug and initial creation timestamp are strictly immutable
+        request.resource.data.slug == resource.data.slug &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        // Audit lineage guarantee (4.1.1.1SK.2): Every content update must advance latestRevisionId
+        (request.resource.data.wikitext == resource.data.wikitext || request.resource.data.latestRevisionId != resource.data.latestRevisionId) &&
         request.resource.data.keys().hasOnly(['id', 'slug', 'title', 'namespace', 'wikitext', 'summary', 'latestRevisionId', 'createdAt', 'updatedAt', 'categories', 'views', 'isProtected', 'lastEditedBy', 'syncedToCloudAt', 'author', 'comment', 'isMinor']) &&
         request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 255 &&
         request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
+        // Protected articles check
         (
           isAdmin() || isMod() || (
             resource.data.get('isProtected', false) != true &&
             request.resource.data.get('isProtected', false) != true
           )
-        );
+        ) &&
+        // Protected namespaces check (4: Projeto, 8: MediaWiki)
+        (isAdmin() || isMod() || !(resource.data.get('namespace', 0) in [4, 8]));
 
       allow delete: if isMod() || isAdmin();
     }
 
-    // --- 2. Revisions (Immutable audit log) ---
+    // --- 2. Revisions & Versions (4.1.1.1SK.2: Strictly Append-Only Immutable Ledger) ---
     match /revisions/{revisionId} {
       allow get, list: if true;
 
+      // Strict creation rule: Cannot overwrite existing revisions (!exists) and author cannot be spoofed
       allow create: if isSignedIn() && isNotBanned() && isValidId(revisionId) &&
+        !exists(/databases/$(database)/documents/revisions/$(revisionId)) &&
         request.resource.data.id == revisionId &&
         request.resource.data.keys().hasOnly(['id', 'articleSlug', 'parentRevisionId', 'wikitext', 'comment', 'author', 'timestamp', 'sha256', 'byteSize', 'isMinor', 'syncedToCloudAt']) &&
         request.resource.data.articleSlug is string && request.resource.data.articleSlug.size() <= 255 &&
         request.resource.data.wikitext is string && request.resource.data.wikitext.size() <= 200000 &&
-        request.resource.data.sha256 is string && request.resource.data.sha256.size() <= 128;
+        request.resource.data.sha256 is string && request.resource.data.sha256.size() <= 128 &&
+        // Author spoofing protection: Author id must be the current authenticated user, unless sysop/admin/registered bot
+        (
+          isAdmin() ||
+          (hasUserDoc() && getUserData().get('role', '') == 'bot') ||
+          (request.resource.data.author.id == request.auth.uid)
+        );
 
+      // Revisions are mathematically immutable: no updates or deletions allowed under any circumstance
+      allow update, delete: if false;
+    }
+
+    // Explicit alias for versions collection matching revisions immutability
+    match /versions/{versionId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isNotBanned() && isValidId(versionId) &&
+        !exists(/databases/$(database)/documents/versions/$(versionId)) &&
+        (
+          isAdmin() ||
+          (hasUserDoc() && getUserData().get('role', '') == 'bot') ||
+          (request.resource.data.author.id == request.auth.uid)
+        );
       allow update, delete: if false;
     }
 
@@ -97,6 +131,7 @@ service cloud.firestore {
       allow get, list: if true;
 
       allow create: if isSignedIn() && isNotBanned() && isValidId(eventId) &&
+        !exists(/databases/$(database)/documents/wiki_events/$(eventId)) &&
         request.resource.data.id == eventId &&
         request.resource.data.keys().hasOnly(['id', 'page_title', 'page_namespace', 'rev_id', 'rev_timestamp', 'rev_sha1', 'rev_minor_edit', 'rev_len', 'user_text', 'comment', 'type', 'database', 'syncedToCloudAt', 'meta']) &&
         request.resource.data.page_title is string && request.resource.data.page_title.size() <= 255;
