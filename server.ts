@@ -13,6 +13,7 @@ async function bootstrap() {
 
   if (!isProd) {
     const vite = await createViteServer({
+      root: __dirname,
       server: { middlewareMode: true },
       appType: 'spa',
     });
