@@ -3,6 +3,8 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { gatewayRouter } from './gateway';
+import { handleActionApi } from './services/actionApi';
+import { contentService } from './services/content';
 
 export function createExpressApp() {
   const app = express();
@@ -84,6 +86,22 @@ export function createExpressApp() {
   // 5. Body parser with 1mb limit
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+  // 5.1. Mount MediaWiki Action API (/api.php) and REST API (/w/rest.php/v1)
+  app.all('/api.php', handleActionApi);
+  app.get('/w/rest.php/v1/page/:title', (req: Request, res: Response) => {
+    const art = contentService.getArticle(req.params.title);
+    if (!art) return res.status(404).json({ error: 'Page not found' });
+    res.json({
+      id: 1,
+      key: art.slug,
+      title: art.title,
+      latest: { id: 1, timestamp: art.updatedAt || art.createdAt },
+      content_model: 'wikitext',
+      license: { url: 'https://creativecommons.org/licenses/by-sa/4.0/', title: 'CC BY-SA 4.0' },
+      source: art.wikitext,
+    });
+  });
 
   // 6. Mount MediaWiki Microservices API Gateway
   app.use('/api/v1', gatewayRouter);

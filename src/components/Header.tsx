@@ -445,6 +445,7 @@ export const Header: React.FC<HeaderProps> = ({
   const navItems = [
     { id: 'home', label: 'Página Inicial (Início)' },
     { id: 'reader', label: 'Artigos (Reader)' },
+    { id: 'special', label: 'Páginas Especiais' },
     { id: 'directory', label: 'Diretório de Usuários' },
     { id: 'editor', label: 'Wikitext Editor' },
     ...(isAdminOrBureaucrat ? [{ id: 'dev_admin', label: 'Desenvolvedor e Administrador' }] : []),

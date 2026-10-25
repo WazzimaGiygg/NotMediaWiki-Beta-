@@ -256,9 +256,59 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "type", "updatedAt"]
+    },
+    "Page": {
+      "title": "Page",
+      "description": "Wiki page with immutable audit fields and protection level",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 255 },
+        "content": { "type": "string", "maxLength": 500000 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "protectionLevel": { "type": "string", "enum": ["none", "semi", "full", "sysop"] }
+      },
+      "required": ["title", "content", "authorUid", "createdAt"]
+    },
+    "PageVersion": {
+      "title": "PageVersion",
+      "description": "Immutable ledger version document under a wiki page",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string", "maxLength": 500000 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" },
+        "versionNumber": { "type": "number" },
+        "pageId": { "type": "string", "maxLength": 255 }
+      },
+      "required": ["content", "authorUid", "timestamp", "versionNumber", "pageId"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable system audit log entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "action"]
     }
   },
   "firestore": {
+    "/pages/{pageId}": {
+      "schema": { "$ref": "#/entities/Page" },
+      "description": "Wiki pages with immutable audit lineage"
+    },
+    "/pages/{pageId}/versions/{versionId}": {
+      "schema": { "$ref": "#/entities/PageVersion" },
+      "description": "Strictly append-only immutable page versions"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable audit log records"
+    },
     "/articles/{articleSlug}": {
       "schema": { "$ref": "#/entities/Article" },
       "description": "MediaWiki articles indexed by canonical slug"

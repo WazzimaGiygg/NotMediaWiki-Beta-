@@ -11,6 +11,7 @@ import { UserDirectory } from './components/UserDirectory';
 import { UserPageView } from './components/UserPageView';
 import { ChatDrawer } from './components/ChatDrawer';
 import { DailyChecklistModal } from './components/DailyChecklistModal';
+import { SpecialPagesHub } from './components/SpecialPagesHub';
 import { MessageSquare } from 'lucide-react';
 import { UserSession } from './types';
 import { api } from './api';
@@ -20,6 +21,7 @@ import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [activeArticleSlug, setActiveArticleSlug] = useState<string>('MediaWiki');
+  const [specialPageName, setSpecialPageName] = useState<string>('SpecialPages');
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
@@ -100,10 +102,28 @@ export default function App() {
       const hash = window.location.hash;
       if (hash === '' || hash === '#' || hash === '#/' || hash === '#/home') {
         setCurrentView('home');
+      } else if (hash.startsWith('#/wiki/Special:') || hash.startsWith('#/wiki/Especial:')) {
+        const rawSpecial = decodeURIComponent(hash.replace('#/wiki/', ''));
+        const colonIdx = rawSpecial.indexOf(':');
+        const spName = colonIdx >= 0 ? rawSpecial.substring(colonIdx + 1) : 'SpecialPages';
+        setSpecialPageName(spName);
+        setCurrentView('special');
+      } else if (hash === '#/special' || hash === '#/especial' || hash.startsWith('#/special/') || hash.startsWith('#/especial/')) {
+        const parts = hash.split('/');
+        const spName = parts[2] ? decodeURIComponent(parts[2]) : 'SpecialPages';
+        setSpecialPageName(spName);
+        setCurrentView('special');
       } else if (hash.startsWith('#/wiki/')) {
         const slug = decodeURIComponent(hash.replace('#/wiki/', ''));
-        setActiveArticleSlug(slug);
-        setCurrentView('reader');
+        if (slug.startsWith('Special:') || slug.startsWith('Especial:')) {
+          const colonIdx = slug.indexOf(':');
+          const spName = colonIdx >= 0 ? slug.substring(colonIdx + 1) : 'SpecialPages';
+          setSpecialPageName(spName);
+          setCurrentView('special');
+        } else {
+          setActiveArticleSlug(slug);
+          setCurrentView('reader');
+        }
       } else if (hash.startsWith('#/edit/')) {
         const slug = decodeURIComponent(hash.replace('#/edit/', ''));
         setActiveArticleSlug(slug);
@@ -224,6 +244,14 @@ export default function App() {
   }, []);
 
   const handleNavigateArticle = (slug: string) => {
+    if (slug.startsWith('Special:') || slug.startsWith('Especial:')) {
+      const colonIdx = slug.indexOf(':');
+      const spName = colonIdx >= 0 ? slug.substring(colonIdx + 1) : 'SpecialPages';
+      setSpecialPageName(spName);
+      setCurrentView('special');
+      window.location.hash = `#/special/${encodeURIComponent(spName)}`;
+      return;
+    }
     setActiveArticleSlug(slug);
     setCurrentView('reader');
     setReadingProgress(0);
@@ -258,6 +286,9 @@ export default function App() {
             window.location.hash = '#/home';
           } else if (view === 'reader') {
             window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+          } else if (view === 'special') {
+            setSpecialPageName('SpecialPages');
+            window.location.hash = '#/special/SpecialPages';
           } else if (view === 'directory') {
             window.location.hash = '#/usuarios';
           } else if (view === 'dev_admin') {
@@ -385,6 +416,16 @@ export default function App() {
               window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
             }}
             initialTab={adminSubTab}
+          />
+        )}
+
+        {currentView === 'special' && (
+          <SpecialPagesHub
+            initialSpecialPage={specialPageName}
+            currentUser={currentUser}
+            onNavigateArticle={handleNavigateArticle}
+            onOpenEdit={handleOpenEdit}
+            onOpenHistory={handleOpenHistory}
           />
         )}
 

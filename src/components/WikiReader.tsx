@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -11,6 +11,10 @@ import { ArticleFootnotes } from './ArticleFootnotes';
 import { WikiReportModal } from './WikiReportModal';
 import { ArticleRatingWidget } from './ArticleRatingWidget';
 import { buildArticleReportData } from '../utils/reportGenerator';
+import { MEDIAWIKI_NAMESPACES, parseTitle, getSubpageBreadcrumbs } from '../utils/namespaces';
+import { parseSemanticFacts } from '../utils/semanticParser';
+import { SemanticFactbox } from './SemanticFactbox';
+import { CategoryTreeView } from './CategoryTreeView';
 
 interface WikiReaderProps {
   slug: string;
@@ -185,9 +189,20 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     };
   }, [data?.html, onProgressChange]);
 
-  const isTalk = slug.startsWith('Talk:');
-  const mainSlug = isTalk ? slug.replace('Talk:', '') : slug;
-  const talkSlug = isTalk ? slug : `Talk:${slug}`;
+  const parsedTitle = useMemo(() => parseTitle(slug), [slug]);
+  const breadcrumbs = useMemo(() => getSubpageBreadcrumbs(parsedTitle), [parsedTitle]);
+  const isTalk = parsedTitle.isTalk;
+  const subjectSlug = parsedTitle.subjectTitle;
+  const talkSlug = parsedTitle.talkTitle;
+
+  const subjectLabel = useMemo(() => {
+    if (parsedTitle.namespaceId === 0 || parsedTitle.namespaceId === 1) return 'Artigo';
+    if (parsedTitle.isTalk) {
+      const subjectDef = MEDIAWIKI_NAMESPACES[parsedTitle.subjectNamespaceId];
+      return subjectDef?.localized || subjectDef?.canonical || 'Página';
+    }
+    return parsedTitle.namespaceDef.localized || parsedTitle.namespaceDef.canonical || 'Página';
+  }, [parsedTitle]);
 
   if (loading) {
     return (
@@ -232,34 +247,41 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
   const { article, html, toc, categories, parseTimeMs } = data;
 
+  const semanticData = useMemo(() => {
+    if (!article?.wikitext) return { facts: [] };
+    return parseSemanticFacts(slug, article.title, article.wikitext);
+  }, [slug, article?.title, article?.wikitext]);
+
   return (
     <div className="relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
       {/* Article Sub-header Tabs & Action Bar */}
       <div className="border-b border-slate-200 dark:border-slate-800 pb-2 mb-6 flex flex-wrap items-center justify-between gap-4">
-        {/* Namespace tabs: Article / Talk */}
+        {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => onNavigate(mainSlug)}
+            onClick={() => onNavigate(subjectSlug)}
             className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
               !isTalk
                 ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
                 : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            Artigo
+            {subjectLabel}
           </button>
-          <button
-            onClick={() => onNavigate(talkSlug)}
-            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-              isTalk
-                ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            Discussão
-          </button>
+          {talkSlug && (
+            <button
+              onClick={() => onNavigate(talkSlug)}
+              className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                isTalk
+                  ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Discussão
+            </button>
+          )}
         </div>
 
         {/* Action Controls */}
@@ -406,6 +428,24 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         <main className="lg:col-span-9">
           {/* Article Title */}
           <div className="border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
+            {/* Subpage Breadcrumbs Hierarchy */}
+            {breadcrumbs.length > 0 && (
+              <nav aria-label="Subpáginas" className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5 flex-wrap font-sans">
+                <span className="text-slate-400 dark:text-slate-500 font-medium">&lt;</span>
+                {breadcrumbs.map((crumb, idx) => (
+                  <React.Fragment key={crumb.slug}>
+                    {idx > 0 && <span className="text-slate-300 dark:text-slate-600">/</span>}
+                    <button
+                      onClick={() => onNavigate(crumb.slug)}
+                      className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      {crumb.label}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </nav>
+            )}
+
             <h1 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center justify-between">
               <span>{article.title}</span>
               {article.isProtected && (
@@ -500,6 +540,33 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             currentSlug={slug}
             onNavigate={onNavigate}
           />
+
+          {/* Semantic MediaWiki & Cargo Structured Factbox */}
+          {semanticData.facts && semanticData.facts.length > 0 && (
+            <SemanticFactbox
+              facts={semanticData.facts}
+              articleTitle={article.title}
+              onNavigateArticle={onNavigate}
+            />
+          )}
+
+          {/* Canonical MediaWiki CategoryTree (Embedded for Namespace 14 - Categoria) */}
+          {parsedTitle.namespaceId === 14 && (
+            <div className="mt-8 border border-slate-200 dark:border-slate-800 rounded-lg p-5 bg-white dark:bg-slate-900 shadow-xs">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <FolderTree className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Árvore de Subcategorias & Artigos Membros ({parsedTitle.baseTitle})
+                </h2>
+              </div>
+              <CategoryTreeView
+                articles={allArticles}
+                currentCategory={parsedTitle.baseTitle}
+                onNavigateArticle={onNavigate}
+                onSelectCategory={(cat) => onNavigate(`Categoria:${cat}`)}
+              />
+            </div>
+          )}
 
           {/* Related Articles Component (Visible on mobile/tablet viewports where sidebar is hidden) */}
           <RelatedArticles
