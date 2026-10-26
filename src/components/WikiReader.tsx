@@ -461,7 +461,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               <span aria-hidden="true">·</span>
               <span>Namespace {article.namespace === 0 ? 'Main' : article.namespace === 1 ? 'Talk' : article.namespace}</span>
               <span aria-hidden="true">·</span>
-              <span>{article.views.toLocaleString()} views</span>
+              <span>{(article.views ?? 0).toLocaleString()} views</span>
               <span aria-hidden="true">·</span>
               <span className="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5" title="Total word count and estimated reading time">
                 <FileText className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />

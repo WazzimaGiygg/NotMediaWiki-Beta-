@@ -277,7 +277,7 @@ export const WikiReportModal: React.FC<WikiReportModalProps> = ({
                   <div className="text-xs text-slate-500 font-sans mt-1 flex flex-wrap items-center gap-2">
                     <span>Namespace: {article.namespace === 0 ? 'Principal (Artigo)' : article.namespace}</span>
                     <span>·</span>
-                    <span>Visualizações: {article.views.toLocaleString()}</span>
+                    <span>Visualizações: {(article.views ?? 0).toLocaleString()}</span>
                     <span>·</span>
                     <span>Revisão Ativa: {article.latestRevisionId}</span>
                     <span>·</span>

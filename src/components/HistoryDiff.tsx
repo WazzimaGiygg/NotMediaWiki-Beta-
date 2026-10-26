@@ -518,7 +518,7 @@ export const HistoryDiff: React.FC<HistoryDiffProps> = ({
                   )}
                 </span>
                 <span>•</span>
-                <span className="font-mono">{revOld.byteSize.toLocaleString()} bytes</span>
+                <span className="font-mono">{(revOld.byteSize ?? 0).toLocaleString()} bytes</span>
               </div>
               <div className="text-[11px] text-slate-600 italic truncate" title={revOld.comment}>
                 "{revOld.comment || 'Sem resumo de edição'}"
@@ -569,7 +569,7 @@ export const HistoryDiff: React.FC<HistoryDiffProps> = ({
                   )}
                 </span>
                 <span>•</span>
-                <span className="font-mono">{revNew.byteSize.toLocaleString()} bytes</span>
+                <span className="font-mono">{(revNew.byteSize ?? 0).toLocaleString()} bytes</span>
               </div>
               <div className="text-[11px] text-slate-600 italic truncate" title={revNew.comment}>
                 "{revNew.comment || 'Sem resumo de edição'}"
@@ -850,7 +850,7 @@ export const HistoryDiff: React.FC<HistoryDiffProps> = ({
 
                     {/* Size */}
                     <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">
-                      {rev.byteSize.toLocaleString()} bytes
+                      {(rev.byteSize ?? 0).toLocaleString()} bytes
                     </td>
 
                     {/* Summary */}

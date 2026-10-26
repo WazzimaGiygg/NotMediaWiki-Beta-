@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { HomeScreen } from './components/HomeScreen';
 import { WikiReader } from './components/WikiReader';
 import { WikiEditor } from './components/WikiEditor';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { DevAdminDashboard } from './components/DevAdminDashboard';
 import { ArticleHistory } from './components/ArticleHistory';
 import { SearchResults } from './components/SearchResults';
@@ -329,16 +330,25 @@ export default function App() {
         )}
 
         {currentView === 'reader' && (
-          <WikiReader
-            slug={activeArticleSlug}
-            currentUser={currentUser}
-            onNavigate={handleNavigateArticle}
-            onEdit={handleOpenEdit}
-            onHistory={handleOpenHistory}
-            onNewArticle={() => setIsNewArticleModalOpen(true)}
-            onProgressChange={setReadingProgress}
-            onOpenChecklist={() => setIsChecklistOpen(true)}
-          />
+          <ErrorBoundary
+            fallbackTitle="Erro ao renderizar o artigo"
+            onReset={() => {
+              setCurrentView('home');
+              window.location.hash = '#/home';
+            }}
+          >
+            <WikiReader
+              key={activeArticleSlug}
+              slug={activeArticleSlug}
+              currentUser={currentUser}
+              onNavigate={handleNavigateArticle}
+              onEdit={handleOpenEdit}
+              onHistory={handleOpenHistory}
+              onNewArticle={() => setIsNewArticleModalOpen(true)}
+              onProgressChange={setReadingProgress}
+              onOpenChecklist={() => setIsChecklistOpen(true)}
+            />
+          </ErrorBoundary>
         )}
 
         {currentView === 'directory' && (

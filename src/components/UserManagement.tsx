@@ -633,7 +633,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onU
 
                       {/* Edit Count */}
                       <td className="py-3 px-4 font-mono text-slate-700">
-                        {user.editCount.toLocaleString()} edições
+                        {(user.editCount ?? 0).toLocaleString()} edições
                       </td>
 
                       {/* Action Buttons */}

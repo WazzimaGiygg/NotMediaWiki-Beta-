@@ -105,30 +105,62 @@ export const api = {
 
   async getArticle(slug: string): Promise<Article> {
     const cleanSlug = slug.trim().replace(/\s+/g, '_');
-    // Fetch directly from Firebase Firestore
-    const cloudArticle = await fetchArticleFromFirestore(cleanSlug);
-    if (cloudArticle) {
-      return cloudArticle;
+    // 1. Fetch directly from Firebase Firestore
+    try {
+      const cloudArticle = await fetchArticleFromFirestore(cleanSlug);
+      if (cloudArticle) {
+        return {
+          ...cloudArticle,
+          views: cloudArticle.views ?? 0,
+          wikitext: cloudArticle.wikitext || '',
+        };
+      }
+
+      // Try case-insensitive or decoded slug from Firestore
+      const all = await fetchArticlesFromFirestore();
+      const matched = all.find(
+        a => a.slug.toLowerCase() === cleanSlug.toLowerCase() ||
+             decodeURIComponent(a.slug).toLowerCase() === cleanSlug.toLowerCase()
+      );
+      if (matched) {
+        return {
+          ...matched,
+          views: matched.views ?? 0,
+          wikitext: matched.wikitext || '',
+        };
+      }
+    } catch (err) {
+      console.warn('Firestore article read notice:', err);
     }
 
-    // Try case-insensitive or decoded slug from Firestore
-    const all = await fetchArticlesFromFirestore();
-    const matched = all.find(
-      a => a.slug.toLowerCase() === cleanSlug.toLowerCase() ||
-           decodeURIComponent(a.slug).toLowerCase() === cleanSlug.toLowerCase()
-    );
-    if (matched) return matched;
+    // 2. Fallback to local Content Service microservice
+    try {
+      const res: any = await safeFetch(`${BASE_URL}/content/articles/${encodeURIComponent(cleanSlug)}`);
+      if (res && res.article) {
+        return {
+          ...res.article,
+          views: res.article.views ?? 0,
+          wikitext: res.article.wikitext || '',
+        };
+      }
+    } catch {
+      // ignore
+    }
 
-    throw new Error(`Artigo "${slug}" não encontrado no banco de dados do Firebase.`);
+    throw new Error(`Artigo "${slug}" não encontrado no banco de dados.`);
   },
 
   async getRenderedArticle(slug: string): Promise<RenderedArticleResponse> {
     const cleanSlug = slug.trim().replace(/\s+/g, '_');
     const article = await this.getArticle(cleanSlug);
-    const parsed = clientParsoid.parse(article.wikitext, article.title);
+    const parsed = clientParsoid.parse(article.wikitext || '', article.title || cleanSlug);
 
     return {
-      article,
+      article: {
+        ...article,
+        views: article.views ?? 0,
+        wikitext: article.wikitext || '',
+      },
       html: parsed.html,
       toc: parsed.toc,
       categories: parsed.categories,

@@ -727,7 +727,7 @@ export const ArticleHistory: React.FC<ArticleHistoryProps> = ({
                       {/* Size & Delta */}
                       <td className="py-2.5 px-3 font-mono whitespace-nowrap">
                         <span className="text-slate-700 dark:text-slate-300">
-                          {rev.byteSize.toLocaleString()} bytes
+                          {(rev.byteSize ?? 0).toLocaleString()} bytes
                         </span>
                         {index < revisions.length - 1 && (
                           <span

@@ -250,7 +250,7 @@ export const RelatedArticles: React.FC<RelatedArticlesProps> = ({
                   {/* Action Link */}
                   <div className="mt-2 pt-1.5 border-t border-slate-200/50 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500">
                     <span className="font-mono">
-                      {article.views.toLocaleString()} views
+                      {(article.views ?? 0).toLocaleString()} views
                     </span>
                     <button
                       onClick={() => onNavigate(article.slug)}

@@ -157,8 +157,7 @@ service cloud.firestore {
         );
 
       allow update: if isRegistered()
-        && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['createdAt', 'authorUid', 'slug', 'id'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['slug'])
         && (
           !(resource.data.get('protectionLevel', '') in ['semi', 'full', 'sysop']) &&
           resource.data.get('isProtected', false) != true

@@ -111,7 +111,7 @@ export const MeshTopology: React.FC = () => {
           <div className="p-4 bg-white border border-slate-200 rounded">
             <div className="text-xs text-slate-500 font-sans">Aggregate Cluster RPS</div>
             <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
-              {metrics.aggregateRps.toLocaleString()} <span className="text-xs font-sans text-slate-400 font-normal">req/s</span>
+              {(metrics.aggregateRps ?? 0).toLocaleString()} <span className="text-xs font-sans text-slate-400 font-normal">req/s</span>
             </div>
             <div className="text-[11px] text-emerald-600 font-sans mt-1">
               Distributed across 7 active microservices
@@ -131,7 +131,7 @@ export const MeshTopology: React.FC = () => {
           <div className="p-4 bg-white border border-slate-200 rounded">
             <div className="text-xs text-slate-500 font-sans">Total Requests Handled</div>
             <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
-              {metrics.totalRequests.toLocaleString()}
+              {(metrics.totalRequests ?? 0).toLocaleString()}
             </div>
             <div className="text-[11px] text-slate-500 font-sans mt-1">
               Zero transaction deadlocks recorded

@@ -952,10 +952,11 @@ export async function saveArticleToFirestore(payload: {
     createdAt: existingArticle?.createdAt || timestamp,
     updatedAt: timestamp,
     categories: finalCategories,
-    views: (existingArticle?.views || 0) + 1,
+    views: Math.max(1, Number(existingArticle?.views || 0) + 1),
     isProtected: existingArticle?.isProtected || false,
-    wikitext: payload.wikitext,
+    wikitext: payload.wikitext || '',
     lastEditedBy: authorName,
+    authorUid: (existingArticle as any)?.authorUid || auth.currentUser?.uid || authorId,
     syncedToCloudAt: timestamp,
   };
 
