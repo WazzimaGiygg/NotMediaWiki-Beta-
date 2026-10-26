@@ -92,4 +92,17 @@ describe('NotMediaWiki API Gateway Integration Tests', () => {
     expect(res.body.failed).toBe(0);
     expect(res.body.suiteDurationMs).toBeGreaterThan(0);
   });
+
+  it('POST /api/v1/auth/users/upsert registers or syncs user session without error', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/users/upsert')
+      .send({
+        id: 'test-sync-user-123',
+        username: 'TestSyncUser',
+        email: 'testsync@example.com',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user.id).toBe('test-sync-user-123');
+  });
 });

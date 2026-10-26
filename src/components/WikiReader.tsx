@@ -204,6 +204,11 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     return parsedTitle.namespaceDef.localized || parsedTitle.namespaceDef.canonical || 'Página';
   }, [parsedTitle]);
 
+  const semanticData = useMemo(() => {
+    if (!data?.article?.wikitext) return { facts: [] };
+    return parseSemanticFacts(slug, data.article.title, data.article.wikitext);
+  }, [slug, data?.article?.title, data?.article?.wikitext]);
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 flex flex-col items-center justify-center min-h-[400px]">
@@ -246,11 +251,6 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   }
 
   const { article, html, toc, categories, parseTimeMs } = data;
-
-  const semanticData = useMemo(() => {
-    if (!article?.wikitext) return { facts: [] };
-    return parseSemanticFacts(slug, article.title, article.wikitext);
-  }, [slug, article?.title, article?.wikitext]);
 
   return (
     <div className="relative">

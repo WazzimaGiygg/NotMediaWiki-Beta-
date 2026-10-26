@@ -63,8 +63,9 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     req.user = user;
     next();
   } catch (err: any) {
-    // Invalid token supplied
-    res.status(401).json({ error: 'Credenciais de autenticação inválidas ou expiradas' });
+    // If token verification fails, continue unauthenticated.
+    // Protected endpoints will be caught by requireAuth.
+    next();
   }
 }
 
