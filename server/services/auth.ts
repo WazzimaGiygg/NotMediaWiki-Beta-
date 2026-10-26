@@ -208,9 +208,17 @@ export class CentralAuthService {
         if (user.editCount !== undefined) existing.editCount = user.editCount;
       }
 
-      const { db } = getFirebaseAdmin();
-      if (db) {
-        db.collection('users').doc(user.id).set(existing, { merge: true }).catch(() => {});
+      try {
+        const { db } = getFirebaseAdmin();
+        if (db && typeof db.collection === 'function') {
+          const cleanExisting: Record<string, any> = {};
+          for (const [k, v] of Object.entries(existing)) {
+            if (v !== undefined) cleanExisting[k] = v;
+          }
+          db.collection('users').doc(user.id).set(cleanExisting, { merge: true }).catch(() => {});
+        }
+      } catch {
+        // Safe fallback when Firebase Admin service account is unconfigured
       }
 
       return existing;
@@ -232,9 +240,17 @@ export class CentralAuthService {
       };
       this.users.set(user.id, newUser);
 
-      const { db } = getFirebaseAdmin();
-      if (db) {
-        db.collection('users').doc(user.id).set(newUser).catch(() => {});
+      try {
+        const { db } = getFirebaseAdmin();
+        if (db && typeof db.collection === 'function') {
+          const cleanNew: Record<string, any> = {};
+          for (const [k, v] of Object.entries(newUser)) {
+            if (v !== undefined) cleanNew[k] = v;
+          }
+          db.collection('users').doc(user.id).set(cleanNew).catch(() => {});
+        }
+      } catch {
+        // Safe fallback when Firebase Admin service account is unconfigured
       }
 
       return newUser;
@@ -245,9 +261,13 @@ export class CentralAuthService {
     const user = this.users.get(userId);
     if (user) {
       user.editCount++;
-      const { db } = getFirebaseAdmin();
-      if (db) {
-        db.collection('users').doc(userId).set({ editCount: user.editCount }, { merge: true }).catch(() => {});
+      try {
+        const { db } = getFirebaseAdmin();
+        if (db && typeof db.collection === 'function') {
+          db.collection('users').doc(userId).set({ editCount: user.editCount }, { merge: true }).catch(() => {});
+        }
+      } catch {
+        // Safe fallback
       }
     }
   }

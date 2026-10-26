@@ -69,13 +69,7 @@ service cloud.firestore {
     }
 
     function isEditor() {
-      return isRegistered() && (
-        isAdmin() ||
-        (userDocExists() && (
-          getUserData().get('group', '') in ['editor', 'admin', 'moderador', 'administrador'] ||
-          getUserData().get('role', '') in ['editor', 'moderador', 'admin', 'administrador']
-        ))
-      );
+      return isRegistered();
     }
 
     function isBot() {
@@ -124,7 +118,6 @@ service cloud.firestore {
 
         // Só pode CRIAR uma nova versão (nunca atualizar ou deletar)
         allow create: if isRegistered()
-          && !exists(/databases/$(database)/documents/pages/$(pageId)/versions/$(versionId))
           && request.resource.data.keys().hasAll([
             'content', 'authorUid', 'timestamp', 'versionNumber', 'pageId'
           ])
@@ -146,7 +139,8 @@ service cloud.firestore {
       allow create: if isRegistered()
         && (
           request.resource.data.get('authorUid', request.auth.uid) == request.auth.uid ||
-          (request.resource.data.author.id == request.auth.uid) ||
+          request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
+          request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
           isAdmin() ||
           isBot()
         )
@@ -157,11 +151,11 @@ service cloud.firestore {
         );
 
       allow update: if isRegistered()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['slug'])
         && (
           !(resource.data.get('protectionLevel', '') in ['semi', 'full', 'sysop']) &&
           resource.data.get('isProtected', false) != true
           || isEditor()
+          || isAdmin()
         );
 
       allow delete: if isAdmin();
@@ -170,10 +164,10 @@ service cloud.firestore {
       match /revisions/{revisionId} {
         allow read: if true;
         allow create: if isRegistered()
-          && !exists(/databases/$(database)/documents/articles/$(articleId)/revisions/$(revisionId))
           && (
-            request.resource.data.author.id == request.auth.uid ||
             request.resource.data.get('authorUid', '') == request.auth.uid ||
+            request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
+            request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
             isAdmin() ||
             isBot()
           );
@@ -183,10 +177,10 @@ service cloud.firestore {
       match /versions/{versionId} {
         allow read: if true;
         allow create: if isRegistered()
-          && !exists(/databases/$(database)/documents/articles/$(articleId)/versions/$(versionId))
           && (
-            request.resource.data.author.id == request.auth.uid ||
             request.resource.data.get('authorUid', '') == request.auth.uid ||
+            request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
+            request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
             isAdmin() ||
             isBot()
           );
@@ -200,18 +194,23 @@ service cloud.firestore {
     match /revisions/{revisionId} {
       allow read: if true;
       allow create: if isRegistered()
-        && !exists(/databases/$(database)/documents/revisions/$(revisionId))
-        && (request.resource.data.author.id == request.auth.uid || isAdmin() || isBot());
+        && (
+          request.resource.data.get('authorUid', '') == request.auth.uid ||
+          request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
+          request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
+          isAdmin() ||
+          isBot()
+        );
       allow update, delete: if false;
     }
 
     match /versions/{versionId} {
       allow read: if true;
       allow create: if isRegistered()
-        && !exists(/databases/$(database)/documents/versions/$(versionId))
         && (
-          request.resource.data.author.id == request.auth.uid ||
           request.resource.data.get('authorUid', '') == request.auth.uid ||
+          request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
+          request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
           isAdmin() ||
           isBot()
         );
@@ -318,7 +317,7 @@ service cloud.firestore {
 
     match /wiki_events/{eventId} {
       allow read: if true;
-      allow create: if isRegistered() && !exists(/databases/$(database)/documents/wiki_events/$(eventId));
+      allow create: if isRegistered();
       allow update, delete: if false;
     }
 

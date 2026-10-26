@@ -885,8 +885,9 @@ export async function saveArticleToFirestore(payload: {
   const sha256 = await computeHash(payload.wikitext);
   const byteSize = new TextEncoder().encode(payload.wikitext).length;
 
-  const authorName = payload.authorUser?.username || 'Wikipedian';
-  const authorId = payload.authorUser?.id || 'anon-user';
+  const currentUid = auth.currentUser?.uid;
+  const authorId = currentUid || payload.authorUser?.id || 'anon-user';
+  const authorName = payload.authorUser?.username || auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Wikipedian';
 
   // 1. Fetch current article if exists to get previous revision
   let existingArticle: Article | null = null;
@@ -956,7 +957,7 @@ export async function saveArticleToFirestore(payload: {
     isProtected: existingArticle?.isProtected || false,
     wikitext: payload.wikitext || '',
     lastEditedBy: authorName,
-    authorUid: (existingArticle as any)?.authorUid || auth.currentUser?.uid || authorId,
+    authorUid: currentUid || (existingArticle as any)?.authorUid || authorId,
     syncedToCloudAt: timestamp,
   };
 
@@ -977,7 +978,7 @@ export async function saveArticleToFirestore(payload: {
     },
     database: 'enwiki',
     page_title: cleanSlug,
-    page_namespace: article.namespace,
+    page_namespace: articleDocData.namespace,
     rev_id: revId,
     rev_timestamp: timestamp,
     rev_sha1: sha256.substring(0, 16),
@@ -993,6 +994,7 @@ export async function saveArticleToFirestore(payload: {
     await setDoc(doc(db, pathArticles, cleanSlug), articleDocData);
     await setDoc(doc(db, pathRevisions, revId), {
       ...revision,
+      authorUid: authorId,
       syncedToCloudAt: timestamp,
     });
     await setDoc(doc(db, pathEvents, eventId), {
@@ -1004,7 +1006,8 @@ export async function saveArticleToFirestore(payload: {
       rev_sha1: event.rev_sha1,
       rev_minor_edit: event.rev_minor_edit,
       rev_len: event.rev_len,
-      user_text: event.user_text,
+      user_text: authorName,
+      authorUid: authorId,
       comment: event.comment,
       type: event.type,
       database: event.database,
@@ -1019,23 +1022,24 @@ export async function saveArticleToFirestore(payload: {
   }
 
   // 6. Update user's editCount and profile in Firestore
-  if (payload.authorUser && payload.authorUser.id) {
+  const targetUserId = currentUid || payload.authorUser?.id;
+  if (targetUserId) {
     try {
-      const userRef = doc(db, pathUsers, payload.authorUser.id);
+      const userRef = doc(db, pathUsers, targetUserId);
       const userSnap = await getDoc(userRef);
       const prevCount = userSnap.exists()
         ? (userSnap.data().editCount || 0)
-        : (payload.authorUser.editCount || 0);
+        : (payload.authorUser?.editCount || 0);
 
       await setDoc(userRef, {
-        uid: payload.authorUser.id,
-        displayName: payload.authorUser.username,
-        role: payload.authorUser.role || 'editor',
+        uid: targetUserId,
+        displayName: authorName,
+        role: payload.authorUser?.role || 'editor',
         editCount: prevCount + 1,
-        avatar: payload.authorUser.avatar || payload.authorUser.username.substring(0, 2).toUpperCase(),
-        email: payload.authorUser.email || '',
-        isGoogleUser: !!payload.authorUser.isGoogleUser,
-        provider: payload.authorUser.provider || (payload.authorUser.isGoogleUser ? 'google.com' : 'local'),
+        avatar: payload.authorUser?.avatar || authorName.substring(0, 2).toUpperCase(),
+        email: auth.currentUser?.email || payload.authorUser?.email || '',
+        isGoogleUser: !!auth.currentUser || !!payload.authorUser?.isGoogleUser,
+        provider: auth.currentUser ? 'google.com' : (payload.authorUser?.provider || 'local'),
         syncedToCloudAt: timestamp,
       }, { merge: true });
     } catch (err) {
