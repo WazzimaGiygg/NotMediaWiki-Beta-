@@ -179,8 +179,12 @@ export const WikiReportModal: React.FC<WikiReportModalProps> = ({
             <div className="border-b-2 border-slate-800 pb-5">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-blue-600" />
+                  <div className="flex items-center gap-2.5">
+                    <img
+                      src="/assets/aistudio/image_370f9ede.png"
+                      alt="NotMediaWiki Logo"
+                      className="w-6 h-6 object-contain rounded"
+                    />
                     <span className="text-xl font-bold tracking-tight text-slate-900 font-serif">
                       NotMediaWiki
                     </span>

@@ -489,9 +489,11 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-2.5 text-left group cursor-pointer"
               title="NotMediaWiki - Ir para a Página Inicial"
             >
-              <div className="w-8 h-8 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-serif font-black text-xl text-slate-800 dark:text-slate-100 group-hover:border-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700 transition-colors shadow-2xs">
-                N
-              </div>
+              <img
+                src="/assets/aistudio/image_370f9ede.png"
+                alt="NotMediaWiki Logo Oficial"
+                className="w-8.5 h-8.5 object-contain rounded group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
+              />
               <div>
                 <div className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                   NotMediaWiki

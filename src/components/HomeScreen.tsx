@@ -291,31 +291,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8 font-sans">
       {/* Top Banner / Ticker */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-mono">
-              NotMediaWiki • Desenvolvimento de Projetos
-            </span>
-            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[11px] font-medium">
-              WazzimaGiygg
-            </span>
+        <div className="flex items-start gap-4">
+          <img
+            src="/assets/aistudio/image_370f9ede.png"
+            alt="NotMediaWiki Logo Oficial"
+            className="w-16 h-16 sm:w-20 sm:h-20 object-contain rounded-lg p-1.5 bg-slate-50 border border-slate-200 shadow-xs shrink-0 hover:scale-105 transition-transform"
+          />
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-mono">
+                NotMediaWiki • Desenvolvimento de Projetos
+              </span>
+              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[11px] font-medium">
+                WazzimaGiygg
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-serif font-black text-slate-900 tracking-tight">
+              NotMediaWiki — Enciclopédia Colaborativa
+            </h1>
+            <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
+              Este site faz parte do desenvolvimento de projetos <strong className="text-slate-800">WazzimaGiygg</strong>, do site{' '}
+              <a
+                href={wrapExternalUrl("https://wazzimagiygg.com")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline font-semibold inline-flex items-center gap-1"
+              >
+                wazzimagiygg.com
+                <ExternalLink className="w-3 h-3" />
+              </a>. Sincronização em tempo real via Cloud Firestore.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-serif font-black text-slate-900 tracking-tight">
-            NotMediaWiki — Enciclopédia Colaborativa
-          </h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            Este site faz parte do desenvolvimento de projetos <strong className="text-slate-800">WazzimaGiygg</strong>, do site{' '}
-            <a
-              href={wrapExternalUrl("https://wazzimagiygg.com")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline font-semibold inline-flex items-center gap-1"
-            >
-              wazzimagiygg.com
-              <ExternalLink className="w-3 h-3" />
-            </a>. Sincronização em tempo real via Cloud Firestore.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
