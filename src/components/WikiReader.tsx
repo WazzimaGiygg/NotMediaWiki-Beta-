@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database, Zap } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -10,6 +10,7 @@ import { TableOfContents } from './TableOfContents';
 import { ArticleFootnotes } from './ArticleFootnotes';
 import { WikiReportModal } from './WikiReportModal';
 import { ArticleRatingWidget } from './ArticleRatingWidget';
+import { ArticleFeedbackWidget } from './ArticleFeedbackWidget';
 import { buildArticleReportData } from '../utils/reportGenerator';
 import { MEDIAWIKI_NAMESPACES, parseTitle, getSubpageBreadcrumbs } from '../utils/namespaces';
 import { parseSemanticFacts } from '../utils/semanticParser';
@@ -477,6 +478,19 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
                 <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                 <span>{revisions.length} {revisions.length === 1 ? 'edição' : 'edições'}</span>
               </button>
+              {revisions[0]?.author && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    onClick={() => onNavigate(`Usuario:${revisions[0].author.username || revisions[0].author.name}`)}
+                    className="hover:underline text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 font-sans cursor-pointer transition-colors"
+                    title={`Ver perfil e Karma de ${revisions[0].author.name}`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    <span>Último editor: <strong>{revisions[0].author.name}</strong></span>
+                  </button>
+                </>
+              )}
               <span aria-hidden="true">·</span>
               <span className="text-emerald-700 dark:text-emerald-400 font-mono">Parsoid: {parseTimeMs}ms</span>
               <span aria-hidden="true">·</span>
@@ -515,6 +529,16 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             className="wiki-content prose max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif"
             onClick={handleContentClick}
             dangerouslySetInnerHTML={{ __html: html }}
+          />
+
+          {/* Article Voting & Feedback Component (Curtir / Descurtir) + Editor Karma System */}
+          <ArticleFeedbackWidget
+            articleSlug={slug}
+            articleTitle={article.title}
+            authorUid={revisions[0]?.author?.id}
+            authorName={revisions[0]?.author?.name || revisions[0]?.author?.username || 'Wikipedian'}
+            currentUser={currentUser || null}
+            onNavigateUser={(userSlug) => onNavigate(`Usuario:${userSlug}`)}
           />
 
           {/* 3.05.8.b.c - Article Evaluation Widget (Daily Checklist Mission +1.00 pt) */}

@@ -17,6 +17,10 @@ import {
   BotScanResult,
   BotActivityLog,
   UserAbuseAudit,
+  ArticleVote,
+  VoteType,
+  ArticleVoteSummary,
+  UserKarmaProfile,
 } from './types';
 import { botAgentService } from './services/botAgentService';
 import { clientParsoid } from './services/parsoid';
@@ -36,6 +40,12 @@ import {
   saveAllowedDomainToFirestore,
   deleteAllowedDomainFromFirestore,
   subscribeToAllowedDomainsFromFirestore,
+  submitArticleVoteToFirestore,
+  subscribeToArticleVotes,
+  fetchUserKarmaProfile,
+  subscribeToUserKarmaProfile,
+  fetchTopKarmaEditorsFromFirestore,
+  calculateKarmaRank,
   auth,
 } from './firebase';
 
@@ -541,6 +551,43 @@ export const api = {
     } catch {
       return user as UserSession;
     }
+  },
+
+  // ---------------------------------------------------------------------------
+  // 6.1. Article Quality Voting & Editor Karma System
+  // ---------------------------------------------------------------------------
+  async submitArticleVote(params: {
+    articleSlug: string;
+    vote: VoteType;
+    currentUser: UserSession;
+    authorUid?: string;
+    authorName?: string;
+  }): Promise<{ vote: ArticleVote | null; action: 'created' | 'updated' | 'removed' }> {
+    return submitArticleVoteToFirestore(params);
+  },
+
+  subscribeArticleVotes(
+    articleSlug: string,
+    currentUserId: string | undefined,
+    callback: (summary: ArticleVoteSummary, votes: ArticleVote[]) => void
+  ): () => void {
+    return subscribeToArticleVotes(articleSlug, currentUserId, callback);
+  },
+
+  async getUserKarma(userId: string): Promise<UserKarmaProfile> {
+    return fetchUserKarmaProfile(userId);
+  },
+
+  subscribeUserKarma(userId: string, callback: (profile: UserKarmaProfile) => void): () => void {
+    return subscribeToUserKarmaProfile(userId, callback);
+  },
+
+  async getTopKarmaEditors(limitCount: number = 10): Promise<UserSession[]> {
+    return fetchTopKarmaEditorsFromFirestore(limitCount);
+  },
+
+  calculateKarmaRank(karma: number) {
+    return calculateKarmaRank(karma);
   },
 
   // ---------------------------------------------------------------------------

@@ -750,6 +750,21 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </button>
 
+              {/* User Karma Reputation Button */}
+              {currentUser && (
+                <button
+                  onClick={onOpenMyUserPage}
+                  className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                  title={`Seu Karma: ${currentUser.karma ?? 10} pontos de reputação baseados em votos positivos`}
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span className="hidden sm:inline">Karma</span>
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                    {currentUser.karma ?? 10}
+                  </span>
+                </button>
+              )}
+
               {/* Real-time Chat Trigger Button */}
               <button
                 onClick={onOpenChat}
@@ -801,8 +816,13 @@ export const Header: React.FC<HeaderProps> = ({
                       <div className="text-[11px] text-slate-400 mt-0.5 truncate">
                         {currentUser?.email || 'Usuário Autenticado'}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        Papel: <strong className="text-slate-700 dark:text-slate-300 capitalize">{currentUser?.role}</strong>
+                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                        <span>Papel: <strong className="text-slate-700 dark:text-slate-300 capitalize">{currentUser?.role}</strong></span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
+                          <Zap className="w-3 h-3 fill-amber-500 text-amber-500" />
+                          {currentUser?.karma ?? 10} Karma
+                        </span>
                       </div>
                     </div>
 

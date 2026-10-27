@@ -11,6 +11,8 @@ import {
   UserCheck,
   RefreshCw,
   Hash,
+  Zap,
+  ThumbsUp,
 } from 'lucide-react';
 import { UserSession, UserRole } from '../types';
 import { fetchUsersFromFirestore, subscribeToFirestoreUsers } from '../firebase';
@@ -239,13 +241,25 @@ export const UserDirectory: React.FC<UserDirectoryProps> = ({
                     </p>
                   )}
 
-                  <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex-wrap">
+                    <div className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+                      <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                      <span>{user.karma ?? 10} Karma</span>
+                    </div>
+
                     <div className="flex items-center gap-1">
                       <Award className="w-3.5 h-3.5 text-indigo-500" />
                       <span>
                         <strong className="text-slate-700 dark:text-slate-200">{user.editCount || 0}</strong> edições
                       </span>
                     </div>
+
+                    {(user.positiveVotesReceived ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        <ThumbsUp className="w-3.5 h-3.5" />
+                        <span>{user.positiveVotesReceived} curtidas</span>
+                      </div>
+                    )}
 
                     {user.isGoogleUser && (
                       <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">

@@ -82,6 +82,9 @@
         "photoURL": { "type": "string", "maxLength": 1000 },
         "role": { "type": "string", "enum": ["sysop", "bureaucrat", "moderator", "editor", "reader", "bot"] },
         "editCount": { "type": "number" },
+        "karma": { "type": "number" },
+        "positiveVotesReceived": { "type": "number" },
+        "negativeVotesReceived": { "type": "number" },
         "isBanned": { "type": "boolean" },
         "banReason": { "type": "string", "maxLength": 500 },
         "bannedAt": { "type": "string" },
@@ -294,6 +297,23 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "userId", "action"]
+    },
+    "ArticleVote": {
+      "title": "ArticleVote",
+      "description": "Reader feedback and like/dislike quality vote on an article, granting Karma to the author",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "articleSlug": { "type": "string", "maxLength": 255 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 128 },
+        "vote": { "type": "string", "enum": ["up", "down"] },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "articleSlug", "userId", "vote", "createdAt"]
     }
   },
   "firestore": {
@@ -368,6 +388,10 @@
     "/compliance_records/{recordId}": {
       "schema": { "$ref": "#/entities/ComplianceRecord" },
       "description": "LGPD and Marco Civil technical compliance audit records synchronized in Firebase Firestore"
+    },
+    "/article_votes/{voteId}": {
+      "schema": { "$ref": "#/entities/ArticleVote" },
+      "description": "Reader feedback like/dislike votes on articles with author karma attribution"
     }
   }
 }

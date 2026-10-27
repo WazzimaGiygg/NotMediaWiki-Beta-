@@ -126,6 +126,9 @@ export interface UserSession {
   isGoogleUser?: boolean;
   photoURL?: string;
   provider?: string;
+  karma?: number;
+  positiveVotesReceived?: number;
+  negativeVotesReceived?: number;
   lastLoginAt?: string;
   syncedToCloudAt?: string;
 }
@@ -512,6 +515,45 @@ export interface ArticleRating {
   rating: number; // 1-5
   feedback?: string;
   createdAt: string;
+}
+
+export type VoteType = 'up' | 'down';
+
+export interface ArticleVote {
+  id: string; // `${articleSlug}_${userId}`
+  articleSlug: string;
+  userId: string;
+  username: string;
+  vote: VoteType;
+  authorUid?: string;
+  authorName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArticleVoteSummary {
+  upvotes: number;
+  downvotes: number;
+  totalVotes: number;
+  score: number;
+  approvalPercentage: number;
+  userVote: VoteType | null;
+}
+
+export interface UserKarmaProfile {
+  userId: string;
+  username: string;
+  karma: number;
+  rankTitle: string;
+  rankIcon: string;
+  rankColor: string;
+  badgeLevel: 'iniciante' | 'confiavel' | 'destaque' | 'guardiao' | 'curador' | 'mestre';
+  positiveVotesReceived: number;
+  negativeVotesReceived: number;
+  totalEdits: number;
+  approvalRate: number;
+  nextRankKarma?: number;
+  progressToNextRank?: number;
 }
 
 // =============================================================================

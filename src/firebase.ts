@@ -54,6 +54,10 @@ import {
   UserDailyChecklist,
   UserMonthlyPointsLedger,
   ArticleRating,
+  VoteType,
+  ArticleVote,
+  ArticleVoteSummary,
+  UserKarmaProfile,
 } from './types';
 import { DEFAULT_EXTENSIONS } from './data/defaultExtensions';
 import { api } from './api';
@@ -271,6 +275,9 @@ export async function fetchUsersFromFirestore(): Promise<UserSession[]> {
         userPageSlug: data.userPageSlug || `Usuário:${username}${userTag}`,
         role: (data.role as UserRole) || 'editor',
         editCount: data.editCount || 0,
+        karma: data.karma !== undefined ? data.karma : ((data.editCount || 0) * 5 + 10),
+        positiveVotesReceived: data.positiveVotesReceived || 0,
+        negativeVotesReceived: data.negativeVotesReceived || 0,
         avatar: (data.displayName || data.username || 'U').substring(0, 2).toUpperCase(),
         email: data.email || undefined,
         bio: data.bio || undefined,
@@ -1322,6 +1329,9 @@ export function subscribeToFirestoreUsers(
           username: data.displayName || data.username || docSnap.id,
           role: (data.role as UserRole) || 'editor',
           editCount: data.editCount || 0,
+          karma: data.karma !== undefined ? data.karma : ((data.editCount || 0) * 5 + 10),
+          positiveVotesReceived: data.positiveVotesReceived || 0,
+          negativeVotesReceived: data.negativeVotesReceived || 0,
           avatar: (data.displayName || data.username || 'U').substring(0, 2).toUpperCase(),
           email: data.email || undefined,
           isBanned: !!data.isBanned,
@@ -3019,6 +3029,367 @@ export function subscribeToArticleRatings(
       callback([]);
     }
   );
+}
+
+// =============================================================================
+// ARTICLE QUALITY VOTING & USER KARMA SYSTEM
+// =============================================================================
+
+export function calculateKarmaRank(karma: number): {
+  rankTitle: string;
+  rankIcon: string;
+  rankColor: string;
+  badgeLevel: 'iniciante' | 'confiavel' | 'destaque' | 'guardiao' | 'curador' | 'mestre';
+  nextRankKarma?: number;
+  progressToNextRank?: number;
+} {
+  const safeKarma = Math.max(0, karma || 0);
+  if (safeKarma >= 1000) {
+    return {
+      rankTitle: 'Mestre Wikimediano',
+      rankIcon: '👑',
+      rankColor: 'text-amber-500 bg-amber-50 dark:bg-amber-950/70 border-amber-300 dark:border-amber-700',
+      badgeLevel: 'mestre',
+      progressToNextRank: 100,
+    };
+  }
+  if (safeKarma >= 500) {
+    return {
+      rankTitle: 'Curador da Enciclopédia',
+      rankIcon: '💎',
+      rankColor: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/70 border-cyan-300 dark:border-cyan-700',
+      badgeLevel: 'curador',
+      nextRankKarma: 1000,
+      progressToNextRank: Math.min(100, Math.round(((safeKarma - 500) / 500) * 100)),
+    };
+  }
+  if (safeKarma >= 250) {
+    return {
+      rankTitle: 'Guardião do Conhecimento',
+      rankIcon: '🛡️',
+      rankColor: 'text-purple-600 bg-purple-50 dark:bg-purple-950/70 border-purple-300 dark:border-purple-700',
+      badgeLevel: 'guardiao',
+      nextRankKarma: 500,
+      progressToNextRank: Math.min(100, Math.round(((safeKarma - 250) / 250) * 100)),
+    };
+  }
+  if (safeKarma >= 100) {
+    return {
+      rankTitle: 'Editor Destaque',
+      rankIcon: '⭐',
+      rankColor: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/70 border-emerald-300 dark:border-emerald-700',
+      badgeLevel: 'destaque',
+      nextRankKarma: 250,
+      progressToNextRank: Math.min(100, Math.round(((safeKarma - 100) / 150) * 100)),
+    };
+  }
+  if (safeKarma >= 30) {
+    return {
+      rankTitle: 'Colaborador Confiável',
+      rankIcon: '🥉',
+      rankColor: 'text-blue-600 bg-blue-50 dark:bg-blue-950/70 border-blue-300 dark:border-blue-700',
+      badgeLevel: 'confiavel',
+      nextRankKarma: 100,
+      progressToNextRank: Math.min(100, Math.round(((safeKarma - 30) / 70) * 100)),
+    };
+  }
+  return {
+    rankTitle: 'Editor Novato',
+    rankIcon: '🌱',
+    rankColor: 'text-slate-600 bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700',
+    badgeLevel: 'iniciante',
+    nextRankKarma: 30,
+    progressToNextRank: Math.min(100, Math.round((safeKarma / 30) * 100)),
+  };
+}
+
+/**
+ * Submits or toggles a like/dislike quality feedback vote on an article.
+ * When an upvote is cast, awards +10 Karma to the article's editor.
+ */
+export async function submitArticleVoteToFirestore(params: {
+  articleSlug: string;
+  vote: VoteType;
+  currentUser: UserSession;
+  authorUid?: string;
+  authorName?: string;
+}): Promise<{ vote: ArticleVote | null; action: 'created' | 'updated' | 'removed' }> {
+  const path = 'article_votes';
+  const cleanSlug = params.articleSlug.trim().replace(/\s+/g, '_');
+  const voteDocId = `${cleanSlug}_${params.currentUser.id}`;
+  const now = new Date().toISOString();
+
+  const voteDocRef = doc(db, path, voteDocId);
+  const existingSnap = await getDoc(voteDocRef);
+
+  let karmaDelta = 0;
+  let posDelta = 0;
+  let negDelta = 0;
+  let action: 'created' | 'updated' | 'removed' = 'created';
+  let finalVote: ArticleVote | null = null;
+
+  if (existingSnap.exists()) {
+    const existing = existingSnap.data() as ArticleVote;
+    if (existing.vote === params.vote) {
+      // Toggle off / remove vote
+      await deleteDoc(voteDocRef);
+      action = 'removed';
+      finalVote = null;
+      if (existing.vote === 'up') {
+        karmaDelta = -10;
+        posDelta = -1;
+      } else {
+        negDelta = -1;
+      }
+    } else {
+      // Switch vote (up -> down or down -> up)
+      finalVote = {
+        id: voteDocId,
+        articleSlug: cleanSlug,
+        userId: params.currentUser.id,
+        username: params.currentUser.username,
+        vote: params.vote,
+        authorUid: params.authorUid || existing.authorUid,
+        authorName: params.authorName || existing.authorName,
+        createdAt: existing.createdAt || now,
+        updatedAt: now,
+      };
+      await setDoc(voteDocRef, finalVote);
+      action = 'updated';
+      if (params.vote === 'up') {
+        karmaDelta = 10;
+        posDelta = 1;
+        negDelta = -1;
+      } else {
+        karmaDelta = -10;
+        posDelta = -1;
+        negDelta = 1;
+      }
+    }
+  } else {
+    // Brand new vote
+    finalVote = {
+      id: voteDocId,
+      articleSlug: cleanSlug,
+      userId: params.currentUser.id,
+      username: params.currentUser.username,
+      vote: params.vote,
+      authorUid: params.authorUid,
+      authorName: params.authorName,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await setDoc(voteDocRef, finalVote);
+    action = 'created';
+    if (params.vote === 'up') {
+      karmaDelta = 10;
+      posDelta = 1;
+    } else {
+      negDelta = 1;
+    }
+  }
+
+  // Award / adjust author's Karma if author is identified and not self-voting
+  const targetAuthorId = params.authorUid;
+  if (targetAuthorId && targetAuthorId !== params.currentUser.id) {
+    try {
+      const authorRef = doc(db, 'users', targetAuthorId);
+      const authorSnap = await getDoc(authorRef);
+      if (authorSnap.exists()) {
+        const authorData = authorSnap.data();
+        const prevKarma = authorData.karma !== undefined ? authorData.karma : (((authorData.editCount || 0) * 5) + 10);
+        const prevPos = authorData.positiveVotesReceived || 0;
+        const prevNeg = authorData.negativeVotesReceived || 0;
+
+        const newKarma = Math.max(0, prevKarma + karmaDelta);
+        const newPos = Math.max(0, prevPos + posDelta);
+        const newNeg = Math.max(0, prevNeg + negDelta);
+
+        await setDoc(authorRef, {
+          karma: newKarma,
+          positiveVotesReceived: newPos,
+          negativeVotesReceived: newNeg,
+          syncedToCloudAt: now,
+        }, { merge: true });
+      }
+    } catch (authorErr) {
+      console.warn('Could not update author karma in users collection:', authorErr);
+    }
+  }
+
+  // System audit log
+  await writeSystemLog({
+    level: 'INFO',
+    service: 'QualityVoting',
+    message: `Voto ${action.toUpperCase()} (${params.vote === 'up' ? '+1 Curtida' : '-1 Descurtida'}) no artigo "${cleanSlug}" por ${params.currentUser.username}${targetAuthorId ? ` (Karma editor ${targetAuthorId}: ${karmaDelta >= 0 ? '+' : ''}${karmaDelta})` : ''}`,
+    details: { articleSlug: cleanSlug, vote: params.vote, action, karmaDelta, authorUid: targetAuthorId },
+  }).catch(() => {});
+
+  return { vote: finalVote, action };
+}
+
+/**
+ * Real-time subscription to quality feedback votes for an article
+ */
+export function subscribeToArticleVotes(
+  articleSlug: string,
+  currentUserId: string | undefined,
+  callback: (summary: ArticleVoteSummary, votes: ArticleVote[]) => void
+): () => void {
+  const path = 'article_votes';
+  const cleanSlug = articleSlug.trim().replace(/\s+/g, '_');
+  const q = query(collection(db, path), where('articleSlug', '==', cleanSlug));
+
+  return onSnapshot(
+    q,
+    snap => {
+      const votes = snap.docs.map(d => d.data() as ArticleVote);
+      let upvotes = 0;
+      let downvotes = 0;
+      let userVote: VoteType | null = null;
+
+      for (const v of votes) {
+        if (v.vote === 'up') upvotes++;
+        else if (v.vote === 'down') downvotes++;
+
+        if (currentUserId && v.userId === currentUserId) {
+          userVote = v.vote;
+        }
+      }
+
+      const totalVotes = upvotes + downvotes;
+      const score = upvotes - downvotes;
+      const approvalPercentage = totalVotes > 0 ? Math.round((upvotes / totalVotes) * 100) : 100;
+
+      callback(
+        {
+          upvotes,
+          downvotes,
+          totalVotes,
+          score,
+          approvalPercentage,
+          userVote,
+        },
+        votes
+      );
+    },
+    err => {
+      console.warn(`[Firestore] Votes subscription error for ${cleanSlug}:`, err);
+      callback(
+        {
+          upvotes: 0,
+          downvotes: 0,
+          totalVotes: 0,
+          score: 0,
+          approvalPercentage: 100,
+          userVote: null,
+        },
+        []
+      );
+    }
+  );
+}
+
+/**
+ * Fetches the Karma profile and statistics for a given user
+ */
+export async function fetchUserKarmaProfile(userId: string): Promise<UserKarmaProfile> {
+  let username = 'Usuário';
+  let totalEdits = 0;
+  let storedKarma: number | undefined;
+  let positiveVotesReceived = 0;
+  let negativeVotesReceived = 0;
+
+  try {
+    const userDocSnap = await getDoc(doc(db, 'users', userId));
+    if (userDocSnap.exists()) {
+      const data = userDocSnap.data();
+      username = data.displayName || data.username || username;
+      totalEdits = data.editCount || 0;
+      storedKarma = data.karma;
+      positiveVotesReceived = data.positiveVotesReceived || 0;
+      negativeVotesReceived = data.negativeVotesReceived || 0;
+    }
+  } catch (e) {
+    console.warn('Error reading user doc for karma:', e);
+  }
+
+  // Also query article_votes where authorUid == userId to guarantee accuracy
+  let upvotesFromArticles = 0;
+  let downvotesFromArticles = 0;
+  try {
+    const q = query(collection(db, 'article_votes'), where('authorUid', '==', userId));
+    const snap = await getDocs(q);
+    snap.forEach(docSnap => {
+      const v = docSnap.data() as ArticleVote;
+      if (v.vote === 'up') upvotesFromArticles++;
+      else if (v.vote === 'down') downvotesFromArticles++;
+    });
+  } catch (e) {
+    // fallback to stored values
+  }
+
+  const effectivePos = Math.max(positiveVotesReceived, upvotesFromArticles);
+  const effectiveNeg = Math.max(negativeVotesReceived, downvotesFromArticles);
+  const totalVotesReceived = effectivePos + effectiveNeg;
+  const approvalRate = totalVotesReceived > 0 ? Math.round((effectivePos / totalVotesReceived) * 100) : 100;
+
+  // Karma calculation: base 10 + (edits * 5) + (positive votes * 10)
+  const calculatedKarma = storedKarma !== undefined
+    ? Math.max(storedKarma, (effectivePos * 10) + (totalEdits * 5) + 10)
+    : (effectivePos * 10) + (totalEdits * 5) + 10;
+
+  const rankInfo = calculateKarmaRank(calculatedKarma);
+
+  return {
+    userId,
+    username,
+    karma: calculatedKarma,
+    rankTitle: rankInfo.rankTitle,
+    rankIcon: rankInfo.rankIcon,
+    rankColor: rankInfo.rankColor,
+    badgeLevel: rankInfo.badgeLevel,
+    positiveVotesReceived: effectivePos,
+    negativeVotesReceived: effectiveNeg,
+    totalEdits,
+    approvalRate,
+    nextRankKarma: rankInfo.nextRankKarma,
+    progressToNextRank: rankInfo.progressToNextRank,
+  };
+}
+
+/**
+ * Real-time subscription to a user's Karma profile
+ */
+export function subscribeToUserKarmaProfile(
+  userId: string,
+  callback: (profile: UserKarmaProfile) => void
+): () => void {
+  return onSnapshot(
+    doc(db, 'users', userId),
+    async () => {
+      const profile = await fetchUserKarmaProfile(userId);
+      callback(profile);
+    },
+    err => {
+      console.warn(`[Firestore] Karma subscription error for ${userId}:`, err);
+    }
+  );
+}
+
+/**
+ * Fetches top editors by Karma
+ */
+export async function fetchTopKarmaEditorsFromFirestore(limitCount: number = 10): Promise<UserSession[]> {
+  try {
+    const users = await fetchUsersFromFirestore();
+    return users
+      .sort((a, b) => (b.karma || 0) - (a.karma || 0))
+      .slice(0, limitCount);
+  } catch (err) {
+    console.warn('Error fetching top karma editors:', err);
+    return [];
+  }
 }
 
 

@@ -15,8 +15,14 @@ import {
   Send,
   ArrowLeft,
   Sparkles,
+  Zap,
+  ThumbsUp,
+  ThumbsDown,
+  TrendingUp,
+  CheckCircle2,
 } from 'lucide-react';
-import { UserPage, UserSession, UserPageTalkPost, UserBoxItem, UserDailyChecklist, UserMonthlyPointsLedger } from '../types';
+import { UserPage, UserSession, UserPageTalkPost, UserBoxItem, UserDailyChecklist, UserMonthlyPointsLedger, UserKarmaProfile } from '../types';
+import { api } from '../api';
 import {
   fetchUserPageFromFirestore,
   ensureUserPageInFirestore,
@@ -46,9 +52,10 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
 }) => {
   const [userPage, setUserPage] = useState<UserPage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pagina' | 'userboxes' | 'discussao' | 'checklist'>('pagina');
+  const [activeTab, setActiveTab] = useState<'pagina' | 'userboxes' | 'discussao' | 'checklist' | 'karma'>('pagina');
   const [dailyChecklist, setDailyChecklist] = useState<UserDailyChecklist | null>(null);
   const [monthlyLedger, setMonthlyLedger] = useState<UserMonthlyPointsLedger | null>(null);
+  const [karmaProfile, setKarmaProfile] = useState<UserKarmaProfile | null>(null);
 
   // Edit Mode
   const [isEditing, setIsEditing] = useState(false);
@@ -122,13 +129,19 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
       if (isMounted && updated) setMonthlyLedger(updated);
     }, monthStr);
 
+    // 4. Real-time subscription to User Karma and Article Vote reputation
+    const unsubKarma = api.subscribeUserKarma(targetUser.id, (profile: UserKarmaProfile) => {
+      if (isMounted && profile) setKarmaProfile(profile);
+    });
+
     return () => {
       isMounted = false;
       unsubscribe();
       unsubChecklist();
       unsubMonthly();
+      unsubKarma();
     };
-  }, [targetUser.id]);
+  }, [targetUser.id, targetUser.username]);
 
   const handleSavePage = async () => {
     if (!userPage) return;
@@ -273,15 +286,36 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap sm:flex-col sm:items-end gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-indigo-500" />
-              <span>
-                <strong className="text-slate-800 dark:text-slate-200 font-mono text-sm">{targetUser.editCount || 0}</strong> edições enciclopédicas
+          <div className="flex flex-wrap sm:flex-col sm:items-end gap-2 text-xs text-slate-500 dark:text-slate-400">
+            {/* Karma Badge & Rank (User Karma System) */}
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-900 dark:text-amber-200 shadow-2xs">
+              <Zap className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
+              <div className="flex items-baseline gap-1">
+                <span className="font-mono text-sm font-extrabold text-amber-700 dark:text-amber-300">
+                  {karmaProfile?.karma ?? targetUser.karma ?? 10}
+                </span>
+                <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-400">Karma</span>
+              </div>
+              <span className="text-slate-300 dark:text-slate-700">|</span>
+              <span className="text-[11px] font-bold text-amber-900 dark:text-amber-200">
+                {karmaProfile?.rankTitle || 'Editor Novato'}
               </span>
             </div>
-            <div className="text-[11px] text-slate-400">
-              Registrado e Sincronizado no Firebase
+
+            <div className="flex items-center gap-3 text-[11px]">
+              <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300 font-medium" title="Votos positivos recebidos em artigos">
+                <ThumbsUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <strong>{karmaProfile?.positiveVotesReceived ?? targetUser.positiveVotesReceived ?? 0}</strong> curtidas
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300 font-medium">
+                <Award className="w-3.5 h-3.5 text-indigo-500" />
+                <strong className="font-mono">{targetUser.editCount || 0}</strong> edições
+              </span>
+            </div>
+
+            <div className="text-[10px] text-slate-400 font-mono">
+              Taxa de Aprovação: {karmaProfile?.approvalRate ?? 100}%
             </div>
           </div>
         </div>
@@ -297,7 +331,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pt-2">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pt-2 flex-wrap">
           <button
             onClick={() => setActiveTab('pagina')}
             className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
@@ -307,6 +341,20 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
             }`}
           >
             Página de Usuário (Wikitext)
+          </button>
+          <button
+            onClick={() => setActiveTab('karma')}
+            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'karma'
+                ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <span>Karma & Reputação</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold">
+              {karmaProfile?.karma ?? targetUser.karma ?? 10} pts
+            </span>
           </button>
           <button
             onClick={() => setActiveTab('userboxes')}
@@ -368,6 +416,212 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
                 {userPage?.wikitext || 'Página de usuário em criação...'}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab: Karma & Reputação Enciclopédica */}
+        {activeTab === 'karma' && (
+          <div className="space-y-6 pt-2">
+            {/* Karma Overview Header */}
+            <div className="p-5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-purple-500/10 border border-amber-300/40 dark:border-amber-700/40">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-300/60 dark:border-amber-600/60 shadow-xs">
+                    <Zap className="w-6 h-6 fill-amber-500 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        {karmaProfile?.rankTitle || 'Editor Novato'}
+                      </h3>
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                        Nível {karmaProfile?.badgeLevel || 1}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Índice de confiabilidade e pontuação acumulada por avaliações positivas de artigos editados por {targetUser.username}.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start md:self-auto">
+                  <div className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/80 shadow-xs text-right">
+                    <span className="block text-[10px] uppercase font-mono tracking-wider text-slate-400">Total Karma</span>
+                    <span className="font-mono text-xl font-black text-amber-600 dark:text-amber-400">
+                      {karmaProfile?.karma ?? targetUser.karma ?? 10} <span className="text-xs font-normal text-slate-400">pts</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress to next rank */}
+              {(() => {
+                const currentKarma = karmaProfile?.karma ?? targetUser.karma ?? 10;
+                const nextThreshold = karmaProfile?.nextRankKarma;
+                const pointsNeeded = nextThreshold ? Math.max(0, nextThreshold - currentKarma) : 0;
+                const nextRankName =
+                  currentKarma < 30
+                    ? 'Colaborador Confiável (30 pts)'
+                    : currentKarma < 100
+                    ? 'Editor Destaque (100 pts)'
+                    : currentKarma < 250
+                    ? 'Guardião do Conhecimento (250 pts)'
+                    : currentKarma < 500
+                    ? 'Curador da Enciclopédia (500 pts)'
+                    : currentKarma < 1000
+                    ? 'Mestre Wikimediano (1000 pts)'
+                    : 'Ranque Máximo Atingido';
+
+                return (
+                  <div className="mt-4 pt-4 border-t border-amber-200/50 dark:border-amber-800/50 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 dark:text-slate-300 font-medium">
+                        Progresso para o próximo ranque:{' '}
+                        <strong>{nextRankName}</strong>
+                      </span>
+                      <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                        {currentKarma} / {nextThreshold || currentKarma} pts ({karmaProfile?.progressToNextRank ?? 100}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200/80 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-amber-500 to-amber-400 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${karmaProfile?.progressToNextRank ?? 100}%` }}
+                      />
+                    </div>
+                    {pointsNeeded > 0 ? (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Faltam <strong>{pointsNeeded} pontos</strong> para subir de ranque ({Math.ceil(pointsNeeded / 10)} curtidas em artigos ou {Math.ceil(pointsNeeded / 5)} edições).
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        Parabéns! Nível máximo de prestígio e autoridade na enciclopédia atingido.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 4 Metric Breakdown Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wider">Pontuação Total</span>
+                  <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+                </div>
+                <div className="font-mono text-2xl font-black text-slate-900 dark:text-slate-100">
+                  {karmaProfile?.karma ?? targetUser.karma ?? 10}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Total de pontos de reputação ativa
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wider">Votos Positivos</span>
+                  <ThumbsUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="font-mono text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  {karmaProfile?.positiveVotesReceived ?? targetUser.positiveVotesReceived ?? 0}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  +{(karmaProfile?.positiveVotesReceived ?? 0) * 10} Karma (+10 pts por curtida)
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wider">Edições Públicas</span>
+                  <Award className="w-4 h-4 text-indigo-500" />
+                </div>
+                <div className="font-mono text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                  {targetUser.editCount || 0}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  +{(targetUser.editCount || 0) * 5} Karma (+5 pts por edição)
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wider">Aprovação</span>
+                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                </div>
+                <div className="font-mono text-2xl font-black text-blue-600 dark:text-blue-400">
+                  {karmaProfile?.approvalRate ?? 100}%
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Feedback favorável da comunidade
+                </p>
+              </div>
+            </div>
+
+            {/* Ranques Oficiais da Enciclopédia */}
+            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs space-y-3">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-500" />
+                Escala de Ranques e Hierarquia de Karma
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                O Karma reflete a qualidade dos artigos e revisões feitas pelo usuário, sendo validado diretamente por leitores e outros editores.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+                {[
+                  { rank: 'Editor Novato', range: '0 - 29 pts', desc: 'Início da jornada na enciclopédia' },
+                  { rank: 'Colaborador Confiável', range: '30 - 99 pts', desc: 'Edições consistentes e aprovadas' },
+                  { rank: 'Editor Destaque', range: '100 - 249 pts', desc: 'Reconhecimento comunitário comprovado' },
+                  { rank: 'Guardião do Conhecimento', range: '250 - 499 pts', desc: 'Alto padrão de qualidade e fontes' },
+                  { rank: 'Curador da Enciclopédia', range: '500 - 999 pts', desc: 'Referência editorial e revisor sênior' },
+                  { rank: 'Mestre Wikimediano', range: '1000+ pts', desc: 'Lenda enciclopédica e autoridade máxima' },
+                ].map((item, idx) => {
+                  const isCurrent = karmaProfile?.rankTitle === item.rank;
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-lg border text-xs transition-all ${
+                        isCurrent
+                          ? 'border-amber-400 bg-amber-50/70 dark:bg-amber-950/40 shadow-xs ring-1 ring-amber-400'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/40 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`font-bold ${isCurrent ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'}`}>
+                          {item.rank}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500 text-white rounded-full">
+                            Atual
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[11px] text-amber-700 dark:text-amber-400 font-bold block mb-1">
+                        {item.range}
+                      </span>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {item.desc}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Como funciona o sistema de Karma e Votação */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-850/50 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+              <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                Regras de Concessão de Karma no Firestore
+              </h4>
+              <ul className="space-y-1.5 text-slate-600 dark:text-slate-300 text-[11px] list-disc list-inside">
+                <li><strong>+10 pontos de Karma</strong> para o autor/editor por cada voto positivo (👍 Curtir) recebido de leitores em seus artigos.</li>
+                <li><strong>+5 pontos de Karma</strong> por cada edição enciclopédica publicada e registrada no histórico de versões.</li>
+                <li><strong>Proteção anti-autovoto:</strong> Usuários podem avaliar artigos, mas autovotos não concedem pontos de Karma à própria conta.</li>
+                <li><strong>Sincronização em tempo real:</strong> Votos e Karma são calculados e persistidos na coleção <code className="font-mono text-[10px] bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded">article_votes</code> e no perfil de usuário.</li>
+              </ul>
+            </div>
           </div>
         )}
 
