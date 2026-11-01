@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Loader2, ShieldCheck, Zap, UserCheck, ArrowRight } from 'lucide-react';
 import { UserSession } from '../types';
-import { loginWithGoogle, loginWithGoogleCredential, recordDailyChecklistAction } from '../firebase';
-import { firebaseConfig } from '../firebaseConfig';
+import { loginWithGoogle, recordDailyChecklistAction } from '../firebase';
 import { api } from '../api';
 import { performVpnAudit } from '../utils/vpnDetector';
 
@@ -10,21 +9,6 @@ interface GoogleOneTapPopupProps {
   currentUser: UserSession | null;
   onUserChanged: (user: UserSession | null) => void;
   onVpnAlert?: (isVpn: boolean, score: number) => void;
-}
-
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        id?: {
-          initialize: (config: any) => void;
-          prompt: (callback?: (notification: any) => void) => void;
-          renderButton?: (parent: HTMLElement, options: any) => void;
-          cancel?: () => void;
-        };
-      };
-    };
-  }
 }
 
 export const GoogleOneTapPopup: React.FC<GoogleOneTapPopupProps> = ({
@@ -36,11 +20,10 @@ export const GoogleOneTapPopup: React.FC<GoogleOneTapPopupProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Remembered previous account details for instant personalized One Tap
+  // Remembered previous account details for instant personalized Quick Login
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const [savedName, setSavedName] = useState<string | null>(null);
   const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
-  const gisInitialized = useRef(false);
 
   useEffect(() => {
     // Read previous user from localStorage if exists
@@ -54,29 +37,8 @@ export const GoogleOneTapPopup: React.FC<GoogleOneTapPopupProps> = ({
     } catch {}
   }, []);
 
-  // Handle successful Google credential response from GIS or popup
-  const completeAuthProcess = async (user: UserSession) => {
-    const serverUser = await api.upsertUser(user);
-    await api.switchUser(serverUser.id).catch(console.warn);
-    onUserChanged(serverUser);
-
-    // Record daily checklist login mission (+1.00 pt)
-    recordDailyChecklistAction(serverUser.id, serverUser.username, 'login').catch(console.warn);
-
-    // Perform background VPN & IP audit
-    performVpnAudit(serverUser)
-      .then(vpnRes => {
-        if (vpnRes.isVpn || vpnRes.riskScore >= 40) {
-          onVpnAlert?.(true, vpnRes.riskScore);
-        }
-      })
-      .catch(console.warn);
-
-    setIsVisible(false);
-  };
-
-  // Google Identity Services (GIS) One Tap initialization
   useEffect(() => {
+    // If user is already authenticated, never show the popup
     if (currentUser) {
       setIsVisible(false);
       return;
@@ -87,84 +49,47 @@ export const GoogleOneTapPopup: React.FC<GoogleOneTapPopupProps> = ({
       return;
     }
 
-    const clientId = firebaseConfig.oAuthClientId || '249427877153-9t3mbfk8bc5qg6jvavk9rjrmf618qfh9.apps.googleusercontent.com';
-
-    const tryInitGIS = () => {
-      if (typeof window !== 'undefined' && window.google?.accounts?.id && !gisInitialized.current) {
-        gisInitialized.current = true;
-        try {
-          window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: async (response: any) => {
-              if (response?.credential) {
-                setIsLoading(true);
-                setErrorMessage(null);
-                try {
-                  const user = await loginWithGoogleCredential(response.credential);
-                  await completeAuthProcess(user);
-                } catch (err: any) {
-                  console.warn('GIS credential login error:', err);
-                  setErrorMessage('Erro ao validar credencial do Google.');
-                } finally {
-                  setIsLoading(false);
-                }
-              }
-            },
-            auto_select: false,
-            cancel_on_tap_outside: true,
-          });
-
-          // Trigger the Google native prompt
-          window.google.accounts.id.prompt((notification: any) => {
-            // If the native GIS prompt is suppressed (e.g. iframe sandbox, third-party cookies disabled, etc.),
-            // our custom top-right floating One Tap card remains visible and fully actionable.
-            if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
-              setIsVisible(true);
-            }
-          });
-        } catch (e) {
-          console.warn('Google Identity Services init warning:', e);
-        }
-      }
-    };
-
-    // Attempt GIS initialization immediately if script is already loaded
-    tryInitGIS();
-
-    // Check again after a short interval if script was loading async
-    const gisCheckTimer = setTimeout(() => {
-      tryInitGIS();
-    }, 800);
-
-    // Display our floating Google Quick Sign-In popup in the top right after 1.2s
-    const displayTimer = setTimeout(() => {
+    // Automatically display the floating Google Quick Sign-In popup after 1.2s
+    const timer = setTimeout(() => {
       setIsVisible(true);
     }, 1200);
 
-    return () => {
-      clearTimeout(gisCheckTimer);
-      clearTimeout(displayTimer);
-    };
+    return () => clearTimeout(timer);
   }, [currentUser]);
 
   const handleDismiss = () => {
     setIsVisible(false);
     sessionStorage.setItem('nmw_google_onetap_dismissed', 'true');
-    try {
-      window.google?.accounts?.id?.cancel?.();
-    } catch {}
   };
 
   const handleQuickLogin = async () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
+      // Uses Firebase Auth signInWithPopup which delegates to authDomain (wzzm-ce3fc.firebaseapp.com)
+      // and eliminates origin_mismatch errors on dynamic domains
       const user = await loginWithGoogle();
-      await completeAuthProcess(user);
+      const serverUser = await api.upsertUser(user);
+      await api.switchUser(serverUser.id).catch(console.warn);
+      onUserChanged(serverUser);
+
+      // Record daily checklist login mission (+1.00 pt)
+      recordDailyChecklistAction(serverUser.id, serverUser.username, 'login').catch(console.warn);
+
+      // Perform background VPN & IP audit
+      performVpnAudit(serverUser)
+        .then(vpnRes => {
+          if (vpnRes.isVpn || vpnRes.riskScore >= 40) {
+            onVpnAlert?.(true, vpnRes.riskScore);
+          }
+        })
+        .catch(console.warn);
+
+      setIsVisible(false);
     } catch (err: any) {
-      console.warn('Google One Tap Sign-in canceled or failed:', err);
+      console.warn('Google Quick Sign-in error:', err);
       if (err?.code === 'auth/popup-closed-by-user') {
-        setErrorMessage('A janela de autenticação foi fechada. Clique novamente para entrar.');
+        setErrorMessage('A janela de login foi fechada. Clique novamente para entrar.');
       } else {
         setErrorMessage('Não foi possível autenticar com o Google. Tente novamente.');
       }
@@ -183,7 +108,7 @@ export const GoogleOneTapPopup: React.FC<GoogleOneTapPopupProps> = ({
       aria-labelledby="google-onetap-title"
       className="fixed top-16 sm:top-18 right-3 sm:right-6 z-50 w-[94vw] sm:w-[360px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 sm:p-5 animate-in fade-in slide-in-from-top-4 duration-300 transition-all font-sans"
     >
-      {/* Top Header: Brand & Google One Tap Indicator */}
+      {/* Top Header: Brand & Google Indicator */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2.5">
           {/* Official Google G Logo */}
