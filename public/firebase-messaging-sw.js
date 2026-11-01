@@ -42,6 +42,37 @@ try {
   console.warn('[firebase-messaging-sw.js] Falha ao inicializar FCM no Service Worker:', err);
 }
 
+// Fallback listener for standard Web Push events
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  try {
+    const data = event.data.json();
+    const title = data.notification?.title || data.data?.title || data.title || 'NotMediaWiki - Artigo Seguido Atualizado';
+    const body = data.notification?.body || data.data?.body || data.body || 'Um artigo vigiado foi alterado.';
+    const slug = data.data?.articleSlug || data.articleSlug;
+    const options = {
+      body,
+      icon: '/assets/aistudio/image_370f9ede.png',
+      badge: '/assets/aistudio/image_370f9ede.png',
+      tag: slug ? `article-edit-${slug}` : 'article-edit',
+      data: {
+        url: data.data?.url || (slug ? `/#/wiki/${slug}` : '/'),
+        articleSlug: slug,
+        timestamp: Date.now(),
+      },
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch {
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification('NotMediaWiki - Artigo Alterado', {
+        body: text || 'Um artigo seguido sofreu alterações.',
+        icon: '/assets/aistudio/image_370f9ede.png',
+      })
+    );
+  }
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = event.notification.data?.url || '/';

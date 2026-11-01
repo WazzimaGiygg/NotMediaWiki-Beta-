@@ -117,16 +117,36 @@ export const Header: React.FC<HeaderProps> = ({
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const initialLoadRef = useRef(true);
+
   useEffect(() => {
     if (!currentUser?.id) {
       setNotifications([]);
+      initialLoadRef.current = true;
       return;
     }
     const unsub = api.subscribeUserNotifications(currentUser.id, list => {
+      if (!initialLoadRef.current && list.length > 0) {
+        const prevIds = new Set(notifications.map(n => n.id));
+        const newest = list.find(n => !n.isRead && !prevIds.has(n.id));
+        if (newest) {
+          api.playNotificationChime();
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification(`NotMediaWiki: ${newest.articleTitle} foi editado`, {
+                body: `${newest.editorName}: ${newest.changeSummary}`,
+                icon: '/assets/aistudio/image_370f9ede.png',
+                tag: `article-${newest.articleSlug}-${newest.id}`,
+              });
+            } catch {}
+          }
+        }
+      }
+      initialLoadRef.current = false;
       setNotifications(list);
     });
     return () => unsub();
-  }, [currentUser?.id]);
+  }, [currentUser?.id, notifications]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
