@@ -21,8 +21,23 @@ import {
   VoteType,
   ArticleVoteSummary,
   UserKarmaProfile,
+  WatchlistSubscription,
+  ArticleNotification,
+  FcmTokenRegistration,
 } from './types';
 import { botAgentService } from './services/botAgentService';
+import {
+  initializeFCM,
+  isArticleWatched,
+  toggleWatchArticle,
+  subscribeToUserWatchlist,
+  notifyArticleWatchers,
+  subscribeToUserNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  playNotificationChime,
+} from './services/notificationService';
 import { clientParsoid } from './services/parsoid';
 import {
   fetchArticlesFromFirestore,
@@ -113,6 +128,38 @@ export const api = {
     }
   },
 
+  /**
+   * Special:Random - Retrieves a random article from the encyclopedia
+   */
+  async getRandomArticle(currentSlug?: string, namespace = 0): Promise<Article | null> {
+    try {
+      const articles = await this.getArticles();
+      if (!articles || articles.length === 0) return null;
+
+      // Prefer main encyclopedia articles (namespace 0)
+      const nsCandidates = articles.filter(a => (a.namespace ?? 0) === namespace);
+      const pool = nsCandidates.length > 0 ? nsCandidates : articles;
+
+      // Filter out the current article if alternatives exist
+      const filtered = currentSlug
+        ? pool.filter(
+            a =>
+              a.slug.toLowerCase() !== currentSlug.toLowerCase() &&
+              decodeURIComponent(a.slug).toLowerCase() !== decodeURIComponent(currentSlug).toLowerCase()
+          )
+        : pool;
+
+      const candidates = filtered.length > 0 ? filtered : pool;
+      if (candidates.length === 0) return null;
+
+      const randomIndex = Math.floor(Math.random() * candidates.length);
+      return candidates[randomIndex];
+    } catch (err) {
+      console.warn('Erro ao obter artigo aleatório:', err);
+      return null;
+    }
+  },
+
   async getArticle(slug: string): Promise<Article> {
     const cleanSlug = slug.trim().replace(/\s+/g, '_');
     // 1. Fetch directly from Firebase Firestore
@@ -196,7 +243,17 @@ export const api = {
     // 1. Save directly into Firebase Firestore (Single Source of Truth)
     const result = await saveArticleToFirestore(payload);
 
-    // 2. Synchronize to local server microservice in background (non-blocking)
+    // 2. Dispatch push notifications to users following this article via Firebase Cloud Messaging
+    notifyArticleWatchers({
+      articleSlug: result.article.slug,
+      articleTitle: result.article.title,
+      changeSummary: payload.comment || 'Atualização no wikitexto do artigo',
+      editorName: result.revision.author.name || 'Editor',
+      editorId: result.revision.author.id,
+      revisionId: result.revision.id,
+    }).catch(err => console.warn('Erro ao notificar seguidores do artigo:', err));
+
+    // 3. Synchronize to local server microservice in background (non-blocking)
     safeFetch(`${BASE_URL}/content/articles`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -809,4 +866,19 @@ export const api = {
       return { success: false, error: err.message };
     }
   },
+
+  // Firebase Cloud Messaging & Watchlist Notifications
+  initializeFCM: (userId: string) => initializeFCM(userId),
+  isArticleWatched: (userId: string, slug: string) => isArticleWatched(userId, slug),
+  toggleWatchArticle: (userId: string, article: { slug: string; title: string }, notifyPush?: boolean) =>
+    toggleWatchArticle(userId, article, notifyPush),
+  subscribeUserWatchlist: (userId: string, callback: (watchlist: WatchlistSubscription[]) => void) =>
+    subscribeToUserWatchlist(userId, callback),
+  subscribeUserNotifications: (userId: string, callback: (notifications: ArticleNotification[]) => void) =>
+    subscribeToUserNotifications(userId, callback),
+  markNotificationAsRead: (notificationId: string) => markNotificationAsRead(notificationId),
+  markAllNotificationsAsRead: (userId: string) => markAllNotificationsAsRead(userId),
+  deleteNotification: (notificationId: string) => deleteNotification(notificationId),
+  playNotificationChime: () => playNotificationChime(),
 };
+

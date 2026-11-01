@@ -3,6 +3,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -68,7 +69,7 @@ export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 export const auth = getAuth(app);
 
 // Export unified connection metadata
-export { firebaseConfig, FIRESTORE_DATABASE_ID, FIREBASE_PROJECT_ID, getFirebaseConnectionInfo, onAuthStateChanged };
+export { app, firebaseConfig, FIRESTORE_DATABASE_ID, FIREBASE_PROJECT_ID, getFirebaseConnectionInfo, onAuthStateChanged };
 export type { FirebaseUser };
 
 // Google Auth Provider configured for popup sign-in
@@ -130,129 +131,161 @@ export async function testFirestoreConnection(): Promise<boolean> {
 testFirestoreConnection();
 
 /**
+ * Synchronizes an authenticated Firebase Google user to a NotMediaWiki UserSession
+ * and persists the profile in Firestore /users/{uid}
+ */
+export async function syncFirebaseUserToSession(fbUser: FirebaseUser): Promise<UserSession> {
+  const pathUsers = 'users';
+  const userRef = doc(db, pathUsers, fbUser.uid);
+  let role: UserRole = 'editor';
+  let editCount = 1;
+  let isBanned = false;
+  let banReason = '';
+  let bannedAt = '';
+
+  let userTag = '';
+  let discriminator = '';
+  let userPageSlug = '';
+
+  const userEmailLower = (fbUser.email || '').toLowerCase().trim();
+  const isBureaucrat =
+    userEmailLower === 'mafersao1100@gmail.com' ||
+    userEmailLower === 'pedrohenriquecardonaperes@gmail.com' ||
+    userEmailLower === 'pedrohenriquecaronaperes@gmail.com';
+
+  try {
+    const existingSnap = await getDoc(userRef);
+    if (existingSnap.exists()) {
+      const existingData = existingSnap.data();
+      role = isBureaucrat ? 'bureaucrat' : 'editor';
+      editCount = existingData.editCount || 1;
+      isBanned = !!existingData.isBanned;
+      banReason = existingData.banReason || '';
+      bannedAt = existingData.bannedAt || '';
+      userTag = existingData.userTag || '';
+      discriminator = existingData.discriminator || '';
+      userPageSlug = existingData.userPageSlug || '';
+    } else {
+      role = isBureaucrat ? 'bureaucrat' : 'editor';
+    }
+  } catch (e) {
+    console.warn('Could not read existing user doc from Firestore:', e);
+    role = isBureaucrat ? 'bureaucrat' : 'editor';
+  }
+
+  // Determine deterministic tag if not yet assigned
+  if (!userTag) {
+    if (fbUser.email?.includes('mafersao1100')) {
+      userTag = '#1100';
+    } else {
+      const numPart = fbUser.email?.match(/\d+/g)?.join('') || '';
+      if (numPart.length >= 2) {
+        userTag = `#${numPart.substring(0, 4).padStart(4, '0')}`;
+      } else {
+        const hashVal = Math.abs(fbUser.uid.split('').reduce((acc, c) => acc * 31 + c.charCodeAt(0), 0)) % 9999 + 1;
+        userTag = `#${hashVal.toString().padStart(4, '0')}`;
+      }
+    }
+    discriminator = userTag.replace('#', '');
+  }
+
+  const username = fbUser.displayName || fbUser.email?.split('@')[0] || 'Wikipedian';
+  userPageSlug = `Usuário:${username}${userTag}`;
+
+  const userProfile: UserSession = {
+    id: fbUser.uid,
+    username,
+    userTag,
+    discriminator,
+    userPageSlug,
+    role,
+    editCount,
+    avatar: (fbUser.displayName || fbUser.email?.split('@')[0] || 'G').substring(0, 2).toUpperCase(),
+    email: fbUser.email || undefined,
+    isBanned,
+    banReason: banReason || undefined,
+    bannedAt: bannedAt || undefined,
+    isGoogleUser: true,
+    photoURL: fbUser.photoURL || undefined,
+    provider: 'google.com',
+    lastLoginAt: new Date().toISOString(),
+    syncedToCloudAt: new Date().toISOString(),
+  };
+
+  // Sync/persist user profile to Firestore /users/{uid}
+  try {
+    await setDoc(userRef, {
+      uid: fbUser.uid,
+      displayName: userProfile.username,
+      userTag: userProfile.userTag,
+      discriminator: userProfile.discriminator,
+      userPageSlug: userProfile.userPageSlug,
+      email: fbUser.email || '',
+      photoURL: fbUser.photoURL || '',
+      role: userProfile.role,
+      editCount: userProfile.editCount,
+      isBanned: userProfile.isBanned,
+      banReason: userProfile.banReason || '',
+      bannedAt: userProfile.bannedAt || '',
+      provider: 'google.com',
+      isGoogleUser: true,
+      lastLoginAt: userProfile.lastLoginAt,
+      syncedToCloudAt: userProfile.syncedToCloudAt,
+    }, { merge: true });
+  } catch (dbErr) {
+    console.warn('User profile sync to Firestore error:', dbErr);
+  }
+
+  // Automatically verify and create the personal user page in Firestore if not present
+  try {
+    await ensureUserPageInFirestore(userProfile);
+  } catch (pageErr) {
+    console.warn('Could not auto-create personal user page:', pageErr);
+  }
+
+  // Save last logged in Google user email in localStorage for quick login One Tap
+  try {
+    if (fbUser.email) {
+      localStorage.setItem('notmediawiki_last_google_email', fbUser.email);
+      localStorage.setItem('notmediawiki_last_google_name', userProfile.username);
+      if (fbUser.photoURL) {
+        localStorage.setItem('notmediawiki_last_google_photo', fbUser.photoURL);
+      }
+    }
+  } catch {}
+
+  return userProfile;
+}
+
+/**
  * Logs in with Google using popup, preserves role/ban state from Firestore,
  * and synchronizes user profile to Firestore
  */
 export async function loginWithGoogle(): Promise<UserSession> {
-  const pathUsers = 'users';
   try {
     const cred = await signInWithPopup(auth, googleProvider);
-    const fbUser = cred.user;
-
-    const userRef = doc(db, pathUsers, fbUser.uid);
-    let role: UserRole = 'editor';
-    let editCount = 1;
-    let isBanned = false;
-    let banReason = '';
-    let bannedAt = '';
-
-    let userTag = '';
-    let discriminator = '';
-    let userPageSlug = '';
-
-    const userEmailLower = (fbUser.email || '').toLowerCase().trim();
-    const isBureaucrat =
-      userEmailLower === 'mafersao1100@gmail.com' ||
-      userEmailLower === 'pedrohenriquecardonaperes@gmail.com' ||
-      userEmailLower === 'pedrohenriquecaronaperes@gmail.com';
-
-    try {
-      const existingSnap = await getDoc(userRef);
-      if (existingSnap.exists()) {
-        const existingData = existingSnap.data();
-        // Somente administradores determinados pelo Google recebem o cargo de burocrata/admin
-        role = isBureaucrat ? 'bureaucrat' : 'editor';
-        editCount = existingData.editCount || 1;
-        isBanned = !!existingData.isBanned;
-        banReason = existingData.banReason || '';
-        bannedAt = existingData.bannedAt || '';
-        userTag = existingData.userTag || '';
-        discriminator = existingData.discriminator || '';
-        userPageSlug = existingData.userPageSlug || '';
-      } else {
-        role = isBureaucrat ? 'bureaucrat' : 'editor';
-      }
-    } catch (e) {
-      console.warn('Could not read existing user doc from Firestore:', e);
-      role = isBureaucrat ? 'bureaucrat' : 'editor';
-    }
-
-    // Determine deterministic tag if not yet assigned
-    if (!userTag) {
-      if (fbUser.email?.includes('mafersao1100')) {
-        userTag = '#1100';
-      } else {
-        const numPart = fbUser.email?.match(/\d+/g)?.join('') || '';
-        if (numPart.length >= 2) {
-          userTag = `#${numPart.substring(0, 4).padStart(4, '0')}`;
-        } else {
-          const hashVal = Math.abs(fbUser.uid.split('').reduce((acc, c) => acc * 31 + c.charCodeAt(0), 0)) % 9999 + 1;
-          userTag = `#${hashVal.toString().padStart(4, '0')}`;
-        }
-      }
-      discriminator = userTag.replace('#', '');
-    }
-
-    const username = fbUser.displayName || fbUser.email?.split('@')[0] || 'Wikipedian';
-    userPageSlug = `Usuário:${username}${userTag}`;
-
-    const userProfile: UserSession = {
-      id: fbUser.uid,
-      username,
-      userTag,
-      discriminator,
-      userPageSlug,
-      role,
-      editCount,
-      avatar: (fbUser.displayName || fbUser.email?.split('@')[0] || 'G').substring(0, 2).toUpperCase(),
-      email: fbUser.email || undefined,
-      isBanned,
-      banReason: banReason || undefined,
-      bannedAt: bannedAt || undefined,
-      isGoogleUser: true,
-      photoURL: fbUser.photoURL || undefined,
-      provider: 'google.com',
-      lastLoginAt: new Date().toISOString(),
-      syncedToCloudAt: new Date().toISOString(),
-    };
-
-    // Sync/persist user profile to Firestore /users/{uid}
-    try {
-      await setDoc(userRef, {
-        uid: fbUser.uid,
-        displayName: userProfile.username,
-        userTag: userProfile.userTag,
-        discriminator: userProfile.discriminator,
-        userPageSlug: userProfile.userPageSlug,
-        email: fbUser.email || '',
-        photoURL: fbUser.photoURL || '',
-        role: userProfile.role,
-        editCount: userProfile.editCount,
-        isBanned: userProfile.isBanned,
-        banReason: userProfile.banReason || '',
-        bannedAt: userProfile.bannedAt || '',
-        provider: 'google.com',
-        isGoogleUser: true,
-        lastLoginAt: userProfile.lastLoginAt,
-        syncedToCloudAt: userProfile.syncedToCloudAt,
-      }, { merge: true });
-    } catch (dbErr) {
-      console.warn('User profile sync to Firestore error:', dbErr);
-    }
-
-    // Automatically verify and create the personal user page in Firestore if not present
-    try {
-      await ensureUserPageInFirestore(userProfile);
-    } catch (pageErr) {
-      console.warn('Could not auto-create personal user page:', pageErr);
-    }
-
-    return userProfile;
+    return await syncFirebaseUserToSession(cred.user);
   } catch (err) {
     console.error('Google Sign-In Error:', err);
     throw err;
   }
 }
+
+/**
+ * Logs in with Google using an ID Token (e.g. from Google One Tap / Identity Services),
+ * connects with Firebase and synchronizes user profile to Firestore
+ */
+export async function loginWithGoogleCredential(idToken: string): Promise<UserSession> {
+  try {
+    const credential = GoogleAuthProvider.credential(idToken);
+    const cred = await signInWithCredential(auth, credential);
+    return await syncFirebaseUserToSession(cred.user);
+  } catch (err) {
+    console.error('Google Credential Sign-In Error:', err);
+    throw err;
+  }
+}
+
 
 /**
  * Fetches all user accounts stored in Firestore /users

@@ -673,5 +673,36 @@ export interface UserAbuseAudit {
   details: string;
 }
 
+// =============================================================================
+// WATCHLIST, FAVORITES & PUSH NOTIFICATIONS (Firebase Cloud Messaging)
+// =============================================================================
+export interface WatchlistSubscription {
+  id: string;
+  userId: string;
+  articleSlug: string;
+  articleTitle: string;
+  createdAt: string;
+  notifyPush: boolean;
+}
 
+export interface ArticleNotification {
+  id: string;
+  userId: string;
+  articleSlug: string;
+  articleTitle: string;
+  changeSummary: string;
+  editorName: string;
+  editorId: string;
+  timestamp: string;
+  isRead: boolean;
+  revisionId: string;
+}
 
+export interface FcmTokenRegistration {
+  id: string;
+  userId: string;
+  token: string;
+  platform: string;
+  updatedAt: string;
+  userAgent?: string;
+}

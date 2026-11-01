@@ -27,8 +27,12 @@ import {
   FileText,
   CornerDownLeft,
   Loader2,
+  Shuffle,
+  Bell,
+  CheckCheck,
+  Trash2,
 } from 'lucide-react';
-import { UserSession, VpnDetectionLog } from '../types';
+import { UserSession, VpnDetectionLog, ArticleNotification } from '../types';
 import { api } from '../api';
 import {
   loginWithGoogle,
@@ -57,6 +61,7 @@ interface HeaderProps {
   onOpenDirectory?: () => void;
   onOpenMyUserPage?: () => void;
   onOpenChecklist?: () => void;
+  onRandomArticle?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -73,11 +78,31 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenDirectory,
   onOpenMyUserPage,
   onOpenChecklist,
+  onRandomArticle,
 }) => {
   const [internalProgress, setInternalProgress] = useState<number>(0);
   const activeProgress = readingProgress !== undefined ? readingProgress : internalProgress;
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Array<{ title: string; slug: string; snippet?: string; namespace?: number; categories?: string[]; score?: number }>>([]);
+  const [isLoadingRandom, setIsLoadingRandom] = useState(false);
+
+  const handleRandomClick = async () => {
+    if (onRandomArticle) {
+      onRandomArticle();
+      return;
+    }
+    setIsLoadingRandom(true);
+    try {
+      const random = await api.getRandomArticle(activeArticleSlug);
+      if (random && random.slug) {
+        onNavigateArticle(random.slug);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar artigo aleatório:', e);
+    } finally {
+      setIsLoadingRandom(false);
+    }
+  };
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
@@ -86,6 +111,34 @@ export const Header: React.FC<HeaderProps> = ({
   const [monthlyPoints, setMonthlyPoints] = useState<number>(0);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Real-time Push & Watchlist Notifications
+  const [notifications, setNotifications] = useState<ArticleNotification[]>([]);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setNotifications([]);
+      return;
+    }
+    const unsub = api.subscribeUserNotifications(currentUser.id, list => {
+      setNotifications(list);
+    });
+    return () => unsub();
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const unreadNotifCount = notifications.filter(n => !n.isRead).length;
 
   // Subscribe to user monthly points for live counter in header
   useEffect(() => {
@@ -668,6 +721,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls: New Page & Authentication */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Special:Random / Artigo Aleatório Action Button */}
+          <button
+            onClick={handleRandomClick}
+            disabled={isLoadingRandom}
+            className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap disabled:opacity-50"
+            title="Sortear e abrir uma página aleatória da enciclopédia (Special:Random)"
+          >
+            <Shuffle className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isLoadingRandom ? 'animate-spin' : ''}`} />
+            <span className="hidden md:inline">Página Aleatória</span>
+          </button>
+
           {/* + Nova Página Button */}
           <button
             onClick={onOpenNewArticle}
@@ -766,6 +830,124 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </button>
               )}
+
+              {/* Push & Watchlist Notifications Bell */}
+              <div ref={notifRef} className="relative">
+                <button
+                  onClick={() => setIsNotifOpen(prev => !prev)}
+                  className="relative p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
+                  title="Notificações de artigos vigiados e alterações"
+                >
+                  <Bell className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold text-[9px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center animate-pulse shadow-xs">
+                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications Popover Dropdown */}
+                {isNotifOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl py-2 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100">
+                        <Bell className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Notificações de Artigos Vigiados</span>
+                        {unreadNotifCount > 0 && (
+                          <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-mono text-[10px] px-1.5 py-0.2 rounded-full">
+                            {unreadNotifCount} novas
+                          </span>
+                        )}
+                      </div>
+                      {unreadNotifCount > 0 && currentUser?.id && (
+                        <button
+                          onClick={() => api.markAllNotificationsAsRead(currentUser.id)}
+                          className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <CheckCheck className="w-3 h-3" />
+                          <span>Lidas</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                      {notifications.length === 0 ? (
+                        <div className="py-8 px-4 text-center text-slate-400 text-xs">
+                          Nenhuma notificação no momento.
+                          <div className="text-[11px] text-slate-500 mt-1">
+                            Clique em <strong>Vigiar</strong> em qualquer artigo para ser avisado sobre novas edições.
+                          </div>
+                        </div>
+                      ) : (
+                        notifications.map(notif => (
+                          <div
+                            key={notif.id}
+                            onClick={() => {
+                              api.markNotificationAsRead(notif.id);
+                              onNavigateArticle(notif.articleSlug);
+                              setIsNotifOpen(false);
+                            }}
+                            className={`p-3 transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-start justify-between gap-2 ${
+                              !notif.isRead ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                                  {notif.articleTitle || notif.articleSlug}
+                                </span>
+                                {!notif.isRead && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 mt-0.5">
+                                <strong>{notif.editorName}</strong>: {notif.changeSummary}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-1">
+                                {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                api.deleteNotification(notif.id);
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-500 rounded transition-colors"
+                              title="Remover"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="pt-2 px-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                      <button
+                        onClick={() => {
+                          setIsNotifOpen(false);
+                          onSelectView('special');
+                        }}
+                        className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        Gerenciar páginas vigiadas →
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (currentUser?.id) {
+                            api.initializeFCM(currentUser.id).then(token => {
+                              if (token) alert('Notificações Push FCM ativadas com sucesso!');
+                            });
+                          }
+                        }}
+                        className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                      >
+                        Ativar Push
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Real-time Chat Trigger Button */}
               <button
@@ -949,6 +1131,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               );
             })}
+
+            {/* Special:Random Navigation Link */}
+            <button
+              type="button"
+              onClick={handleRandomClick}
+              disabled={isLoadingRandom}
+              className="px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Acessar uma página aleatória da enciclopédia (Special:Random)"
+            >
+              <Shuffle className={`w-3.5 h-3.5 text-blue-500 dark:text-blue-400 ${isLoadingRandom ? 'animate-spin' : ''}`} />
+              <span>Página Aleatória</span>
+            </button>
           </nav>
 
           {/* Quick Context & Reading Progress Indicator */}

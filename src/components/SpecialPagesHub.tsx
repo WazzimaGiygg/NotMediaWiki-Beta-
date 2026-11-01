@@ -23,8 +23,11 @@ import {
   Eye,
   Tag,
   Share2,
+  Shuffle,
+  Star,
+  Bell,
 } from 'lucide-react';
-import { Article, Revision, UserSession, WikiEvent } from '../types';
+import { Article, Revision, UserSession, WikiEvent, WatchlistSubscription } from '../types';
 import { api } from '../api';
 import { MEDIAWIKI_NAMESPACES, getAvailableNamespaces, parseTitle } from '../utils/namespaces';
 import { generateMediaWikiXmlDump, parseMediaWikiXmlDump } from '../utils/wikiXmlDump';
@@ -37,6 +40,7 @@ interface SpecialPagesHubProps {
   onOpenEdit: (slug: string) => void;
   onOpenHistory: (slug: string) => void;
   currentUser?: UserSession | null;
+  onRandomArticle?: () => void;
 }
 
 export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
@@ -45,6 +49,7 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   onOpenEdit,
   onOpenHistory,
   currentUser,
+  onRandomArticle,
 }) => {
   const [activePage, setActivePage] = useState<string>(initialSpecialPage);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -69,6 +74,16 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
 
   // XML Import state
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
+
+  // Watchlist (Special:Watchlist) state
+  const [watchlist, setWatchlist] = useState<WatchlistSubscription[]>([]);
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const unsub = api.subscribeUserWatchlist(currentUser.id, list => {
+      setWatchlist(list);
+    });
+    return () => unsub();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     setActivePage(initialSpecialPage);
@@ -108,6 +123,21 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       return true;
     }).sort((a, b) => a.title.localeCompare(b.title));
   }, [articles, allPagesNamespace, allPagesPrefix]);
+
+  const handleRandomPage = async () => {
+    if (onRandomArticle) {
+      onRandomArticle();
+      return;
+    }
+    try {
+      const random = await api.getRandomArticle();
+      if (random && random.slug) {
+        onNavigateArticle(random.slug);
+      }
+    } catch (err) {
+      console.warn('Erro ao abrir página aleatória:', err);
+    }
+  };
 
   // Semantic Data across all pages
   const semanticDatabase = useMemo(() => {
@@ -321,6 +351,20 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
                     Especial:DadosEstruturados
                   </button>
                   <p className="text-[11px] text-slate-400">Semantic MediaWiki / Cargo factboxes e consultas.</p>
+                </li>
+                <li>
+                  <button onClick={handleRandomPage} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
+                    <Shuffle className="w-3 h-3 text-indigo-500" />
+                    <span>Especial:PáginaAleatória (Special:Random)</span>
+                  </button>
+                  <p className="text-[11px] text-slate-400">Navega imediatamente para um verbete enciclopédico sorteado ao acaso.</p>
+                </li>
+                <li>
+                  <button onClick={() => setActivePage('Watchlist')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
+                    <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                    <span>Especial:PáginasVigiadas (Special:Watchlist)</span>
+                  </button>
+                  <p className="text-[11px] text-slate-400">Artigos que você segue com notificações push e registro de edições recentes.</p>
                 </li>
               </ul>
             </div>
@@ -750,6 +794,115 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
             }`}>
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{importFeedback}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* VIEW: SPECIAL:WATCHLIST (Páginas Vigiadas) */}
+      {activePage === 'Watchlist' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                <span>Especial:PáginasVigiadas (Special:Watchlist)</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Monitore os artigos de seu interesse. Quando um artigo sofrer alterações, notificações push via Firebase Cloud Messaging e alertas internos serão disparados.
+              </p>
+            </div>
+            {currentUser?.id && (
+              <button
+                onClick={() => {
+                  api.initializeFCM(currentUser.id).then(token => {
+                    if (token) alert('Dispositivo registrado com sucesso para Notificações Push FCM!');
+                    else alert('Notificações no navegador ativadas via Firebase!');
+                  });
+                }}
+                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 text-blue-700 dark:text-blue-300 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto"
+              >
+                <Bell className="w-3.5 h-3.5 text-blue-600" />
+                <span>Ativar Notificações Push</span>
+              </button>
+            )}
+          </div>
+
+          {!currentUser ? (
+            <div className="p-5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs">
+              <p className="font-semibold mb-1">Identificação Necessária</p>
+              <p>É necessário estar autenticado com uma Conta Google para vigiar artigos e receber notificações push.</p>
+            </div>
+          ) : watchlist.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-xs space-y-2">
+              <Star className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+              <div className="font-semibold text-slate-600 dark:text-slate-400">
+                Você ainda não está vigiando nenhuma página
+              </div>
+              <p className="max-w-md mx-auto text-[11px] text-slate-400">
+                Ao ler qualquer verbete no NotMediaWiki, clique no botão <strong>Vigiar</strong> na barra superior para acompanhar alterações em tempo real.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+              {watchlist.map(sub => (
+                <div
+                  key={sub.id}
+                  className="p-4 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
+                      <button
+                        onClick={() => onNavigateArticle(sub.articleSlug)}
+                        className="font-bold text-sm text-blue-600 dark:text-blue-400 hover:underline text-left truncate cursor-pointer"
+                      >
+                        {sub.articleTitle || sub.articleSlug}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono mt-1 flex items-center gap-2">
+                      <span>Vigiando desde: {new Date(sub.createdAt).toLocaleDateString('pt-BR')}</span>
+                      <span>•</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <Bell className="w-3 h-3" /> Push Ativo
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => onNavigateArticle(sub.articleSlug)}
+                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded cursor-pointer"
+                    >
+                      Ler
+                    </button>
+                    <button
+                      onClick={() => onOpenEdit(sub.articleSlug)}
+                      className="px-2.5 py-1 text-xs font-medium bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-700 dark:text-blue-300 rounded cursor-pointer"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => onOpenHistory(sub.articleSlug)}
+                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded cursor-pointer"
+                    >
+                      Histórico
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await api.toggleWatchArticle(currentUser.id, {
+                          slug: sub.articleSlug,
+                          title: sub.articleTitle,
+                        });
+                      }}
+                      className="px-2.5 py-1 text-xs font-medium bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 text-rose-700 dark:text-rose-300 rounded cursor-pointer"
+                      title="Deixar de vigiar este artigo"
+                    >
+                      Desmarcar
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

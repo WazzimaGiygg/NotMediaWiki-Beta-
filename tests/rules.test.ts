@@ -49,4 +49,11 @@ describe('Firestore Security Rules Static Analysis & Invariants', () => {
     const chatBlock = rulesContent.substring(rulesContent.indexOf('match /direct_chats/{chatId}'));
     expect(chatBlock).toContain('request.auth.uid in resource.data.participants');
   });
+
+  it('Guards watchlist_subscriptions, article_notifications, and fcm_tokens', () => {
+    expect(rulesContent).toContain('match /watchlist_subscriptions/{subId}');
+    expect(rulesContent).toContain('match /article_notifications/{notificationId}');
+    expect(rulesContent).toContain('match /fcm_tokens/{tokenId}');
+    expect(rulesContent).toContain('resource.data.userId == request.auth.uid');
+  });
 });

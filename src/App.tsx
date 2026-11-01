@@ -13,6 +13,7 @@ import { UserPageView } from './components/UserPageView';
 import { ChatDrawer } from './components/ChatDrawer';
 import { DailyChecklistModal } from './components/DailyChecklistModal';
 import { SpecialPagesHub } from './components/SpecialPagesHub';
+import { GoogleOneTapPopup } from './components/GoogleOneTapPopup';
 import { MessageSquare } from 'lucide-react';
 import { UserSession } from './types';
 import { api } from './api';
@@ -103,24 +104,41 @@ export default function App() {
       const hash = window.location.hash;
       if (hash === '' || hash === '#' || hash === '#/' || hash === '#/home') {
         setCurrentView('home');
+      } else if (hash === '#/random' || hash === '#/aleatorio' || hash === '#/aleatoria') {
+        handleRandomArticle();
       } else if (hash.startsWith('#/wiki/Special:') || hash.startsWith('#/wiki/Especial:')) {
         const rawSpecial = decodeURIComponent(hash.replace('#/wiki/', ''));
         const colonIdx = rawSpecial.indexOf(':');
         const spName = colonIdx >= 0 ? rawSpecial.substring(colonIdx + 1) : 'SpecialPages';
-        setSpecialPageName(spName);
-        setCurrentView('special');
+        const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
+          handleRandomArticle();
+        } else {
+          setSpecialPageName(spName);
+          setCurrentView('special');
+        }
       } else if (hash === '#/special' || hash === '#/especial' || hash.startsWith('#/special/') || hash.startsWith('#/especial/')) {
         const parts = hash.split('/');
         const spName = parts[2] ? decodeURIComponent(parts[2]) : 'SpecialPages';
-        setSpecialPageName(spName);
-        setCurrentView('special');
+        const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
+          handleRandomArticle();
+        } else {
+          setSpecialPageName(spName);
+          setCurrentView('special');
+        }
       } else if (hash.startsWith('#/wiki/')) {
         const slug = decodeURIComponent(hash.replace('#/wiki/', ''));
         if (slug.startsWith('Special:') || slug.startsWith('Especial:')) {
           const colonIdx = slug.indexOf(':');
           const spName = colonIdx >= 0 ? slug.substring(colonIdx + 1) : 'SpecialPages';
-          setSpecialPageName(spName);
-          setCurrentView('special');
+          const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
+            handleRandomArticle();
+          } else {
+            setSpecialPageName(spName);
+            setCurrentView('special');
+          }
         } else {
           setActiveArticleSlug(slug);
           setCurrentView('reader');
@@ -244,10 +262,29 @@ export default function App() {
     };
   }, []);
 
+  const handleRandomArticle = async () => {
+    try {
+      const article = await api.getRandomArticle(activeArticleSlug);
+      if (article && article.slug) {
+        handleNavigateArticle(article.slug);
+      } else {
+        handleNavigateArticle('MediaWiki');
+      }
+    } catch (err) {
+      console.warn('Erro ao sortear artigo aleatório:', err);
+      handleNavigateArticle('MediaWiki');
+    }
+  };
+
   const handleNavigateArticle = (slug: string) => {
     if (slug.startsWith('Special:') || slug.startsWith('Especial:')) {
       const colonIdx = slug.indexOf(':');
       const spName = colonIdx >= 0 ? slug.substring(colonIdx + 1) : 'SpecialPages';
+      const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
+        handleRandomArticle();
+        return;
+      }
       setSpecialPageName(spName);
       setCurrentView('special');
       window.location.hash = `#/special/${encodeURIComponent(spName)}`;
@@ -316,6 +353,13 @@ export default function App() {
           }
         }}
         onOpenChecklist={() => setIsChecklistOpen(true)}
+        onRandomArticle={handleRandomArticle}
+      />
+
+      {/* Floating Google Quick Login Popup (Top Right Corner) */}
+      <GoogleOneTapPopup
+        currentUser={currentUser}
+        onUserChanged={setCurrentUser}
       />
 
       {/* Main View Container */}
@@ -326,6 +370,7 @@ export default function App() {
             onNavigateArticle={handleNavigateArticle}
             onEditArticle={handleOpenEdit}
             onOpenNewArticle={() => setIsNewArticleModalOpen(true)}
+            onRandomArticle={handleRandomArticle}
           />
         )}
 
@@ -436,6 +481,7 @@ export default function App() {
             onNavigateArticle={handleNavigateArticle}
             onOpenEdit={handleOpenEdit}
             onOpenHistory={handleOpenHistory}
+            onRandomArticle={handleRandomArticle}
           />
         )}
 
@@ -512,6 +558,12 @@ export default function App() {
         onClose={() => setIsChatOpen(false)}
         targetUserForNewChat={chatTargetUser}
         onClearTargetUser={() => setChatTargetUser(null)}
+      />
+
+      {/* Google One Tap / Quick Sign-in popup at top-right */}
+      <GoogleOneTapPopup
+        currentUser={currentUser}
+        onUserChanged={setCurrentUser}
       />
 
       {/* Floating Chat Trigger Button */}

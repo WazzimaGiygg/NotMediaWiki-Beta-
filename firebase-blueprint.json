@@ -314,6 +314,52 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "articleSlug", "userId", "vote", "createdAt"]
+    },
+    "WatchlistSubscription": {
+      "title": "WatchlistSubscription",
+      "description": "User subscription to follow/watch changes on a specific article with push notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 255 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "articleSlug": { "type": "string", "maxLength": 255 },
+        "articleTitle": { "type": "string", "maxLength": 255 },
+        "createdAt": { "type": "string" },
+        "notifyPush": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "articleSlug", "articleTitle", "createdAt"]
+    },
+    "ArticleNotification": {
+      "title": "ArticleNotification",
+      "description": "Push notification record delivered to users watching an article that underwent revisions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "articleSlug": { "type": "string", "maxLength": 255 },
+        "articleTitle": { "type": "string", "maxLength": 255 },
+        "changeSummary": { "type": "string", "maxLength": 1000 },
+        "editorName": { "type": "string", "maxLength": 128 },
+        "editorId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "revisionId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "userId", "articleSlug", "articleTitle", "timestamp", "isRead"]
+    },
+    "FcmTokenRegistration": {
+      "title": "FcmTokenRegistration",
+      "description": "Firebase Cloud Messaging Web Push device registration token for user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 255 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "token": { "type": "string", "maxLength": 1000 },
+        "platform": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string" },
+        "userAgent": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "userId", "token", "updatedAt"]
     }
   },
   "firestore": {
@@ -392,6 +438,18 @@
     "/article_votes/{voteId}": {
       "schema": { "$ref": "#/entities/ArticleVote" },
       "description": "Reader feedback like/dislike votes on articles with author karma attribution"
+    },
+    "/watchlist_subscriptions/{subId}": {
+      "schema": { "$ref": "#/entities/WatchlistSubscription" },
+      "description": "User article watchlist and favorite subscriptions for push notifications"
+    },
+    "/article_notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/ArticleNotification" },
+      "description": "Push notification messages dispatched to users watching changed articles"
+    },
+    "/fcm_tokens/{tokenId}": {
+      "schema": { "$ref": "#/entities/FcmTokenRegistration" },
+      "description": "Device Firebase Cloud Messaging Web Push registration tokens"
     }
   }
 }

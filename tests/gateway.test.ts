@@ -105,4 +105,19 @@ describe('NotMediaWiki API Gateway Integration Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.user.id).toBe('test-sync-user-123');
   });
+
+  it('GET /api/v1/content/random returns a random article from the encyclopedia', async () => {
+    const res = await request(app).get('/api/v1/content/random');
+    expect(res.status).toBe(200);
+    expect(res.body.article).toBeDefined();
+    expect(typeof res.body.article.slug).toBe('string');
+    expect(typeof res.body.article.title).toBe('string');
+  });
+
+  it('GET /api/v1/content/random?current=MediaWiki excludes current article when alternatives exist', async () => {
+    const res = await request(app).get('/api/v1/content/random?current=MediaWiki');
+    expect(res.status).toBe(200);
+    expect(res.body.article).toBeDefined();
+    expect(res.body.article.slug.toLowerCase()).not.toBe('mediawiki');
+  });
 });

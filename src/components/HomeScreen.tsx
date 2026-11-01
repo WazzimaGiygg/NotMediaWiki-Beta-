@@ -22,6 +22,7 @@ import {
   HelpCircle,
   ChevronRight,
   RefreshCw,
+  Shuffle,
 } from 'lucide-react';
 import { Article, UserSession, HomePageMetadata } from '../types';
 import { api } from '../api';
@@ -42,6 +43,7 @@ interface HomeScreenProps {
   onEditArticle: (slug: string) => void;
   onOpenNewArticle: () => void;
   onSwitchUser?: (userId: string) => void;
+  onRandomArticle?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -50,6 +52,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onEditArticle,
   onOpenNewArticle,
   onSwitchUser,
+  onRandomArticle,
 }) => {
   const [homeMeta, setHomeMeta] = useState<HomePageMetadata>({
     id: 'home_page',
@@ -332,6 +335,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           >
             <Plus className="w-4 h-4" />
             Criar Novo Artigo
+          </button>
+
+          <button
+            onClick={onRandomArticle}
+            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shadow-2xs cursor-pointer"
+            title="Sortear e abrir um verbete aleatório da enciclopédia (Special:Random)"
+          >
+            <Shuffle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Artigo Aleatório</span>
           </button>
 
           {isBureaucrat && (

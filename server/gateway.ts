@@ -67,6 +67,31 @@ gatewayRouter.get('/content/articles', (req: Request, res: Response) => {
   }
 });
 
+// Special:Random endpoint
+gatewayRouter.get(['/content/random', '/content/articles/special/random'], (req: Request, res: Response) => {
+  try {
+    let ns = 0;
+    if (req.query.namespace !== undefined) {
+      const parsed = parseInt(req.query.namespace as string, 10);
+      if (!Number.isNaN(parsed)) ns = parsed;
+    }
+    const currentSlug = req.query.current as string | undefined;
+    const articles = contentService.getAllArticles(ns);
+    const pool = articles.length > 0 ? articles : contentService.getAllArticles();
+    const filtered = currentSlug
+      ? pool.filter(a => a.slug.toLowerCase() !== currentSlug.toLowerCase())
+      : pool;
+    const candidates = filtered.length > 0 ? filtered : pool;
+    if (candidates.length === 0) {
+      return res.status(404).json({ error: 'Nenhum artigo encontrado' });
+    }
+    const random = candidates[Math.floor(Math.random() * candidates.length)];
+    res.json({ article: random });
+  } catch {
+    res.status(500).json({ error: 'Falha interna ao buscar artigo aleatório' });
+  }
+});
+
 gatewayRouter.get('/content/articles/:slug', (req: Request, res: Response) => {
   try {
     const slug = req.params.slug;

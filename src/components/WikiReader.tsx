@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database, Zap } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database, Zap, Star } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -44,6 +44,40 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   const [allArticles, setAllArticles] = useState<Article[]>([]);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isWatched, setIsWatched] = useState<boolean>(false);
+  const [watchLoading, setWatchLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (currentUser?.id && slug) {
+      api.isArticleWatched(currentUser.id, slug)
+        .then(watched => setIsWatched(watched))
+        .catch(() => setIsWatched(false));
+    } else {
+      setIsWatched(false);
+    }
+  }, [currentUser?.id, slug]);
+
+  const handleToggleWatch = async () => {
+    if (!currentUser?.id) {
+      alert('Faça login para vigiar artigos e receber notificações.');
+      return;
+    }
+    setWatchLoading(true);
+    try {
+      const newStatus = await api.toggleWatchArticle(currentUser.id, {
+        slug,
+        title: data?.article?.title || slug,
+      }, true);
+      setIsWatched(newStatus.isWatched);
+      if (newStatus.isWatched) {
+        api.initializeFCM(currentUser.id).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Erro ao alterar status de vigia:', err);
+    } finally {
+      setWatchLoading(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -287,6 +321,23 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleToggleWatch}
+            disabled={watchLoading}
+            className={`px-3 py-1.5 text-xs font-medium rounded border flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
+              isWatched
+                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-750 hover:bg-amber-100'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+            title={
+              isWatched
+                ? 'Você está vigiando este artigo. Clique para parar de receber notificações.'
+                : 'Vigiar este artigo para receber notificações push quando houver alterações.'
+            }
+          >
+            <Star className={`w-3.5 h-3.5 ${isWatched ? 'fill-amber-400 text-amber-500' : 'text-slate-400'}`} />
+            <span>{isWatched ? 'Vigiando' : 'Vigiar'}</span>
+          </button>
           <button
             onClick={() => onEdit(slug)}
             className="px-3 py-1.5 text-xs font-medium bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 transition-colors cursor-pointer"
