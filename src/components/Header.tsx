@@ -639,102 +639,166 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </form>
 
-          {/* Autocomplete Dropdown */}
-          {showSuggestions && searchQuery.trim().length > 0 && (
+          {/* Autocomplete Dropdown & Quick Random Discovery */}
+          {showSuggestions && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-1.5 z-50 overflow-hidden backdrop-blur-md">
-              <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span>Resultados da Busca Rápida</span>
-                {isSearching ? (
-                  <span className="flex items-center gap-1 text-blue-500 font-normal normal-case">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Pesquisando...
-                  </span>
-                ) : (
-                  <span>{suggestions.length} resultado{suggestions.length !== 1 ? 's' : ''}</span>
-                )}
-              </div>
-
-              {suggestions.length > 0 ? (
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {suggestions.map((s, idx) => {
-                    const isSelected = idx === selectedIndex;
-                    return (
-                      <button
-                        key={s.slug}
-                        type="button"
-                        onMouseEnter={() => setSelectedIndex(idx)}
-                        onClick={() => {
-                          onNavigateArticle(s.slug);
-                          setSearchQuery('');
-                          setShowSuggestions(false);
-                          setSelectedIndex(-1);
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors flex flex-col gap-0.5 cursor-pointer ${
-                          isSelected
-                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-100 border-l-2 border-blue-600 pl-2.5'
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-800 dark:text-slate-200 border-l-2 border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <FileText className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
-                            <span className="font-medium truncate">{highlightMatch(s.title, searchQuery)}</span>
-                            <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shrink-0">
-                              {getNamespaceBadge(s.namespace)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className={`text-[11px] font-mono ${isSelected ? 'text-blue-600 dark:text-blue-300' : 'text-slate-400'}`}>
-                              /wiki/{s.slug}
-                            </span>
-                            {isSelected && (
-                              <CornerDownLeft className="w-3 h-3 text-blue-600 dark:text-blue-400 animate-pulse" />
-                            )}
-                          </div>
-                        </div>
-                        {s.snippet && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 pl-5">
-                            {s.snippet}
-                          </p>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : !isSearching ? (
-                <div className="px-4 py-5 text-center">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                    Nenhum artigo encontrado com o título &ldquo;<span className="font-semibold text-slate-700 dark:text-slate-300">{searchQuery}</span>&rdquo;
-                  </p>
+              {searchQuery.trim().length === 0 ? (
+                /* Empty query discovery drawer */
+                <div className="p-2 space-y-1">
+                  <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                    <span>Descoberta Rápida</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
                       setShowSuggestions(false);
-                      onOpenNewArticle();
+                      handleRandomClick();
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors cursor-pointer shadow-2xs"
+                    className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    Criar página &ldquo;{searchQuery}&rdquo;
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          Buscar Artigo Aleatório
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Sortear e abrir uma página ao acaso da enciclopédia
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                      Special:Random
+                    </span>
                   </button>
                 </div>
-              ) : null}
+              ) : (
+                /* Active query suggestions list */
+                <>
+                  <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span>Resultados da Busca Rápida</span>
+                    {isSearching ? (
+                      <span className="flex items-center gap-1 text-blue-500 font-normal normal-case">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Pesquisando...
+                      </span>
+                    ) : (
+                      <span>{suggestions.length} resultado{suggestions.length !== 1 ? 's' : ''}</span>
+                    )}
+                  </div>
 
-              <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-3 py-2 flex items-center justify-between text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenSearch(searchQuery);
-                    setShowSuggestions(false);
-                  }}
-                  className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Buscar em todo o texto completo</span>
-                  <span>→</span>
-                </button>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">
-                  <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">↑↓</kbd> navegar <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Enter</kbd> abrir <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Esc</kbd> fechar
-                </span>
-              </div>
+                  {suggestions.length > 0 ? (
+                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {suggestions.map((s, idx) => {
+                        const isSelected = idx === selectedIndex;
+                        return (
+                          <button
+                            key={s.slug}
+                            type="button"
+                            onMouseEnter={() => setSelectedIndex(idx)}
+                            onClick={() => {
+                              onNavigateArticle(s.slug);
+                              setSearchQuery('');
+                              setShowSuggestions(false);
+                              setSelectedIndex(-1);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors flex flex-col gap-0.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-100 border-l-2 border-blue-600 pl-2.5'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-800 dark:text-slate-200 border-l-2 border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <FileText className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
+                                <span className="font-medium truncate">{highlightMatch(s.title, searchQuery)}</span>
+                                <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shrink-0">
+                                  {getNamespaceBadge(s.namespace)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`text-[11px] font-mono ${isSelected ? 'text-blue-600 dark:text-blue-300' : 'text-slate-400'}`}>
+                                  /wiki/{s.slug}
+                                </span>
+                                {isSelected && (
+                                  <CornerDownLeft className="w-3 h-3 text-blue-600 dark:text-blue-400 animate-pulse" />
+                                )}
+                              </div>
+                            </div>
+                            {s.snippet && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 pl-5">
+                                {s.snippet}
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : !isSearching ? (
+                    <div className="px-4 py-5 text-center space-y-3">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                        Nenhum artigo encontrado com o título &ldquo;<span className="font-semibold text-slate-700 dark:text-slate-300">{searchQuery}</span>&rdquo;
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSuggestions(false);
+                            onOpenNewArticle();
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Criar página &ldquo;{searchQuery}&rdquo;
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSuggestions(false);
+                            handleRandomClick();
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded text-xs font-medium transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <Shuffle className="w-3.5 h-3.5 text-indigo-500" />
+                          Buscar Artigo Aleatório
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-3 py-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenSearch(searchQuery);
+                          setShowSuggestions(false);
+                        }}
+                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Buscar em todo o texto</span>
+                        <span>→</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSuggestions(false);
+                          handleRandomClick();
+                        }}
+                        className="font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 cursor-pointer"
+                        title="Buscar e abrir um verbete sorteado aleatoriamente"
+                      >
+                        <Shuffle className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Artigo Aleatório</span>
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">
+                      <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">↑↓</kbd> navegar <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Enter</kbd> abrir <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Esc</kbd> fechar
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

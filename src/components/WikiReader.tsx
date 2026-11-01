@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database, Zap, Star } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -26,6 +26,7 @@ interface WikiReaderProps {
   currentUser?: UserSession | null;
   onProgressChange?: (progress: number) => void;
   onOpenChecklist?: () => void;
+  onRandomArticle?: () => void;
 }
 
 export const WikiReader: React.FC<WikiReaderProps> = ({
@@ -37,6 +38,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   currentUser,
   onProgressChange,
   onOpenChecklist,
+  onRandomArticle,
 }) => {
   const [data, setData] = useState<RenderedArticleResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -76,6 +78,26 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
       console.error('Erro ao alterar status de vigia:', err);
     } finally {
       setWatchLoading(false);
+    }
+  };
+
+  const [randomLoading, setRandomLoading] = useState(false);
+
+  const handleRandomClick = async () => {
+    if (onRandomArticle) {
+      onRandomArticle();
+      return;
+    }
+    setRandomLoading(true);
+    try {
+      const random = await api.getRandomArticle(slug);
+      if (random && random.slug) {
+        onNavigate(random.slug);
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar artigo aleatório:', err);
+    } finally {
+      setRandomLoading(false);
     }
   };
 
@@ -373,6 +395,15 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           >
             <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span>Imprimir</span>
+          </button>
+          <button
+            onClick={handleRandomClick}
+            disabled={randomLoading}
+            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+            title="Sortear e abrir outro artigo aleatório da enciclopédia"
+          >
+            <Shuffle className={`w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 ${randomLoading ? 'animate-spin' : ''}`} />
+            <span>Artigo Aleatório</span>
           </button>
         </div>
       </div>

@@ -392,6 +392,7 @@ export default function App() {
               onNewArticle={() => setIsNewArticleModalOpen(true)}
               onProgressChange={setReadingProgress}
               onOpenChecklist={() => setIsChecklistOpen(true)}
+              onRandomArticle={handleRandomArticle}
             />
           </ErrorBoundary>
         )}
@@ -489,6 +490,7 @@ export default function App() {
           <SearchResults
             initialQuery={searchQuery}
             onNavigateArticle={handleNavigateArticle}
+            onRandomArticle={handleRandomArticle}
           />
         )}
       </main>
