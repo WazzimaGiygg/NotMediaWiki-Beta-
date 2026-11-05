@@ -707,6 +707,31 @@ export function subscribeToFirestoreArticles(
 }
 
 /**
+ * Sets up a live real-time snapshot listener on a single Firestore article document
+ */
+export function subscribeToFirestoreArticle(
+  slug: string,
+  onUpdate: (article: Article) => void,
+  onError?: (err: any) => void
+) {
+  const cleanSlug = slug.trim().replace(/\s+/g, '_');
+  const path = `articles/${cleanSlug}`;
+  return onSnapshot(
+    doc(db, 'articles', cleanSlug),
+    docSnap => {
+      if (docSnap.exists()) {
+        const article = docSnap.data() as Article;
+        onUpdate(article);
+      }
+    },
+    error => {
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+}
+
+/**
  * Helper to compute SHA-256 for revisions
  */
 async function computeHash(content: string): Promise<string> {

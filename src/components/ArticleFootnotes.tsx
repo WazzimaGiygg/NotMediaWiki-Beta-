@@ -13,6 +13,7 @@ export interface ArticleFootnotesProps {
 
 export const ArticleFootnotes: React.FC<ArticleFootnotesProps> = ({
   ast,
+  references,
   wikitext,
   className = '',
   onNavigate,
@@ -22,10 +23,10 @@ export const ArticleFootnotes: React.FC<ArticleFootnotesProps> = ({
   const [copiedAll, setCopiedAll] = useState(false);
   const [targetedNoteId, setTargetedNoteId] = useState<string | null>(null);
 
-  // Extract structured citations from Parsoid AST (with fallback to wikitext)
+  // Extract structured citations from Parsoid AST (with fallback to wikitext and references)
   const citations = useMemo<CitationFootnote[]>(() => {
-    return extractCitationsFromAst(ast, wikitext);
-  }, [ast, wikitext]);
+    return extractCitationsFromAst(ast, wikitext, references);
+  }, [ast, wikitext, references]);
 
   // Listen to window location hash to highlight targeted footnote if navigated via anchor
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -16,6 +16,9 @@ import { MEDIAWIKI_NAMESPACES, parseTitle, getSubpageBreadcrumbs } from '../util
 import { parseSemanticFacts } from '../utils/semanticParser';
 import { SemanticFactbox } from './SemanticFactbox';
 import { CategoryTreeView } from './CategoryTreeView';
+import { subscribeToFirestoreArticle, auth } from '../firebase';
+import { parseFootnoteTagsInHtml } from '../utils/citationParser';
+import { downloadArticlePdf } from '../utils/pdfDownloader';
 
 interface WikiReaderProps {
   slug: string;
@@ -101,15 +104,66 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     }
   };
 
+  // Focus / Reader Mode state (Distraction-Free)
+  const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
+  const [readerFontSize, setReaderFontSize] = useState<'base' | 'lg' | 'xl'>('lg');
+  const [readerFontFamily, setReaderFontFamily] = useState<'serif' | 'sans'>('serif');
+
+  // PDF Generation & Download state
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+
+  const handleDownloadPdf = async () => {
+    if (!data?.article) return;
+    setIsGeneratingPdf(true);
+    try {
+      const referencesEl = document.getElementById('references');
+      await downloadArticlePdf({
+        article: data.article,
+        htmlContent: renderedHtml || data.html,
+        footnotesRef: referencesEl,
+      });
+    } catch (err) {
+      console.error('Erro ao gerar PDF do artigo:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  // Keyboard shortcut: Esc to exit reader mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isReaderMode) {
+        setIsReaderMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isReaderMode]);
+
+  // Real-time Firestore onSnapshot subscription state
+  const loadedRevIdRef = useRef<string | null>(null);
+  const loadedWikitextRef = useRef<string | null>(null);
+  const [realtimeToast, setRealtimeToast] = useState<{
+    visible: boolean;
+    editorName: string;
+    summary: string;
+    timestamp: string;
+    revId: string;
+  } | null>(null);
+  const [refreshingRealtime, setRefreshingRealtime] = useState<boolean>(false);
+
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
     setError(null);
+    setRealtimeToast(null);
 
     api.getRenderedArticle(slug)
       .then(res => {
         if (isMounted) {
           setData(res);
+          loadedRevIdRef.current = res.article.latestRevisionId || null;
+          loadedWikitextRef.current = res.article.wikitext || null;
           setLoading(false);
         }
       })
@@ -131,6 +185,67 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     return () => { isMounted = false; };
   }, [slug]);
 
+  // Real-time Firestore onSnapshot subscription for the currently viewed article
+  useEffect(() => {
+    if (!slug) return;
+    setRealtimeToast(null);
+
+    const unsubscribe = subscribeToFirestoreArticle(
+      slug,
+      (liveArticle) => {
+        const currentRev = loadedRevIdRef.current;
+        const currentWikitext = loadedWikitextRef.current;
+
+        // Verify if revision ID or wikitext content changed in Firestore
+        const isNewRev = liveArticle.latestRevisionId && currentRev && liveArticle.latestRevisionId !== currentRev;
+        const isNewWikitext = liveArticle.wikitext && currentWikitext && liveArticle.wikitext !== currentWikitext;
+
+        if (isNewRev || isNewWikitext) {
+          const editorUid = (liveArticle as any).authorUid || (liveArticle as any).author?.id;
+          const currentUserId = currentUser?.id || auth.currentUser?.uid;
+
+          // Alert only if the edit was made by another user while this page is open
+          if (!currentUserId || !editorUid || editorUid !== currentUserId) {
+            const editorName = (liveArticle as any).lastEditedBy || (liveArticle as any).author?.name || 'Outro usuário';
+            const summary = liveArticle.summary || (liveArticle as any).comment || 'Edição no conteúdo';
+
+            setRealtimeToast({
+              visible: true,
+              editorName,
+              summary,
+              timestamp: liveArticle.updatedAt || new Date().toISOString(),
+              revId: liveArticle.latestRevisionId || 'nova',
+            });
+          }
+        }
+      },
+      (err) => {
+        console.warn('Realtime article subscription notice:', err);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [slug, currentUser]);
+
+  const handleReloadArticle = async () => {
+    if (!slug) return;
+    setRefreshingRealtime(true);
+    try {
+      const res = await api.getRenderedArticle(slug);
+      setData(res);
+      loadedRevIdRef.current = res.article.latestRevisionId || null;
+      loadedWikitextRef.current = res.article.wikitext || null;
+      setRealtimeToast(null);
+      api.getRevisions(slug).then(setRevisions).catch(console.error);
+    } catch (err) {
+      console.warn('Erro ao atualizar artigo em tempo real:', err);
+    } finally {
+      setRefreshingRealtime(false);
+    }
+  };
+
   const contentRef = useRef<HTMLElement>(null);
 
   // Lightweight syntax highlighting on code blocks inside .wiki-content
@@ -139,7 +254,14 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     enhanceCodeBlocks(contentRef.current);
   }, [data?.html]);
 
-  // Handle clicking links rendered in Parsoid HTML
+  // Ensure all <ref> tags in the HTML are parsed into clickable, accessible superscripts
+  const renderedHtml = useMemo(() => {
+    if (!data?.html) return '';
+    const { html: parsed } = parseFootnoteTagsInHtml(data.html);
+    return parsed;
+  }, [data?.html]);
+
+  // Handle clicking links rendered in Parsoid HTML (with interactive footnote backlinks and jumping)
   const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const anchor = target.closest('a');
@@ -150,14 +272,23 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         const targetSlug = decodeURIComponent(href.replace('#/wiki/', ''));
         onNavigate(targetSlug);
       } else if (href && href.startsWith('#')) {
-        // Anchor link within page (e.g. section headings or #cite_note-X)
+        // Anchor link within page (e.g. section headings or #cite_note-X / #cite_ref-X)
         const elementId = href.substring(1);
         const el = document.getElementById(elementId);
         if (el) {
           e.preventDefault();
-          el.scrollIntoView({ behavior: 'smooth' });
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           if (elementId.startsWith('cite_note-')) {
             window.location.hash = elementId;
+            el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-blue-950/50', 'rounded', 'p-1', 'transition-all');
+            setTimeout(() => {
+              el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-blue-950/50');
+            }, 3000);
+          } else if (elementId.startsWith('cite_ref-')) {
+            el.classList.add('ring-2', 'ring-amber-400', 'bg-amber-100', 'dark:bg-amber-950/60', 'rounded', 'px-1', 'transition-all');
+            setTimeout(() => {
+              el.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-100', 'dark:bg-amber-950/60', 'rounded', 'px-1');
+            }, 3000);
           }
         }
       } else if (href && (/^https?:\/\//i.test(href) || href.startsWith('//'))) {
@@ -312,105 +443,234 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   return (
     <div className="relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-      {/* Article Sub-header Tabs & Action Bar */}
-      <div className="border-b border-slate-200 dark:border-slate-800 pb-2 mb-6 flex flex-wrap items-center justify-between gap-4">
-        {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onNavigate(subjectSlug)}
-            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
-              !isTalk
-                ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            {subjectLabel}
-          </button>
-          {talkSlug && (
+      {/* Floating Sticky Reader Mode Header Controls when active */}
+      {isReaderMode && (
+        <div className="sticky top-3 z-30 mb-8 p-3.5 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-lg flex flex-wrap items-center justify-between gap-3 animate-fade-in transition-all">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800/60">
+              <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Modo de Leitura Focado</span>
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
+              {wordCount.toLocaleString()} palavras · ~{readingTimeMin} min de leitura
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {/* Typography Controls: Serif vs Sans */}
+            <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-0.5">
+              <button
+                onClick={() => setReaderFontFamily('serif')}
+                className={`px-2.5 py-1 text-xs font-serif transition-colors cursor-pointer rounded ${
+                  readerFontFamily === 'serif'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+                title="Tipografia Serifada clássica"
+              >
+                Serif
+              </button>
+              <button
+                onClick={() => setReaderFontFamily('sans')}
+                className={`px-2.5 py-1 text-xs font-sans transition-colors cursor-pointer rounded ${
+                  readerFontFamily === 'sans'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+                title="Tipografia Sem Serifa moderna"
+              >
+                Sans
+              </button>
+            </div>
+
+            {/* Font Size controls */}
+            <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-0.5">
+              <button
+                onClick={() => setReaderFontSize('base')}
+                className={`px-2.5 py-1 text-xs transition-colors cursor-pointer rounded ${
+                  readerFontSize === 'base'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+                title="Tamanho padrão de fonte"
+              >
+                A
+              </button>
+              <button
+                onClick={() => setReaderFontSize('lg')}
+                className={`px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer rounded ${
+                  readerFontSize === 'lg'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+                title="Tamanho médio de fonte (+)"
+              >
+                A+
+              </button>
+              <button
+                onClick={() => setReaderFontSize('xl')}
+                className={`px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer rounded ${
+                  readerFontSize === 'xl'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+                title="Tamanho grande de fonte (++)"
+              >
+                A++
+              </button>
+            </div>
+
+            {/* Download PDF button in reader mode */}
             <button
-              onClick={() => onNavigate(talkSlug)}
-              className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                isTalk
+              onClick={handleDownloadPdf}
+              disabled={isGeneratingPdf}
+              className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title="Baixar artigo em PDF"
+            >
+              {isGeneratingPdf ? (
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+              )}
+              <span className="hidden sm:inline">{isGeneratingPdf ? 'Baixando...' : 'PDF'}</span>
+            </button>
+
+            {/* Exit Reader Mode */}
+            <button
+              onClick={() => setIsReaderMode(false)}
+              className="px-3 py-1.5 text-xs font-semibold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="Sair do Modo de Leitura (Esc)"
+            >
+              <Minimize2 className="w-3.5 h-3.5" />
+              <span>Sair (Esc)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Article Sub-header Tabs & Action Bar */}
+      {!isReaderMode && (
+        <div className="border-b border-slate-200 dark:border-slate-800 pb-2 mb-6 flex flex-wrap items-center justify-between gap-4">
+          {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onNavigate(subjectSlug)}
+              className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
+                !isTalk
                   ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
                   : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              <MessageSquare className="w-3.5 h-3.5" />
-              Discussão
+              {subjectLabel}
             </button>
-          )}
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleToggleWatch}
-            disabled={watchLoading}
-            className={`px-3 py-1.5 text-xs font-medium rounded border flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
-              isWatched
-                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-750 hover:bg-amber-100'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
-            title={
-              isWatched
-                ? 'Você está vigiando este artigo. Clique para parar de receber notificações.'
-                : 'Vigiar este artigo para receber notificações push quando houver alterações.'
-            }
-          >
-            <Star className={`w-3.5 h-3.5 ${isWatched ? 'fill-amber-400 text-amber-500' : 'text-slate-400'}`} />
-            <span>{isWatched ? 'Vigiando' : 'Vigiar'}</span>
-          </button>
-          <button
-            onClick={() => onEdit(slug)}
-            className="px-3 py-1.5 text-xs font-medium bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            Editar código-fonte
-          </button>
-          <button
-            onClick={() => onHistory(slug)}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            title="Ver histórico de edições e comparar versões (Diff)"
-          >
-            <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            <span>Histórico de edições</span>
-            {revisions.length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                {revisions.length}
-              </span>
+            {talkSlug && (
+              <button
+                onClick={() => onNavigate(talkSlug)}
+                className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isTalk
+                    ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
+                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Discussão
+              </button>
             )}
-          </button>
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="px-3 py-1.5 text-xs font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            title="Gerar Relatório Oficial em PDF deste artigo no padrão institucional"
-          >
-            <Printer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>Relatório PDF</span>
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            title="Imprimir artigo diretamente (formatação otimizada para papel/impressora)"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            <span>Imprimir</span>
-          </button>
-          <button
-            onClick={handleRandomClick}
-            disabled={randomLoading}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-            title="Sortear e abrir outro artigo aleatório da enciclopédia"
-          >
-            <Shuffle className={`w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 ${randomLoading ? 'animate-spin' : ''}`} />
-            <span>Artigo Aleatório</span>
-          </button>
-        </div>
-      </div>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: Article Directory / Quick Switcher */}
-        <div className="hidden lg:block lg:col-span-3 space-y-6">
+          {/* Action Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsReaderMode(true)}
+              className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Ativar Modo de Leitura focado (esconde barras e painéis laterais)"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Modo de Leitura</span>
+            </button>
+            <button
+              onClick={handleToggleWatch}
+              disabled={watchLoading}
+              className={`px-3 py-1.5 text-xs font-medium rounded border flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
+                isWatched
+                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-750 hover:bg-amber-100'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+              title={
+                isWatched
+                  ? 'Você está vigiando este artigo. Clique para parar de receber notificações.'
+                  : 'Vigiar este artigo para receber notificações push quando houver alterações.'
+              }
+            >
+              <Star className={`w-3.5 h-3.5 ${isWatched ? 'fill-amber-400 text-amber-500' : 'text-slate-400'}`} />
+              <span>{isWatched ? 'Vigiando' : 'Vigiar'}</span>
+            </button>
+            <button
+              onClick={() => onEdit(slug)}
+              className="px-3 py-1.5 text-xs font-medium bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              Editar código-fonte
+            </button>
+            <button
+              onClick={() => onHistory(slug)}
+              className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Ver histórico de edições e comparar versões (Diff)"
+            >
+              <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Histórico de edições</span>
+              {revisions.length > 0 && (
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {revisions.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="px-3 py-1.5 text-xs font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Gerar Relatório Oficial em PDF deste artigo no padrão institucional"
+            >
+              <Printer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Relatório PDF</span>
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Imprimir artigo diretamente (formatação otimizada para papel/impressora)"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span>Imprimir</span>
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isGeneratingPdf}
+              className="px-3 py-1.5 text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title="Gerar e baixar o artigo em formato PDF (respeitando as regras de estilização de impressão do index.css)"
+            >
+              {isGeneratingPdf ? (
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              )}
+              <span>{isGeneratingPdf ? 'Baixando PDF...' : 'Baixar PDF'}</span>
+            </button>
+            <button
+              onClick={handleRandomClick}
+              disabled={randomLoading}
+              className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title="Sortear e abrir outro artigo aleatório da enciclopédia"
+            >
+              <Shuffle className={`w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 ${randomLoading ? 'animate-spin' : ''}`} />
+              <span>Artigo Aleatório</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={isReaderMode ? "max-w-3xl mx-auto py-2" : "grid grid-cols-1 lg:grid-cols-12 gap-8"}>
+        {/* Left Column: Article Directory / Quick Switcher (Hidden in Reader Mode) */}
+        {!isReaderMode && (
+          <div className="hidden lg:block lg:col-span-3 space-y-6">
           {/* Dynamic Table of Contents Sidebar Component */}
           <TableOfContents
             contentRef={contentRef}
@@ -504,11 +764,12 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               <GitCompare className="w-3 h-3 text-blue-600 dark:text-blue-400" />
               <span>Comparar versões (Diff)</span>
             </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Right / Main Column: Article Content */}
-        <main className="lg:col-span-9">
+        <main className={isReaderMode ? "w-full" : "lg:col-span-9"}>
           {/* Article Title */}
           <div className="border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
             {/* Subpage Breadcrumbs Hierarchy */}
@@ -579,59 +840,53 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               <span className="font-mono text-slate-400 dark:text-slate-500">rev: {article.latestRevisionId}</span>
             </div>
 
-            {/* BLP Ethics Council Compliance Badge & Trigger */}
-            <div className="mt-3 p-2.5 rounded-lg bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-purple-900 dark:text-purple-300">
-              <div className="flex items-center gap-2">
-                <HeartHandshake className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                <span>
-                  <strong>Conselho de Ética (WP:BLP):</strong> Artigo com biografias de pessoas vivas ou derivados sujeito a rigorosa conformidade com fontes secundárias confiáveis e direitos da personalidade.
-                </span>
+            {/* BLP Ethics Council Compliance Badge & Trigger (Standard mode only) */}
+            {!isReaderMode && (
+              <div className="mt-3 p-2.5 rounded-lg bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-purple-900 dark:text-purple-300">
+                <div className="flex items-center gap-2">
+                  <HeartHandshake className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>
+                    <strong>Conselho de Ética (WP:BLP):</strong> Artigo com biografias de pessoas vivas ou derivados sujeito a rigorosa conformidade com fontes secundárias confiáveis e direitos da personalidade.
+                  </span>
+                </div>
+                <a
+                  href="#/etica"
+                  className="self-start sm:self-auto shrink-0 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/60 dark:hover:bg-purple-800/60 rounded text-[11px] font-semibold text-purple-800 dark:text-purple-200 transition-colors whitespace-nowrap"
+                >
+                  Conselho de Ética
+                </a>
               </div>
-              <a
-                href="#/etica"
-                className="self-start sm:self-auto shrink-0 px-2.5 py-1 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/60 dark:hover:bg-purple-800/60 rounded text-[11px] font-semibold text-purple-800 dark:text-purple-200 transition-colors whitespace-nowrap"
-              >
-                Conselho de Ética
-              </a>
-            </div>
+            )}
           </div>
 
-          {/* Mobile Collapsible TOC for small viewports */}
-          <TableOfContents
-            contentRef={contentRef}
-            html={html}
-            initialToc={toc}
-            className="mb-6 lg:hidden"
-          />
+          {/* Mobile Collapsible TOC for small viewports (Standard mode only) */}
+          {!isReaderMode && (
+            <TableOfContents
+              contentRef={contentRef}
+              html={html}
+              initialToc={toc}
+              className="mb-6 lg:hidden"
+            />
+          )}
 
           {/* Rendered HTML Container */}
           <article
             id="wiki-article-container"
             ref={contentRef}
-            className="wiki-content prose max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif"
+            className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 ${
+              readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
+            } ${
+              readerFontSize === 'base'
+                ? 'text-base leading-relaxed'
+                : readerFontSize === 'lg'
+                ? 'text-lg leading-loose'
+                : 'text-xl leading-loose'
+            }`}
             onClick={handleContentClick}
-            dangerouslySetInnerHTML={{ __html: html }}
+            dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
 
-          {/* Article Voting & Feedback Component (Curtir / Descurtir) + Editor Karma System */}
-          <ArticleFeedbackWidget
-            articleSlug={slug}
-            articleTitle={article.title}
-            authorUid={revisions[0]?.author?.id}
-            authorName={revisions[0]?.author?.name || revisions[0]?.author?.username || 'Wikipedian'}
-            currentUser={currentUser || null}
-            onNavigateUser={(userSlug) => onNavigate(`Usuario:${userSlug}`)}
-          />
-
-          {/* 3.05.8.b.c - Article Evaluation Widget (Daily Checklist Mission +1.00 pt) */}
-          <ArticleRatingWidget
-            articleSlug={slug}
-            articleTitle={article.title}
-            currentUser={currentUser || null}
-            onOpenChecklist={onOpenChecklist}
-          />
-
-          {/* Numbered Citations & Footnotes Component parsed from Parsoid AST */}
+          {/* Numbered Citations & Footnotes Component parsed from Parsoid AST (Preserved in Reader Mode) */}
           <ArticleFootnotes
             ast={data?.ast}
             references={data?.references}
@@ -639,16 +894,59 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             onNavigate={onNavigate}
           />
 
-          {/* Article Categories & Interactive Filter UI Component */}
-          <ArticleCategories
-            categories={categories && categories.length > 0 ? categories : (article.categories || [])}
-            allArticles={allArticles}
-            currentSlug={slug}
-            onNavigate={onNavigate}
-          />
+          {/* Reader Mode End Banner & Quick Exit Button */}
+          {isReaderMode && (
+            <div className="mt-12 py-8 border-t border-slate-200 dark:border-slate-800 text-center space-y-3">
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-serif italic">
+                Fim do artigo · {wordCount.toLocaleString()} palavras lidas
+              </p>
+              <button
+                onClick={() => {
+                  setIsReaderMode(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg shadow-sm transition-colors cursor-pointer"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span>Sair do Modo de Leitura e voltar à visão padrão</span>
+              </button>
+            </div>
+          )}
 
-          {/* Semantic MediaWiki & Cargo Structured Factbox */}
-          {semanticData.facts && semanticData.facts.length > 0 && (
+          {/* Article Voting & Feedback Component (Standard mode only) */}
+          {!isReaderMode && (
+            <ArticleFeedbackWidget
+              articleSlug={slug}
+              articleTitle={article.title}
+              authorUid={revisions[0]?.author?.id}
+              authorName={revisions[0]?.author?.name || revisions[0]?.author?.username || 'Wikipedian'}
+              currentUser={currentUser || null}
+              onNavigateUser={(userSlug) => onNavigate(`Usuario:${userSlug}`)}
+            />
+          )}
+
+          {/* 3.05.8.b.c - Article Evaluation Widget (Daily Checklist Mission +1.00 pt) (Standard mode only) */}
+          {!isReaderMode && (
+            <ArticleRatingWidget
+              articleSlug={slug}
+              articleTitle={article.title}
+              currentUser={currentUser || null}
+              onOpenChecklist={onOpenChecklist}
+            />
+          )}
+
+          {/* Article Categories & Interactive Filter UI Component (Standard mode only) */}
+          {!isReaderMode && (
+            <ArticleCategories
+              categories={categories && categories.length > 0 ? categories : (article.categories || [])}
+              allArticles={allArticles}
+              currentSlug={slug}
+              onNavigate={onNavigate}
+            />
+          )}
+
+          {/* Semantic MediaWiki & Cargo Structured Factbox (Standard mode only) */}
+          {!isReaderMode && semanticData.facts && semanticData.facts.length > 0 && (
             <SemanticFactbox
               facts={semanticData.facts}
               articleTitle={article.title}
@@ -656,8 +954,8 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             />
           )}
 
-          {/* Canonical MediaWiki CategoryTree (Embedded for Namespace 14 - Categoria) */}
-          {parsedTitle.namespaceId === 14 && (
+          {/* Canonical MediaWiki CategoryTree (Embedded for Namespace 14 - Categoria) (Standard mode only) */}
+          {!isReaderMode && parsedTitle.namespaceId === 14 && (
             <div className="mt-8 border border-slate-200 dark:border-slate-800 rounded-lg p-5 bg-white dark:bg-slate-900 shadow-xs">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <FolderTree className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -674,37 +972,41 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             </div>
           )}
 
-          {/* Related Articles Component (Visible on mobile/tablet viewports where sidebar is hidden) */}
-          <RelatedArticles
-            currentSlug={slug}
-            currentArticle={article}
-            categories={categories && categories.length > 0 ? categories : (article.categories || [])}
-            allArticles={allArticles}
-            onNavigate={onNavigate}
-            className="mt-6 lg:hidden"
-            initialCollapsed={false}
-          />
+          {/* Related Articles Component (Visible on mobile/tablet viewports where sidebar is hidden) (Standard mode only) */}
+          {!isReaderMode && (
+            <RelatedArticles
+              currentSlug={slug}
+              currentArticle={article}
+              categories={categories && categories.length > 0 ? categories : (article.categories || [])}
+              allArticles={allArticles}
+              onNavigate={onNavigate}
+              className="mt-6 lg:hidden"
+              initialCollapsed={false}
+            />
+          )}
 
-          {/* Microservices Execution & Article Reader Footer */}
-          <div className="mt-8 p-4 rounded-lg bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-medium font-sans shadow-xs" title="Total de palavras no artigo">
-                <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span>
-                  <strong className="font-semibold text-slate-900 dark:text-white">{wordCount.toLocaleString()}</strong> palavras
+          {/* Microservices Execution & Article Reader Footer (Standard mode only) */}
+          {!isReaderMode && (
+            <div className="mt-8 p-4 rounded-lg bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-medium font-sans shadow-xs" title="Total de palavras no artigo">
+                  <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span>
+                    <strong className="font-semibold text-slate-900 dark:text-white">{wordCount.toLocaleString()}</strong> palavras
+                  </span>
+                  <span className="text-slate-400 dark:text-slate-500 font-normal">({readingTimeMin} min de leitura)</span>
                 </span>
-                <span className="text-slate-400 dark:text-slate-500 font-normal">({readingTimeMin} min de leitura)</span>
-              </span>
-              <span className="hidden sm:inline text-slate-300 dark:text-slate-700" aria-hidden="true">|</span>
-              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                Rev: <span className="text-slate-700 dark:text-slate-300 font-semibold">{article.latestRevisionId}</span>
-              </span>
-            </div>
+                <span className="hidden sm:inline text-slate-300 dark:text-slate-700" aria-hidden="true">|</span>
+                <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                  Rev: <span className="text-slate-700 dark:text-slate-300 font-semibold">{article.latestRevisionId}</span>
+                </span>
+              </div>
 
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-              NotMediaWiki · Projeto <a href={wrapExternalUrl("https://wazzimagiygg.com")} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">WazzimaGiygg</a> (wazzimagiygg.com)
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                NotMediaWiki · Projeto <a href={wrapExternalUrl("https://wazzimagiygg.com")} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">WazzimaGiygg</a> (wazzimagiygg.com)
+              </div>
             </div>
-          </div>
+          )}
         </main>
       </div>
     </div>
@@ -720,6 +1022,64 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         htmlContent={data.html}
         currentUser={currentUser}
       />
+    )}
+
+    {/* Real-time Firestore onSnapshot update toast notification */}
+    {realtimeToast && realtimeToast.visible && (
+      <aside
+        role="alert"
+        aria-live="polite"
+        className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md w-full bg-white dark:bg-slate-900 border-2 border-blue-500/80 dark:border-blue-500/60 rounded-xl shadow-2xl p-4 transition-all duration-300 animate-slide-up"
+      >
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5">
+            <RefreshCw className={`w-4 h-4 ${refreshingRealtime ? 'animate-spin' : ''}`} />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span>Artigo editado por outro usuário</span>
+                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+              </h4>
+              <button
+                onClick={() => setRealtimeToast(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Fechar notificação"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+              O editor <strong>{realtimeToast.editorName}</strong> acabou de salvar alterações neste artigo.
+            </p>
+
+            {realtimeToast.summary && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic mt-0.5 truncate">
+                "{realtimeToast.summary}"
+              </p>
+            )}
+
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                onClick={handleReloadArticle}
+                disabled={refreshingRealtime}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshingRealtime ? 'animate-spin' : ''}`} />
+                <span>{refreshingRealtime ? 'Atualizando...' : 'Atualizar conteúdo'}</span>
+              </button>
+              <button
+                onClick={() => setRealtimeToast(null)}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              >
+                Continuar lendo
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
     )}
   </div>
 );

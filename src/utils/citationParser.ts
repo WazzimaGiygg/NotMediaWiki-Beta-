@@ -123,8 +123,13 @@ export function formatCitationHtml(rawText: string): string {
  *
  * @param ast Parsoid Abstract Syntax Tree nodes array
  * @param wikitext Optional fallback wikitext to extract references if AST is missing or empty
+ * @param references Optional array of raw reference strings
  */
-export function extractCitationsFromAst(ast?: any[] | null, wikitext?: string): CitationFootnote[] {
+export function extractCitationsFromAst(
+  ast?: any[] | null,
+  wikitext?: string,
+  references?: string[]
+): CitationFootnote[] {
   // If AST has Reference nodes, use them
   const refNodes: ParsoidAstReferenceNode[] = [];
 
@@ -136,10 +141,27 @@ export function extractCitationsFromAst(ast?: any[] | null, wikitext?: string): 
     }
   }
 
-  // Fallback: If AST is empty or didn't contain Reference nodes, parse from wikitext
+  // Fallback 1: If AST is empty or didn't contain Reference nodes, parse from wikitext
   if (refNodes.length === 0 && wikitext) {
     const parsedFromWikitext = extractCitationsFromWikitext(wikitext);
-    return parsedFromWikitext.citations;
+    if (parsedFromWikitext.citations.length > 0) {
+      return parsedFromWikitext.citations;
+    }
+  }
+
+  // Fallback 2: If references array is provided
+  if (refNodes.length === 0 && Array.isArray(references) && references.length > 0) {
+    references.forEach((refText, i) => {
+      const idx = i + 1;
+      refNodes.push({
+        type: 'Reference',
+        index: idx,
+        text: refText,
+        refId: `cite_ref-${idx}`,
+        noteId: `cite_note-${idx}`,
+        occurrence: 0,
+      });
+    });
   }
 
   if (refNodes.length === 0) {
@@ -351,4 +373,78 @@ export function formatCitationAsBibtex(citation: CitationFootnote): string {
   const url = citation.primaryUrl ? `,\n  url = {${citation.primaryUrl}}` : '';
 
   return `@misc{${key},\n  author = {${author}},\n  title = {${title}},\n  year = {${year}}${url}\n}`;
+}
+
+/**
+ * Parses and replaces any raw inline <ref>...</ref> tags inside HTML into clickable superscript links.
+ */
+export function parseFootnoteTagsInHtml(html: string): {
+  html: string;
+  foundRefs: ParsoidAstReferenceNode[];
+} {
+  if (!html || !/<ref[\s>]/i.test(html)) {
+    return { html, foundRefs: [] };
+  }
+
+  const foundRefs: ParsoidAstReferenceNode[] = [];
+  const namedRefs = new Map<string, { index: number; text: string; group?: string; count: number }>();
+  let refCounter = 1;
+
+  const refRegex = /<ref(?:\s+([^>]*?))?(?:\/>|>([\s\S]*?)<\/ref>)/gi;
+
+  const transformedHtml = html.replace(refRegex, (_, rawAttrs, content) => {
+    let name: string | undefined;
+    let group: string | undefined;
+
+    if (rawAttrs) {
+      const nameMatch = rawAttrs.match(/name\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/i);
+      if (nameMatch) {
+        name = (nameMatch[1] || nameMatch[2] || nameMatch[3]).trim();
+      }
+      const groupMatch = rawAttrs.match(/group\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/i);
+      if (groupMatch) {
+        group = (groupMatch[1] || groupMatch[2] || groupMatch[3]).trim();
+      }
+    }
+
+    const trimmedContent = content ? content.trim() : '';
+    let refIdx: number;
+    let refText: string;
+    let occurrence = 0;
+
+    if (name && namedRefs.has(name)) {
+      const existing = namedRefs.get(name)!;
+      refIdx = existing.index;
+      refText = existing.text || trimmedContent;
+      if (!existing.text && trimmedContent) {
+        existing.text = trimmedContent;
+      }
+      existing.count += 1;
+      occurrence = existing.count;
+    } else {
+      refIdx = refCounter++;
+      refText = trimmedContent;
+      if (name) {
+        namedRefs.set(name, { index: refIdx, text: trimmedContent, group, count: 0 });
+      }
+    }
+
+    const refAnchorId = occurrence === 0 ? `cite_ref-${refIdx}` : `cite_ref-${refIdx}_${occurrence}`;
+    const noteAnchorId = `cite_note-${refIdx}`;
+
+    foundRefs.push({
+      type: 'Reference',
+      index: refIdx,
+      name,
+      group,
+      text: refText,
+      refId: refAnchorId,
+      noteId: noteAnchorId,
+      occurrence,
+    });
+
+    return `<sup class="reference" id="${refAnchorId}"><a href="#${noteAnchorId}" class="cite-ref-link text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs font-semibold px-0.5 cursor-pointer" data-ref-index="${refIdx}" title="Ver nota de rodapé [${refIdx}]">[${refIdx}]</a></sup>`;
+  });
+
+  return { html: transformedHtml, foundRefs };
 }
