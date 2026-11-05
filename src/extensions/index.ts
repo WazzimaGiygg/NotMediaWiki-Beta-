@@ -6,6 +6,16 @@ import { apiWorkbenchExtension, EXTENSION_API_WORKBENCH_ENABLED } from './apiWor
 import { dailyChecklistExtension, EXTENSION_DAILY_CHECKLIST_ENABLED } from './dailyChecklistExtension';
 import { botAgentExtension, EXTENSION_BOT_AGENT_ENABLED } from './botAgentExtension';
 import { botManagerExtension, EXTENSION_BOT_MANAGER_ENABLED } from './bots/BotManagerExtension';
+import { supportTicketsExtension, getSupportTicketsConfig } from './supportTicketsExtension';
+import { externalRedirectExtension, getExternalRedirectConfig } from './externalRedirectExtension';
+import { maintenanceModeExtension, getMaintenanceModeConfig } from './maintenanceModeExtension';
+import {
+  wikiLivrosExtension,
+  wikiUniversitarioExtension,
+  jornalWazzimaGiyggExtension,
+  PORTAL_EXTENSIONS,
+  getPortalsConfig,
+} from './portalsExtension';
 
 export {
   systemLogsExtension,
@@ -24,6 +34,17 @@ export {
   EXTENSION_BOT_AGENT_ENABLED,
   botManagerExtension,
   EXTENSION_BOT_MANAGER_ENABLED,
+  supportTicketsExtension,
+  getSupportTicketsConfig,
+  externalRedirectExtension,
+  getExternalRedirectConfig,
+  maintenanceModeExtension,
+  getMaintenanceModeConfig,
+  wikiLivrosExtension,
+  wikiUniversitarioExtension,
+  jornalWazzimaGiyggExtension,
+  PORTAL_EXTENSIONS,
+  getPortalsConfig,
 };
 
 export const MANAGED_FEATURE_EXTENSIONS = [
@@ -35,6 +56,12 @@ export const MANAGED_FEATURE_EXTENSIONS = [
   dailyChecklistExtension,
   botAgentExtension,
   botManagerExtension,
+  supportTicketsExtension,
+  externalRedirectExtension,
+  maintenanceModeExtension,
+  wikiLivrosExtension,
+  wikiUniversitarioExtension,
+  jornalWazzimaGiyggExtension,
 ];
 
 /**
@@ -42,7 +69,7 @@ export const MANAGED_FEATURE_EXTENSIONS = [
  * prioritariamente as extensões ativas (seja no arquivo ou no estado persistido).
  */
 export function isFeatureExtensionEnabled(
-  featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist' | 'bots',
+  featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist' | 'bots' | 'support' | 'redirect' | 'maintenance' | 'livros' | 'universitario' | 'jornal',
   runtimeExtensions?: { id: string; enabled: boolean }[]
 ): boolean {
   const idMap: Record<string, { fileEnabled: boolean; extId: string }> = {
@@ -53,15 +80,19 @@ export function isFeatureExtensionEnabled(
     workbench: { fileEnabled: EXTENSION_API_WORKBENCH_ENABLED, extId: apiWorkbenchExtension.id },
     checklist: { fileEnabled: EXTENSION_DAILY_CHECKLIST_ENABLED, extId: dailyChecklistExtension.id },
     bots: { fileEnabled: EXTENSION_BOT_MANAGER_ENABLED && EXTENSION_BOT_AGENT_ENABLED, extId: botManagerExtension.id },
+    support: { fileEnabled: true, extId: supportTicketsExtension.id },
+    redirect: { fileEnabled: true, extId: externalRedirectExtension.id },
+    maintenance: { fileEnabled: true, extId: maintenanceModeExtension.id },
+    livros: { fileEnabled: true, extId: wikiLivrosExtension.id },
+    universitario: { fileEnabled: true, extId: wikiUniversitarioExtension.id },
+    jornal: { fileEnabled: true, extId: jornalWazzimaGiyggExtension.id },
   };
 
   const meta = idMap[featureId];
   if (!meta) return true;
 
-  // Se o próprio arquivo da extensão desabilitou o recurso (false), respeitamos diretamente
   if (!meta.fileEnabled) return false;
 
-  // Se há extensões em tempo de execução fornecidas (do localStorage ou Firestore), respeitamos também seu toggle
   if (runtimeExtensions && runtimeExtensions.length > 0) {
     const found = runtimeExtensions.find(e => e.id === meta.extId || (featureId === 'bots' && e.id === botAgentExtension.id));
     if (found !== undefined) {
@@ -71,4 +102,3 @@ export function isFeatureExtensionEnabled(
 
   return meta.fileEnabled;
 }
-

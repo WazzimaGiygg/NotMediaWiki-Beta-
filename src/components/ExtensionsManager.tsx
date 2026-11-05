@@ -36,9 +36,13 @@ import {
   Printer,
   Database,
   Globe,
+  Edit3,
+  Trash2,
+  Library,
+  PlusCircle,
 } from 'lucide-react';
 import { WikiExtension, ExtensionCategory, ExtensionConfigParam, UserSession } from '../types';
-import { DEFAULT_EXTENSIONS } from '../data/defaultExtensions';
+import { DEFAULT_EXTENSIONS, AVAILABLE_CATALOG_EXTENSIONS } from '../data/defaultExtensions';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { api } from '../api';
 import { WikiReportModal } from './WikiReportModal';
@@ -78,8 +82,10 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
   // Modals state
   const [manifestModalExt, setManifestModalExt] = useState<WikiExtension | null>(null);
   const [configModalExt, setConfigModalExt] = useState<WikiExtension | null>(null);
+  const [editModalExt, setEditModalExt] = useState<WikiExtension | null>(null);
   const [testModalExt, setTestModalExt] = useState<WikiExtension | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Cloud Sync Status
@@ -411,11 +417,21 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
             </button>
 
             <button
+              onClick={() => setIsCatalogModalOpen(true)}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="3.05.3.a: Adicionar extensões já existentes do ecossistema MediaWiki"
+            >
+              <Library className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Catálogo de Extensões</span>
+            </button>
+
+            <button
               onClick={() => setIsAddModalOpen(true)}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Cadastrar extensão personalizada"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Instalar Extensão</span>
+              <span>Nova Extensão</span>
             </button>
 
             <button
@@ -742,6 +758,15 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
                         <button
+                          onClick={() => setEditModalExt(ext)}
+                          className="px-2 py-1 text-[11px] font-medium text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/60 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                          title="3.05.3.a: Modificar parâmetros e dados da extensão"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Editar</span>
+                        </button>
+
+                        <button
                           onClick={() => setConfigModalExt(ext)}
                           className="px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors flex items-center gap-1 cursor-pointer"
                           title="Ajustar parâmetros de configuração"
@@ -838,6 +863,13 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                         </td>
                         <td className="py-2.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setEditModalExt(ext)}
+                              className="px-2 py-1 text-[11px] bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 text-purple-700 dark:text-purple-300 rounded transition-colors"
+                              title="3.05.3.a: Modificar extensão"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
                             <button
                               onClick={() => setConfigModalExt(ext)}
                               className="px-2 py-1 text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-300 transition-colors"
@@ -1358,6 +1390,45 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
           currentUser={currentUser}
         />
       )}
+
+      {/* MODAL 6: 3.05.3.a - EDIT EXTENSION MODAL */}
+      {editModalExt && (
+        <EditExtensionModal
+          extension={editModalExt}
+          onClose={() => setEditModalExt(null)}
+          onSave={async updated => {
+            setExtensions(prev => prev.map(e => (e.id === updated.id ? updated : e)));
+            setEditModalExt(null);
+            try {
+              await api.saveExtension(updated, currentUser);
+              showToast(`Extensão "${updated.name}" atualizada e sincronizada no Firebase!`, 'success');
+              setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
+            } catch (err: any) {
+              showToast(`Extensão atualizada localmente (Firebase: ${err.message})`, 'info');
+            }
+          }}
+        />
+      )}
+
+      {/* MODAL 7: 3.05.3.a - CATALOG OF EXISTING EXTENSIONS */}
+      {isCatalogModalOpen && (
+        <CatalogExtensionsModal
+          installedIds={extensions.map(e => e.id)}
+          onClose={() => setIsCatalogModalOpen(false)}
+          onInstall={async catalogExt => {
+            const exists = extensions.some(e => e.id === catalogExt.id);
+            if (exists) return;
+            setExtensions(prev => [catalogExt, ...prev]);
+            try {
+              await api.saveExtension(catalogExt, currentUser);
+              showToast(`Extensão do catálogo "${catalogExt.name}" instalada com sucesso!`, 'success');
+              setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
+            } catch (err: any) {
+              showToast(`Extensão instalada localmente (Firebase: ${err.message})`, 'info');
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1632,3 +1703,679 @@ const InstallExtensionModal: React.FC<InstallModalProps> = ({ onClose, onAdd }) 
     </div>
   );
 };
+
+/* ========================================================================= */
+/* 3.05.3.a - MODAL DE MODIFICAÇÃO DE EXTENSÕES (EDIT EXTENSION MODAL)      */
+/* ========================================================================= */
+
+interface EditExtensionModalProps {
+  extension: WikiExtension;
+  onClose: () => void;
+  onSave: (updated: WikiExtension) => Promise<void>;
+}
+
+const EditExtensionModal: React.FC<EditExtensionModalProps> = ({ extension, onClose, onSave }) => {
+  const [name, setName] = useState(extension.name);
+  const [namePt, setNamePt] = useState(extension.namePt);
+  const [version, setVersion] = useState(extension.version);
+  const [category, setCategory] = useState<ExtensionCategory>(extension.category);
+  const [author, setAuthor] = useState(extension.author);
+  const [description, setDescription] = useState(extension.description);
+  const [url, setUrl] = useState(extension.url || '');
+  const [license, setLicense] = useState(extension.license);
+  const [enabled, setEnabled] = useState(extension.enabled);
+  const [configParams, setConfigParams] = useState<ExtensionConfigParam[]>(
+    extension.config ? JSON.parse(JSON.stringify(extension.config)) : []
+  );
+
+  // New Param form state
+  const [isAddingParam, setIsAddingParam] = useState(false);
+  const [newKey, setNewKey] = useState('$wg');
+  const [newType, setNewType] = useState<'string' | 'boolean' | 'number' | 'json'>('string');
+  const [newValue, setNewValue] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+
+  const [saving, setSaving] = useState(false);
+
+  const handleUpdateParamValue = (key: string, val: any) => {
+    setConfigParams(prev =>
+      prev.map(p => {
+        if (p.key === key) {
+          return { ...p, value: val };
+        }
+        return p;
+      })
+    );
+  };
+
+  const handleDeleteParam = (key: string) => {
+    setConfigParams(prev => prev.filter(p => p.key !== key));
+  };
+
+  const handleAddNewParam = () => {
+    const trimmedKey = newKey.trim();
+    if (!trimmedKey || trimmedKey === '$wg') return;
+
+    let parsedVal: any = newValue;
+    if (newType === 'boolean') {
+      parsedVal = newValue === 'true';
+    } else if (newType === 'number') {
+      parsedVal = Number(newValue) || 0;
+    }
+
+    const newParam: ExtensionConfigParam = {
+      key: trimmedKey,
+      type: newType,
+      value: parsedVal,
+      defaultValue: parsedVal,
+      description: newDesc.trim() || 'Parâmetro de configuração adicionado pelo burocrata.',
+    };
+
+    setConfigParams(prev => [...prev, newParam]);
+    setNewKey('$wg');
+    setNewValue('');
+    setNewDesc('');
+    setIsAddingParam(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const updated: WikiExtension = {
+        ...extension,
+        name: name.trim(),
+        namePt: namePt.trim(),
+        version: version.trim(),
+        category,
+        author: author.trim(),
+        description: description.trim(),
+        url: url.trim() || undefined,
+        license: license.trim(),
+        enabled,
+        config: configParams,
+        lastUpdated: new Date().toISOString().split('T')[0],
+      };
+      await onSave(updated);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-purple-600/30 border border-purple-500/40 text-purple-300">
+              <Edit3 className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base leading-tight">
+                Modificar Extensão: {extension.name}
+              </h3>
+              <p className="text-xs text-slate-400 font-mono">
+                3.05.3.a • {extension.id}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-lg leading-none p-1 rounded hover:bg-slate-800 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+          {/* General Metadata */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] font-mono flex items-center justify-between">
+              <span>Metadados Principais</span>
+              <label className="flex items-center gap-2 cursor-pointer normal-case">
+                <span className="text-[11px] text-slate-500">Status da Extensão:</span>
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={e => setEnabled(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <span className={`font-semibold ${enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {enabled ? 'Ativada' : 'Desativada'}
+                </span>
+              </label>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Nome Canônico (MediaWiki) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Nome Amigável (Português)
+                </label>
+                <input
+                  type="text"
+                  value={namePt}
+                  onChange={e => setNamePt(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Categoria
+                </label>
+                <select
+                  value={category}
+                  onChange={e => setCategory(e.target.value as any)}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                >
+                  <option value="parser">Parser & AST</option>
+                  <option value="ui">Interface & UI</option>
+                  <option value="search">Busca & Indexador</option>
+                  <option value="security">Segurança & Moderação</option>
+                  <option value="infra">Infraestrutura & Eventos</option>
+                  <option value="media">Mídia & Assets</option>
+                  <option value="engagement">Engajamento & SEO</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Versão
+                </label>
+                <input
+                  type="text"
+                  value={version}
+                  onChange={e => setVersion(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Licença
+                </label>
+                <input
+                  type="text"
+                  value={license}
+                  onChange={e => setLicense(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Autor / Mantenedor
+              </label>
+              <input
+                type="text"
+                value={author}
+                onChange={e => setAuthor(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Descrição Detalhada
+              </label>
+              <textarea
+                rows={2}
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                URL Oficial / Repositório
+              </label>
+              <input
+                type="text"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Configuration Parameters Section */}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] font-mono">
+                  Parâmetros de Configuração ({configParams.length})
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Modifique links, URLs e chaves diretivas desta extensão no runtime.
+                </p>
+              </div>
+
+              {!isAddingParam && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingParam(true)}
+                  className="px-2.5 py-1 bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-xs font-semibold flex items-center gap-1 cursor-pointer hover:bg-purple-100"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Novo Parâmetro</span>
+                </button>
+              )}
+            </div>
+
+            {/* Adding new param box */}
+            {isAddingParam && (
+              <div className="p-3 bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-lg space-y-2">
+                <div className="font-semibold text-purple-800 dark:text-purple-300 text-[11px]">
+                  Criar Novo Parâmetro de Configuração
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">Chave ($wg...)</label>
+                    <input
+                      type="text"
+                      value={newKey}
+                      onChange={e => setNewKey(e.target.value)}
+                      placeholder="$wgMySetting"
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded font-mono text-[11px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">Tipo</label>
+                    <select
+                      value={newType}
+                      onChange={e => setNewType(e.target.value as any)}
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11px]"
+                    >
+                      <option value="string">String (Texto / URL)</option>
+                      <option value="boolean">Booleano (True/False)</option>
+                      <option value="number">Número</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">Valor Inicial</label>
+                    {newType === 'boolean' ? (
+                      <select
+                        value={newValue}
+                        onChange={e => setNewValue(e.target.value)}
+                        className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11px]"
+                      >
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    ) : (
+                      <input
+                        type={newType === 'number' ? 'number' : 'text'}
+                        value={newValue}
+                        onChange={e => setNewValue(e.target.value)}
+                        placeholder="Valor do parâmetro..."
+                        className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11px]"
+                      />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-0.5">Descrição explicativa</label>
+                  <input
+                    type="text"
+                    value={newDesc}
+                    onChange={e => setNewDesc(e.target.value)}
+                    placeholder="Para que serve este parâmetro..."
+                    className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11px]"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingParam(false)}
+                    className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded text-[11px]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddNewParam}
+                    className="px-3 py-1 bg-purple-600 text-white rounded text-[11px] font-semibold"
+                  >
+                    Confirmar Parâmetro
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* List of existing params */}
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {configParams.length === 0 ? (
+                <div className="p-4 text-center text-slate-400 bg-slate-50 dark:bg-slate-850 rounded-lg">
+                  Nenhum parâmetro de configuração definido nesta extensão.
+                </div>
+              ) : (
+                configParams.map(param => (
+                  <div
+                    key={param.key}
+                    className="p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-lg space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <code className="font-mono text-purple-700 dark:text-purple-300 font-bold text-[11px]">
+                          {param.key}
+                        </code>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          {param.type}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteParam(param.key)}
+                        className="text-slate-400 hover:text-rose-500 p-1 rounded transition-colors cursor-pointer"
+                        title="Remover este parâmetro"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {param.description}
+                    </p>
+
+                    <div>
+                      {param.type === 'boolean' ? (
+                        <div className="flex items-center gap-3 pt-1">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`param_${param.key}`}
+                              checked={param.value === true}
+                              onChange={() => handleUpdateParamValue(param.key, true)}
+                              className="text-purple-600"
+                            />
+                            <span className="font-mono text-emerald-600 font-semibold">true</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`param_${param.key}`}
+                              checked={param.value === false}
+                              onChange={() => handleUpdateParamValue(param.key, false)}
+                              className="text-purple-600"
+                            />
+                            <span className="font-mono text-slate-500">false</span>
+                          </label>
+                        </div>
+                      ) : param.type === 'number' ? (
+                        <input
+                          type="number"
+                          value={param.value}
+                          onChange={e => handleUpdateParamValue(param.key, Number(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={param.value}
+                          onChange={e => handleUpdateParamValue(param.key, e.target.value)}
+                          className="w-full px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono"
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-[11px] text-slate-400 font-mono">
+              Salva automaticamente no Firebase Firestore
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg font-medium cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                {saving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>{saving ? 'Salvando...' : 'Salvar Modificações'}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+/* ========================================================================= */
+/* 3.05.3.a - MODAL DE CATÁLOGO DE EXTENSÕES (CATALOG EXTENSIONS MODAL)       */
+/* ========================================================================= */
+
+interface CatalogExtensionsModalProps {
+  installedIds: string[];
+  onClose: () => void;
+  onInstall: (ext: WikiExtension) => Promise<void>;
+}
+
+const CatalogExtensionsModal: React.FC<CatalogExtensionsModalProps> = ({
+  installedIds,
+  onClose,
+  onInstall,
+}) => {
+  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState<string>('all');
+  const [installingId, setInstallingId] = useState<string | null>(null);
+
+  const filteredCatalog = AVAILABLE_CATALOG_EXTENSIONS.filter(ext => {
+    const matchCat = catFilter === 'all' || ext.category === catFilter;
+    const matchSearch =
+      !search.trim() ||
+      ext.name.toLowerCase().includes(search.toLowerCase()) ||
+      ext.namePt.toLowerCase().includes(search.toLowerCase()) ||
+      ext.description.toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const handleInstallClick = async (ext: WikiExtension) => {
+    setInstallingId(ext.id);
+    try {
+      await onInstall(ext);
+    } finally {
+      setInstallingId(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300">
+              <Library className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base leading-tight">
+                Catálogo de Extensões do MediaWiki & WazzimaGiygg
+              </h3>
+              <p className="text-xs text-slate-400">
+                3.05.3.a • Adicione extensões já existentes com um único clique
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-lg leading-none p-1 rounded hover:bg-slate-800 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <div className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setCatFilter('all')}
+              className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer ${
+                catFilter === 'all'
+                  ? 'bg-indigo-600 text-white font-semibold'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              Todas ({AVAILABLE_CATALOG_EXTENSIONS.length})
+            </button>
+            <button
+              onClick={() => setCatFilter('ui')}
+              className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer ${
+                catFilter === 'ui'
+                  ? 'bg-indigo-600 text-white font-semibold'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              Interface
+            </button>
+            <button
+              onClick={() => setCatFilter('security')}
+              className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer ${
+                catFilter === 'security'
+                  ? 'bg-indigo-600 text-white font-semibold'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              Segurança
+            </button>
+            <button
+              onClick={() => setCatFilter('search')}
+              className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer ${
+                catFilter === 'search'
+                  ? 'bg-indigo-600 text-white font-semibold'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              Semântica / Busca
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-56">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar no catálogo..."
+              className="w-full pl-9 pr-3 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Extensions List */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+          {filteredCatalog.map(ext => {
+            const isInstalled = installedIds.includes(ext.id);
+            const isWorking = installingId === ext.id;
+
+            return (
+              <div
+                key={ext.id}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-2xs hover:border-indigo-400/60 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+              >
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      {ext.name}
+                    </h4>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      ({ext.namePt})
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      v{ext.version}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {ext.category}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {ext.description}
+                  </p>
+
+                  <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+                    <span>Autor: {ext.author}</span>
+                    <span>•</span>
+                    <span>Licença: {ext.license}</span>
+                    <span>•</span>
+                    <span>{ext.config.length} parâmetros</span>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
+                  {isInstalled ? (
+                    <span className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Instalada</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isWorking}
+                      onClick={() => handleInstallClick(ext)}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      {isWorking ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isWorking ? 'Instalando...' : 'Adicionar ao Wiki'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between text-xs text-slate-500">
+          <span>{filteredCatalog.length} extensões catalogadas disponíveis</span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded font-medium cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

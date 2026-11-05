@@ -1,11 +1,13 @@
+import { getExternalRedirectConfig } from '../extensions/externalRedirectExtension';
+
 /**
  * Utility to manage external domains and link prefixing policies.
- * Prefix default: "https://wazzimagiygg.com/rv/?uid="
- * Requirement: Permitir adicionar os domínios permitidos direto no Firebase, pelo Burocrata.
- * Domínios permitidos/confiáveis são sincronizados em tempo real do Cloud Firestore.
+ * 3.05.3.c - Transformado em extensão (ExternalLinkRedirector)
+ * Permite desativar o redirecionador ou alterar o link do UID redirecionador (padrão: https://wazzimagiygg.com/rv/?uid=)
  */
 
-export const EXTERNAL_LINK_PREFIX = 'https://wazzimagiygg.com/rv/?uid=';
+export const DEFAULT_EXTERNAL_LINK_PREFIX = 'https://wazzimagiygg.com/rv/?uid=';
+export const EXTERNAL_LINK_PREFIX = DEFAULT_EXTERNAL_LINK_PREFIX;
 
 const ALLOWED_DOMAINS_STORAGE_KEY = 'notmediawiki_allowed_domains';
 
@@ -72,10 +74,11 @@ export function isDomainAllowed(urlOrDomain: string, customAllowedList?: string[
 }
 
 /**
- * Returns the URL with the prefix if it is an external link.
+ * Returns the URL with the prefix if external redirection is enabled by the extension.
+ * If the extension is disabled or $wgEnableExternalRedirect === false, returns the original URL.
  * If the link is internal (hash route #, relative /, or mailto), returns unchanged.
  */
-export function wrapExternalUrl(url: string, bypassAllowedDomains: boolean = false): string {
+export function wrapExternalUrl(url: string, forceBypassAllowedDomains: boolean = false): string {
   if (!url) return url;
   const trimmed = url.trim();
 
@@ -89,31 +92,46 @@ export function wrapExternalUrl(url: string, bypassAllowedDomains: boolean = fal
     return trimmed;
   }
 
+  // Check extension configuration dynamically
+  const redirectConfig = getExternalRedirectConfig();
+
+  // If the extension is disabled or redirect is turned off, open directly
+  if (!redirectConfig.extensionEnabled || !redirectConfig.redirectActive) {
+    return trimmed;
+  }
+
+  const prefix = redirectConfig.prefix || DEFAULT_EXTERNAL_LINK_PREFIX;
+
   // Already prefixed
-  if (trimmed.startsWith(EXTERNAL_LINK_PREFIX)) {
+  if (trimmed.startsWith(prefix) || trimmed.startsWith(DEFAULT_EXTERNAL_LINK_PREFIX)) {
+    return trimmed;
+  }
+
+  // Bypass if domain is allowed and config permits bypass
+  if ((redirectConfig.bypassAllowedDomains || forceBypassAllowedDomains) && isDomainAllowed(trimmed)) {
     return trimmed;
   }
 
   // If it's an external HTTP/HTTPS URL
   if (/^https?:\/\//i.test(trimmed)) {
-    return `${EXTERNAL_LINK_PREFIX}${trimmed}`;
+    return `${prefix}${trimmed}`;
   }
 
   // If it's a protocol-relative link (e.g. //example.com)
   if (trimmed.startsWith('//')) {
-    return `${EXTERNAL_LINK_PREFIX}https:${trimmed}`;
+    return `${prefix}https:${trimmed}`;
   }
 
   // If it's a raw domain without protocol (e.g. wazzimagiygg.com)
   if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/i.test(trimmed)) {
-    return `${EXTERNAL_LINK_PREFIX}https://${trimmed}`;
+    return `${prefix}https://${trimmed}`;
   }
 
   return trimmed;
 }
 
 /**
- * Global helper to open an external link safely with the mandatory prefix
+ * Global helper to open an external link safely respecting the extension policy
  */
 export function openExternalUrl(url: string, target: string = '_blank'): void {
   const finalUrl = wrapExternalUrl(url);

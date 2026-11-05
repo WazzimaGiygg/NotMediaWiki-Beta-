@@ -7,6 +7,14 @@ import { apiWorkbenchExtension } from '../extensions/apiWorkbenchExtension';
 import { dailyChecklistExtension } from '../extensions/dailyChecklistExtension';
 import { botAgentExtension } from '../extensions/botAgentExtension';
 import { botManagerExtension } from '../extensions/bots/BotManagerExtension';
+import { supportTicketsExtension } from '../extensions/supportTicketsExtension';
+import { externalRedirectExtension } from '../extensions/externalRedirectExtension';
+import { maintenanceModeExtension } from '../extensions/maintenanceModeExtension';
+import {
+  wikiLivrosExtension,
+  wikiUniversitarioExtension,
+  jornalWazzimaGiyggExtension,
+} from '../extensions/portalsExtension';
 
 export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   {
@@ -510,4 +518,226 @@ export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   dailyChecklistExtension,
   botAgentExtension,
   botManagerExtension,
+  supportTicketsExtension,
+  externalRedirectExtension,
+  maintenanceModeExtension,
+  wikiLivrosExtension,
+  wikiUniversitarioExtension,
+  jornalWazzimaGiyggExtension,
 ];
+
+/**
+ * 3.05.3.a - Catálogo de extensões existentes do ecossistema MediaWiki / NotMediaWiki
+ * que podem ser adicionadas e instaladas com um clique pelo usuário / burocrata.
+ */
+export const AVAILABLE_CATALOG_EXTENSIONS: WikiExtension[] = [
+  {
+    id: 'ext-visualeditor',
+    name: 'VisualEditor',
+    namePt: 'VisualEditor (Editor Visual WYSIWYG)',
+    version: '0.1.2',
+    category: 'ui',
+    author: 'Wikimedia Foundation',
+    description: 'Interface rica e intuitiva para edição de páginas no estilo O que Você Vê é O que Você Obtém (WYSIWYG), com inserção visual de tabelas, imagens e infoboxes.',
+    enabled: true,
+    type: 'extension',
+    url: 'https://www.mediawiki.org/wiki/Extension:VisualEditor',
+    license: 'GPL-2.0-or-later',
+    hooks: [
+      {
+        name: 'VisualEditorEditorBeforeInit',
+        handler: 'VisualEditorHooks::onBeforeInit',
+        description: 'Inicializa o motor de renderização bidirecional do VisualEditor.',
+      },
+    ],
+    config: [
+      {
+        key: '$wgVisualEditorDefaultTab',
+        type: 'string',
+        value: 'visual',
+        defaultValue: 'visual',
+        description: 'Aba de edição padrão exibida ao clicar em Editar (visual ou wikitext).',
+      },
+      {
+        key: '$wgVisualEditorEnableDiff',
+        type: 'boolean',
+        value: true,
+        defaultValue: true,
+        description: 'Exibe comparação de diferenças (Diff) antes de salvar as alterações.',
+      },
+    ],
+    manifestJson: {
+      name: 'VisualEditor',
+      version: '0.1.2',
+      type: 'ui',
+      license_name: 'GPL-2.0-or-later',
+    },
+    lastUpdated: '2026-04-10',
+  },
+  {
+    id: 'ext-cargo',
+    name: 'Cargo',
+    namePt: 'Cargo (Banco de Dados Semântico)',
+    version: '3.6.1',
+    category: 'search',
+    author: 'Yaron Koren & MediaWiki Community',
+    description: 'Permite armazenar e consultar dados estruturados de infoboxes e modelos semânticos através de pseudo-consultas SQL (#cargo_query e #cargo_store).',
+    enabled: true,
+    type: 'extension',
+    url: 'https://www.mediawiki.org/wiki/Extension:Cargo',
+    license: 'GPL-2.0-or-later',
+    hooks: [
+      {
+        name: 'ParserFirstCallInit',
+        handler: 'CargoHooks::onParserInit',
+        description: 'Registra as funções de parser #cargo_store e #cargo_query.',
+      },
+    ],
+    config: [
+      {
+        key: '$wgCargoMaxQueryLimit',
+        type: 'number',
+        value: 500,
+        defaultValue: 500,
+        description: 'Limite máximo de registros retornados por consulta semântica.',
+      },
+      {
+        key: '$wgCargoEnableDrilldown',
+        type: 'boolean',
+        value: true,
+        defaultValue: true,
+        description: 'Habilita página especial de filtros facetados (Special:Drilldown).',
+      },
+    ],
+    manifestJson: {
+      name: 'Cargo',
+      version: '3.6.1',
+      type: 'search',
+      license_name: 'GPL-2.0-or-later',
+    },
+    lastUpdated: '2026-03-15',
+  },
+  {
+    id: 'ext-wikiseo',
+    name: 'WikiSEO',
+    namePt: 'WikiSEO (OpenGraph & Metatags)',
+    version: '2.5.0',
+    category: 'engagement',
+    author: 'Florian Schmidt & WazzimaGiygg SEO Squad',
+    description: 'Adiciona suporte a cartões sociais Twitter Cards, OpenGraph do Facebook/WhatsApp e metadados estruturados Schema.org JSON-LD nas páginas.',
+    enabled: true,
+    type: 'extension',
+    url: 'https://www.mediawiki.org/wiki/Extension:WikiSEO',
+    license: 'GPL-2.0-or-later',
+    hooks: [
+      {
+        name: 'BeforePageDisplay',
+        handler: 'WikiSEOHooks::onBeforePageDisplay',
+        description: 'Injeta metatags de SEO e cartões OpenGraph no cabeçalho HTML.',
+      },
+    ],
+    config: [
+      {
+        key: '$wgWikiSEOEnableOpenGraph',
+        type: 'boolean',
+        value: true,
+        defaultValue: true,
+        description: 'Gera tags og:title, og:description e og:image para compartilhamento.',
+      },
+      {
+        key: '$wgWikiSEODefaultImage',
+        type: 'string',
+        value: 'https://wazzimagiygg.com/assets/og-cover.png',
+        defaultValue: 'https://wazzimagiygg.com/assets/og-cover.png',
+        description: 'URL da imagem padrão utilizada para compartilhamento social.',
+      },
+    ],
+    manifestJson: {
+      name: 'WikiSEO',
+      version: '2.5.0',
+      type: 'engagement',
+      license_name: 'GPL-2.0-or-later',
+    },
+    lastUpdated: '2026-02-18',
+  },
+  {
+    id: 'ext-abusefilter',
+    name: 'AbuseFilter',
+    namePt: 'AbuseFilter (Filtro Anti-Vandalismo Avançado)',
+    version: '1.4.0',
+    category: 'security',
+    author: 'Andrew Garrett & WazzimaGiygg Moderation Guild',
+    description: 'Aplica regras automatizadas e heurísticas em tempo real antes de salvar edições para detectar termos proibidos, injeção de scripts e vandalismo em massa.',
+    enabled: true,
+    type: 'extension',
+    url: 'https://www.mediawiki.org/wiki/Extension:AbuseFilter',
+    license: 'GPL-2.0-or-later',
+    hooks: [
+      {
+        name: 'EditFilterMergedContent',
+        handler: 'AbuseFilterHooks::onEditFilterMergedContent',
+        description: 'Examina o conteúdo da revisão antes da persistência no banco.',
+      },
+    ],
+    config: [
+      {
+        key: '$wgAbuseFilterDisallowBlock',
+        type: 'boolean',
+        value: false,
+        defaultValue: false,
+        description: 'Bloqueia o usuário automaticamente após 3 infrações graves seguidas.',
+      },
+      {
+        key: '$wgAbuseFilterLogActions',
+        type: 'boolean',
+        value: true,
+        defaultValue: true,
+        description: 'Registra todas as ações disparadas na coleção de auditoria do Firestore.',
+      },
+    ],
+    manifestJson: {
+      name: 'AbuseFilter',
+      version: '1.4.0',
+      type: 'security',
+      license_name: 'GPL-2.0-or-later',
+    },
+    lastUpdated: '2026-03-01',
+  },
+  {
+    id: 'ext-mobilefrontend',
+    name: 'MobileFrontend',
+    namePt: 'MobileFrontend (Interface Móvel & Gestos)',
+    version: '2.0.4',
+    category: 'ui',
+    author: 'Wikimedia Mobile Team',
+    description: 'Otimização responsiva com seções retráteis em sanfona, tipografia adaptativa e gestos touch para navegação fluida em smartphones e tablets.',
+    enabled: true,
+    type: 'skin',
+    url: 'https://www.mediawiki.org/wiki/Extension:MobileFrontend',
+    license: 'GPL-2.0-or-later',
+    hooks: [
+      {
+        name: 'BeforePageDisplay',
+        handler: 'MobileFrontendHooks::onBeforePageDisplay',
+        description: 'Ajusta viewport e carrega estilos otimizados para aparelhos móveis.',
+      },
+    ],
+    config: [
+      {
+        key: '$wgMFCollapseSectionsByDefault',
+        type: 'boolean',
+        value: false,
+        defaultValue: false,
+        description: 'Recolhe seções de artigos automaticamente em telas pequenas.',
+      },
+    ],
+    manifestJson: {
+      name: 'MobileFrontend',
+      version: '2.0.4',
+      type: 'skin',
+      license_name: 'GPL-2.0-or-later',
+    },
+    lastUpdated: '2026-01-25',
+  },
+];
+
