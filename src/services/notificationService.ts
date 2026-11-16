@@ -133,6 +133,95 @@ export function mergeArticleNotifications(
     .slice(0, 40);
 }
 
+export type WebPushPermissionStatus = 'granted' | 'denied' | 'default' | 'unsupported';
+
+export interface WebPushSetupResult {
+  permission: WebPushPermissionStatus;
+  fcmToken: string | null;
+  serviceWorkerReady: boolean;
+  fcmSupported: boolean;
+  message: string;
+}
+
+let foregroundFcmListenerAttached = false;
+
+/**
+ * Returns the current browser Notification / Web Push API permission status.
+ */
+export function getWebPushPermissionState(): WebPushPermissionStatus {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'unsupported';
+  }
+  return Notification.permission as WebPushPermissionStatus;
+}
+
+/**
+ * Displays a native OS/browser notification outside the app tab via Service Worker registration
+ * (enabling background click-to-navigate via notificationclick), falling back to window.Notification.
+ */
+export async function showBrowserPushNotification(params: {
+  title: string;
+  body: string;
+  articleSlug?: string;
+  tag?: string;
+}): Promise<boolean> {
+  if (getWebPushPermissionState() !== 'granted') {
+    return false;
+  }
+
+  const cleanSlug = params.articleSlug ? params.articleSlug.trim().replace(/\s+/g, '_') : '';
+  const targetUrl = cleanSlug ? `/#/wiki/${encodeURIComponent(cleanSlug)}` : '/';
+  const options: NotificationOptions & { renotify?: boolean } = {
+    body: params.body,
+    icon: '/assets/aistudio/image_370f9ede.png',
+    badge: '/assets/aistudio/image_370f9ede.png',
+    tag: params.tag || (cleanSlug ? `article-edit-${cleanSlug}` : 'notmediawiki-alert'),
+    renotify: true,
+    data: {
+      articleSlug: cleanSlug,
+      url: targetUrl,
+      timestamp: Date.now(),
+    },
+  };
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const existingReg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      const reg =
+        existingReg ||
+        (await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), 1200)),
+        ]));
+
+      if (reg && typeof reg.showNotification === 'function') {
+        await reg.showNotification(params.title, options);
+        return true;
+      }
+    } catch {
+      // Fall back to direct Notification constructor below
+    }
+  }
+
+  try {
+    const notif = new window.Notification(params.title, options);
+    notif.onclick = () => {
+      try {
+        window.focus();
+        if (cleanSlug) {
+          window.location.hash = `#/wiki/${encodeURIComponent(cleanSlug)}`;
+        }
+        notif.close();
+      } catch {
+        // ignore focus restriction
+      }
+    };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Generates an audio chime using Web Audio API for push alerts
  */
@@ -175,96 +264,155 @@ export function playNotificationChime(): void {
 }
 
 /**
+ * Requests Web Push API permission, registers the Service Worker, obtains the FCM token,
+ * persists it in Firestore (`fcm_tokens`), and attaches the foreground FCM message listener.
+ */
+export async function requestWebPushPermissionAndRegister(userId: string): Promise<WebPushSetupResult> {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return {
+      permission: 'unsupported',
+      fcmToken: null,
+      serviceWorkerReady: false,
+      fcmSupported: false,
+      message: 'Este navegador não suporta a Web Push API (Notification API).',
+    };
+  }
+
+  let permission: WebPushPermissionStatus = Notification.permission as WebPushPermissionStatus;
+
+  if (permission === 'default') {
+    try {
+      permission = (await Notification.requestPermission()) as WebPushPermissionStatus;
+    } catch {
+      permission = Notification.permission as WebPushPermissionStatus;
+    }
+  }
+
+  if (permission === 'denied') {
+    return {
+      permission: 'denied',
+      fcmToken: null,
+      serviceWorkerReady: false,
+      fcmSupported: false,
+      message: 'Permissão bloqueada no navegador. Libere as notificações nas configurações do site.',
+    };
+  }
+
+  if (permission !== 'granted') {
+    return {
+      permission,
+      fcmToken: null,
+      serviceWorkerReady: false,
+      fcmSupported: false,
+      message: 'Permissão de notificação não concedida.',
+    };
+  }
+
+  // Register Service Worker for background Web Push and FCM messages
+  let swRegistration: ServiceWorkerRegistration | undefined;
+  if ('serviceWorker' in navigator) {
+    try {
+      swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    } catch (swErr) {
+      console.warn('Registro do Service Worker FCM em background falhou:', swErr);
+    }
+  }
+
+  const serviceWorkerReady = Boolean(swRegistration);
+  let fcmSupported = false;
+  let token: string | null = null;
+
+  try {
+    fcmSupported = await isSupported();
+    if (fcmSupported) {
+      const messaging = getMessaging(app);
+      const vapidKey =
+        typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY
+          ? (import.meta as any).env.VITE_FIREBASE_VAPID_KEY
+          : undefined;
+
+      try {
+        token = await getToken(messaging, {
+          ...(swRegistration ? { serviceWorkerRegistration: swRegistration } : {}),
+          ...(vapidKey ? { vapidKey } : {}),
+        });
+      } catch {
+        try {
+          token = await getToken(messaging);
+        } catch (tokenErr) {
+          console.warn('Não foi possível obter token FCM:', tokenErr);
+        }
+      }
+
+      if (token && userId && auth.currentUser?.uid === userId) {
+        const tokenId = `${userId}_${token.substring(0, 16)}`;
+        const tokenDoc: FcmTokenRegistration = {
+          id: tokenId,
+          userId,
+          token,
+          platform: 'web',
+          updatedAt: new Date().toISOString(),
+          userAgent: navigator.userAgent.substring(0, 200),
+        };
+
+        try {
+          await setDoc(doc(db, PATH_FCM_TOKENS, tokenId), tokenDoc);
+        } catch (err) {
+          console.warn('Notice: Could not persist FCM token in Firestore:', err);
+        }
+      }
+
+      if (!foregroundFcmListenerAttached) {
+        foregroundFcmListenerAttached = true;
+        onMessage(messaging, payload => {
+          playNotificationChime();
+          const title = payload.notification?.title || payload.data?.title || 'NotMediaWiki - Artigo Alterado';
+          const body = payload.notification?.body || payload.data?.body || 'Um artigo seguido foi atualizado.';
+          const slug = payload.data?.articleSlug;
+          showBrowserPushNotification({
+            title,
+            body,
+            articleSlug: slug,
+            tag: slug ? `article-edit-${slug}` : undefined,
+          }).catch(() => {});
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao configurar Firebase Cloud Messaging:', err);
+  }
+
+  const message = token
+    ? 'Notificações Web Push e token FCM ativados neste dispositivo!'
+    : serviceWorkerReady
+      ? 'Web Push API ativada via Service Worker! Você receberá alertas de artigos seguidos no navegador.'
+      : 'Notificações do navegador ativadas para artigos seguidos.';
+
+  return {
+    permission: 'granted',
+    fcmToken: token,
+    serviceWorkerReady,
+    fcmSupported,
+    message,
+  };
+}
+
+/**
+ * Automatically syncs Service Worker & FCM registration when notification permission is already granted.
+ */
+export async function syncExistingFcmRegistration(userId: string): Promise<WebPushSetupResult | null> {
+  if (!userId || getWebPushPermissionState() !== 'granted') {
+    return null;
+  }
+  return requestWebPushPermissionAndRegister(userId);
+}
+
+/**
  * Initializes Firebase Cloud Messaging in the browser and registers the device token
  */
 export async function initializeFCM(userId: string): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const supported = await isSupported();
-    if (!supported) {
-      console.log('Firebase Cloud Messaging não é suportado neste navegador.');
-      return null;
-    }
-
-    // Register Service Worker for background FCM messages
-    if ('serviceWorker' in navigator) {
-      try {
-        await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-      } catch (swErr) {
-        console.warn('Registro do Service Worker FCM em background falhou:', swErr);
-      }
-    }
-
-    const messaging = getMessaging(app);
-
-    // Request notification permission if not yet decided
-    if ('Notification' in window && Notification.permission === 'default') {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        return null;
-      }
-    }
-
-    if (Notification.permission !== 'granted') {
-      return null;
-    }
-
-    // Retrieve registration token
-    let token: string | null = null;
-    try {
-      token = await getToken(messaging, {
-        serviceWorkerRegistration: await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js'),
-      });
-    } catch {
-      // Token without explicit SW registration fallback
-      try {
-        token = await getToken(messaging);
-      } catch (tokenErr) {
-        console.warn('Não foi possível obter token FCM:', tokenErr);
-      }
-    }
-
-    if (token && userId) {
-      const tokenId = `${userId}_${token.substring(0, 16)}`;
-      const tokenDoc: FcmTokenRegistration = {
-        id: tokenId,
-        userId,
-        token,
-        platform: 'web',
-        updatedAt: new Date().toISOString(),
-        userAgent: navigator.userAgent.substring(0, 200),
-      };
-
-      await setDoc(doc(db, PATH_FCM_TOKENS, tokenId), tokenDoc).catch(console.warn);
-    }
-
-    // Listen to foreground FCM messages
-    onMessage(messaging, (payload) => {
-      console.log('FCM Foreground Notification received:', payload);
-      playNotificationChime();
-
-      const title = payload.notification?.title || payload.data?.title || 'NotMediaWiki - Artigo Alterado';
-      const body = payload.notification?.body || payload.data?.body || 'Um artigo seguido foi atualizado.';
-
-      if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification(title, {
-            body,
-            icon: '/assets/aistudio/image_370f9ede.png',
-            tag: payload.data?.articleSlug ? `edit-${payload.data.articleSlug}` : undefined,
-          });
-        } catch {
-          // Window notification fallback
-        }
-      }
-    });
-
-    return token;
-  } catch (err) {
-    console.warn('Erro ao configurar Firebase Cloud Messaging:', err);
-    return null;
-  }
+  const result = await requestWebPushPermissionAndRegister(userId);
+  return result.fcmToken;
 }
 
 /**
@@ -517,19 +665,16 @@ export async function notifyArticleWatchers(params: {
       await setDoc(doc(db, PATH_NOTIFICATIONS, notifId), notifDoc).catch(console.warn);
       notifiedCount++;
 
-      // Trigger local browser notification if current client is the watcher
+      // Trigger local browser Web Push notification if current client is the watcher
       const currentAuthUid = auth.currentUser?.uid;
-      if (currentAuthUid === sub.userId && 'Notification' in window && Notification.permission === 'granted') {
+      if (currentAuthUid === sub.userId && getWebPushPermissionState() === 'granted') {
         playNotificationChime();
-        try {
-          new Notification(`NotMediaWiki: ${notifDoc.articleTitle} foi editado`, {
-            body: `${params.editorName} fez alterações: "${params.changeSummary}"`,
-            icon: '/assets/aistudio/image_370f9ede.png',
-            tag: `edit-${cleanSlug}`,
-          });
-        } catch {
-          // Window notification fallback
-        }
+        showBrowserPushNotification({
+          title: `NotMediaWiki: ${notifDoc.articleTitle} foi editado`,
+          body: `${params.editorName} fez alterações: "${params.changeSummary}"`,
+          articleSlug: cleanSlug,
+          tag: `article-edit-${cleanSlug}`,
+        }).catch(() => {});
       }
     }
 

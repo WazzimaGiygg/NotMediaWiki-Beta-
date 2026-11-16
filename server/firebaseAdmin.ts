@@ -1,14 +1,16 @@
 import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging, Messaging } from 'firebase-admin/messaging';
 import fs from 'fs';
 import path from 'path';
 
 let adminApp: App | null = null;
 let firestoreDb: any = null;
 let authInstance: Auth | null = null;
+let messagingInstance: Messaging | null = null;
 
-export function getFirebaseAdmin(): { app: any; auth: any; db: any } {
+export function getFirebaseAdmin(): { app: any; auth: any; db: any; messaging: Messaging | null } {
   if (!adminApp) {
     let projectId = process.env.FIREBASE_PROJECT_ID;
     let databaseId = process.env.FIRESTORE_DATABASE_ID;
@@ -42,10 +44,17 @@ export function getFirebaseAdmin(): { app: any; auth: any; db: any } {
     }
 
     try {
-      firestoreDb = getFirestore(adminApp);
+      firestoreDb = databaseId ? getFirestore(adminApp, databaseId) : getFirestore(adminApp);
     } catch (e: any) {
       console.warn('[FirebaseAdmin] Firestore instance init notice:', e.message);
       firestoreDb = null;
+    }
+
+    try {
+      messagingInstance = getMessaging(adminApp);
+    } catch (e: any) {
+      console.warn('[FirebaseAdmin] Messaging instance init notice:', e.message);
+      messagingInstance = null;
     }
   }
 
@@ -53,6 +62,7 @@ export function getFirebaseAdmin(): { app: any; auth: any; db: any } {
     app: adminApp,
     auth: authInstance,
     db: firestoreDb,
+    messaging: messagingInstance,
   };
 }
 

@@ -77,6 +77,8 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
 
   // Watchlist (Special:Watchlist) state
   const [watchlist, setWatchlist] = useState<WatchlistSubscription[]>([]);
+  const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pushPermission, setPushPermission] = useState<string>(() => api.getWebPushPermissionState());
   useEffect(() => {
     if (!currentUser?.id) return;
     const unsub = api.subscribeUserWatchlist(currentUser.id, list => {
@@ -813,20 +815,61 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
               </p>
             </div>
             {currentUser?.id && (
-              <button
-                onClick={() => {
-                  api.initializeFCM(currentUser.id).then(token => {
-                    if (token) alert('Dispositivo registrado com sucesso para Notificações Push FCM!');
-                    else alert('Notificações no navegador ativadas via Firebase!');
-                  });
-                }}
-                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 text-blue-700 dark:text-blue-300 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto"
-              >
-                <Bell className="w-3.5 h-3.5 text-blue-600" />
-                <span>Ativar Notificações Push</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
+                <span
+                  className={`px-2 py-1 rounded text-[10px] font-mono border ${
+                    pushPermission === 'granted'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : pushPermission === 'denied'
+                        ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {pushPermission === 'granted'
+                    ? 'Web Push: Ativo'
+                    : pushPermission === 'denied'
+                      ? 'Web Push: Bloqueado'
+                      : pushPermission === 'unsupported'
+                        ? 'Web Push: Indisponível'
+                        : 'Web Push: Aguardando permissão'}
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await api.requestWebPushPermission(currentUser.id);
+                    setPushPermission(res.permission);
+                    setPushFeedback({
+                      type: res.permission === 'granted' ? 'success' : 'error',
+                      text: res.message,
+                    });
+                  }}
+                  className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 text-blue-700 dark:text-blue-300 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Bell className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{pushPermission === 'granted' ? 'Sincronizar Token FCM' : 'Ativar Notificações Push'}</span>
+                </button>
+              </div>
             )}
           </div>
+
+          {pushFeedback && (
+            <div
+              className={`p-3 rounded text-xs flex items-center justify-between gap-2 border ${
+                pushFeedback.type === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800'
+              }`}
+            >
+              <span>{pushFeedback.text}</span>
+              <button
+                type="button"
+                onClick={() => setPushFeedback(null)}
+                className="text-[11px] underline cursor-pointer shrink-0"
+              >
+                Fechar
+              </button>
+            </div>
+          )}
 
           {!currentUser ? (
             <div className="p-5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs">

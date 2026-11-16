@@ -28,6 +28,10 @@ import {
 import { botAgentService } from './services/botAgentService';
 import {
   initializeFCM,
+  requestWebPushPermissionAndRegister,
+  syncExistingFcmRegistration,
+  getWebPushPermissionState,
+  showBrowserPushNotification,
   isArticleWatched,
   toggleWatchArticle,
   subscribeToUserWatchlist,
@@ -244,15 +248,27 @@ export const api = {
     // 1. Save directly into Firebase Firestore (Single Source of Truth)
     const result = await saveArticleToFirestore(payload);
 
-    // 2. Dispatch push notifications to users following this article via Firebase Cloud Messaging
-    notifyArticleWatchers({
+    // 2. Dispatch notification records & FCM Web Push multicast to users following this article
+    const pushPayload = {
       articleSlug: result.article.slug,
       articleTitle: result.article.title,
       changeSummary: payload.comment || 'Atualização no wikitexto do artigo',
       editorName: result.revision.author.name || 'Editor',
       editorId: result.revision.author.id,
       revisionId: result.revision.id,
-    }).catch(err => console.warn('Erro ao notificar seguidores do artigo:', err));
+    };
+
+    notifyArticleWatchers(pushPayload).catch(err =>
+      console.warn('Erro ao notificar seguidores do artigo:', err)
+    );
+
+    safeFetch(`${BASE_URL}/notifications/push-article-edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pushPayload),
+    }).catch(err => {
+      console.warn('Note: FCM Web Push multicast dispatch:', err.message);
+    });
 
     // 3. Synchronize to local server microservice in background (non-blocking)
     safeFetch(`${BASE_URL}/content/articles`, {
@@ -868,8 +884,13 @@ export const api = {
     }
   },
 
-  // Firebase Cloud Messaging & Watchlist Notifications
+  // Firebase Cloud Messaging & Web Push API Notifications
   initializeFCM: (userId: string) => initializeFCM(userId),
+  requestWebPushPermission: (userId: string) => requestWebPushPermissionAndRegister(userId),
+  syncExistingFcmRegistration: (userId: string) => syncExistingFcmRegistration(userId),
+  getWebPushPermissionState: () => getWebPushPermissionState(),
+  showBrowserPushNotification: (params: { title: string; body: string; articleSlug?: string; tag?: string }) =>
+    showBrowserPushNotification(params),
   isArticleWatched: (userId: string, slug: string) => isArticleWatched(userId, slug),
   toggleWatchArticle: (userId: string, article: { slug: string; title: string }, notifyPush?: boolean) =>
     toggleWatchArticle(userId, article, notifyPush),

@@ -9,6 +9,7 @@ import { centralAuthService, UserRole } from './services/auth';
 import { telemetryService } from './services/telemetry';
 import { botEngine } from './services/botEngine';
 import { authenticateToken, requireAuth, requireRole, isSuperAdmin } from './middleware/auth';
+import { getFirebaseAdmin } from './firebaseAdmin';
 import {
   articleSaveSchema,
   articleRollbackSchema,
@@ -848,5 +849,99 @@ gatewayRouter.post('/bots/audit-user', (req: Request, res: Response) => {
 gatewayRouter.get('/bots/user-audits', (_req: Request, res: Response) => {
   res.json({ audits: botEngine.getAllUserAudits() });
 });
+
+// -----------------------------------------------------------------------------
+// 8. WEB PUSH / FIREBASE CLOUD MESSAGING DISPATCH
+// -----------------------------------------------------------------------------
+gatewayRouter.post('/notifications/push-article-edit', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { articleSlug, articleTitle, changeSummary, editorName, editorId, revisionId } = req.body || {};
+    if (!articleSlug || typeof articleSlug !== 'string') {
+      return res.status(400).json({ error: 'articleSlug é obrigatório' });
+    }
+
+    const cleanSlug = articleSlug.trim().replace(/\s+/g, '_');
+    const { db, messaging } = getFirebaseAdmin();
+    if (!db || !messaging) {
+      return res.json({ success: true, dispatched: 0, mode: 'client_listener_only' });
+    }
+
+    const watchersSnap = await db
+      .collection('watchlist_subscriptions')
+      .where('articleSlug', '==', cleanSlug)
+      .get();
+
+    const watcherUserIds = new Set<string>();
+    watchersSnap.forEach((docSnap: any) => {
+      const sub = docSnap.data();
+      if (sub?.userId && sub.userId !== editorId && sub.notifyPush !== false) {
+        watcherUserIds.add(sub.userId);
+      }
+    });
+
+    if (watcherUserIds.size === 0) {
+      return res.json({ success: true, dispatched: 0, mode: 'no_watchers' });
+    }
+
+    // Collect FCM tokens for all eligible watchers
+    const tokens: string[] = [];
+    for (const uid of watcherUserIds) {
+      const tokensSnap = await db.collection('fcm_tokens').where('userId', '==', uid).get();
+      tokensSnap.forEach((tDoc: any) => {
+        const token = tDoc.data()?.token;
+        if (typeof token === 'string' && token.length > 0 && !tokens.includes(token)) {
+          tokens.push(token);
+        }
+      });
+    }
+
+    if (tokens.length === 0) {
+      return res.json({ success: true, dispatched: 0, watchers: watcherUserIds.size, mode: 'no_fcm_tokens' });
+    }
+
+    const title = `NotMediaWiki: ${articleTitle || cleanSlug.replace(/_/g, ' ')} foi editado`;
+    const body = `${editorName || 'Outro editor'}: ${changeSummary || 'Conteúdo atualizado.'}`;
+    const targetUrl = `/#/wiki/${encodeURIComponent(cleanSlug)}`;
+
+    const response = await messaging.sendEachForMulticast({
+      tokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        articleSlug: cleanSlug,
+        title,
+        body,
+        revisionId: revisionId || '',
+        url: targetUrl,
+      },
+      webpush: {
+        fcmOptions: {
+          link: targetUrl,
+        },
+        notification: {
+          title,
+          body,
+          icon: '/assets/aistudio/image_370f9ede.png',
+          badge: '/assets/aistudio/image_370f9ede.png',
+          tag: `article-edit-${cleanSlug}`,
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      dispatched: response.successCount,
+      failed: response.failureCount,
+      mode: 'fcm_multicast',
+    });
+  } catch (err: any) {
+    // Gracefully fall back if server-side credentials aren't active in preview environment
+    console.warn('[FCM Dispatch Notice]:', err?.message || err);
+    return res.json({ success: true, dispatched: 0, mode: 'fallback_client_only' });
+  }
+});
+
 
 

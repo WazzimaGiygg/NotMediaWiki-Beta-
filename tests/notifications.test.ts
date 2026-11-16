@@ -1,11 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { WatchlistSubscription, ArticleNotification, FcmTokenRegistration } from '../src/types';
 import {
   detectFollowedArticleChange,
   mergeArticleNotifications,
+  getWebPushPermissionState,
+  showBrowserPushNotification,
+  requestWebPushPermissionAndRegister,
 } from '../src/services/notificationService';
 
 describe('Watchlist, Favorites & Real-time Header Notifications Suite', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('Validates WatchlistSubscription schema structure', () => {
     const sub: WatchlistSubscription = {
       id: 'usr123_MediaWiki',
@@ -172,6 +180,92 @@ describe('Watchlist, Favorites & Real-time Header Notifications Suite', () => {
       expect(merged[0].articleSlug).toBe('Artigo_B');
       expect(merged[1].articleSlug).toBe('Artigo_A');
       expect(merged[1].isRead).toBe(true);
+    });
+  });
+
+  describe('Web Push API & FCM Permission Integration', () => {
+    it('returns unsupported when Notification API is unavailable', async () => {
+      vi.stubGlobal('window', {});
+      expect(getWebPushPermissionState()).toBe('unsupported');
+
+      const result = await requestWebPushPermissionAndRegister('usr_1');
+      expect(result.permission).toBe('unsupported');
+      expect(result.fcmToken).toBeNull();
+    });
+
+    it('returns denied gracefully when browser permission is denied', async () => {
+      const MockNotification = vi.fn() as any;
+      MockNotification.permission = 'denied';
+      vi.stubGlobal('window', { Notification: MockNotification });
+      vi.stubGlobal('Notification', MockNotification);
+
+      expect(getWebPushPermissionState()).toBe('denied');
+      const result = await requestWebPushPermissionAndRegister('usr_1');
+      expect(result.permission).toBe('denied');
+      expect(result.fcmToken).toBeNull();
+
+      const shown = await showBrowserPushNotification({
+        title: 'Teste',
+        body: 'Bloqueado',
+        articleSlug: 'MediaWiki',
+      });
+      expect(shown).toBe(false);
+    });
+
+    it('dispatches notification via Service Worker showNotification when registration exists', async () => {
+      const showNotification = vi.fn().mockResolvedValue(undefined);
+      const MockNotification = vi.fn() as any;
+      MockNotification.permission = 'granted';
+
+      vi.stubGlobal('window', { Notification: MockNotification });
+      vi.stubGlobal('Notification', MockNotification);
+      vi.stubGlobal('navigator', {
+        serviceWorker: {
+          getRegistration: vi.fn().mockResolvedValue({ showNotification }),
+          ready: Promise.resolve({ showNotification }),
+        },
+      });
+
+      const shown = await showBrowserPushNotification({
+        title: 'NotMediaWiki: MediaWiki foi editado',
+        body: 'Ana: Nova seção',
+        articleSlug: 'MediaWiki',
+      });
+
+      expect(shown).toBe(true);
+      expect(showNotification).toHaveBeenCalledTimes(1);
+      expect(showNotification).toHaveBeenCalledWith(
+        'NotMediaWiki: MediaWiki foi editado',
+        expect.objectContaining({
+          body: 'Ana: Nova seção',
+          tag: 'article-edit-MediaWiki',
+          data: expect.objectContaining({
+            articleSlug: 'MediaWiki',
+            url: '/#/wiki/MediaWiki',
+          }),
+        })
+      );
+      expect(MockNotification).not.toHaveBeenCalled();
+    });
+
+    it('falls back to window.Notification when Service Worker is unavailable', async () => {
+      const MockNotification = vi.fn(function (this: any) {
+        this.close = vi.fn();
+      }) as any;
+      MockNotification.permission = 'granted';
+
+      vi.stubGlobal('window', { Notification: MockNotification, focus: vi.fn(), location: { hash: '' } });
+      vi.stubGlobal('Notification', MockNotification);
+      vi.stubGlobal('navigator', {});
+
+      const shown = await showBrowserPushNotification({
+        title: 'Artigo Editado',
+        body: 'Resumo da alteração',
+        articleSlug: 'Wiki_Teste',
+      });
+
+      expect(shown).toBe(true);
+      expect(MockNotification).toHaveBeenCalledTimes(1);
     });
   });
 });

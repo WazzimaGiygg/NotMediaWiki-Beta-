@@ -254,11 +254,29 @@ export default function App() {
 
     document.addEventListener('click', handleGlobalClick, true);
 
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      const payload = event?.data;
+      if (payload?.type === 'NAVIGATE_ARTICLE' && typeof payload.articleSlug === 'string' && payload.articleSlug.trim()) {
+        const cleanSlug = payload.articleSlug.trim();
+        setActiveArticleSlug(cleanSlug);
+        setCurrentView('reader');
+        setReadingProgress(0);
+        window.location.hash = `#/wiki/${encodeURIComponent(cleanSlug)}`;
+      }
+    };
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
     return () => {
       unsubExtensions();
       unsubDomains();
       window.removeEventListener('hashchange', handleHash);
       document.removeEventListener('click', handleGlobalClick, true);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
     };
   }, []);
 

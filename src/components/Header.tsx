@@ -44,7 +44,7 @@ import {
   subscribeToMonthlyPoints,
   getCurrentMonthString,
 } from '../firebase';
-import { mergeArticleNotifications } from '../services/notificationService';
+import { mergeArticleNotifications, WebPushPermissionStatus } from '../services/notificationService';
 import { onAuthStateChanged } from 'firebase/auth';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { performVpnAudit } from '../utils/vpnDetector';
@@ -114,12 +114,14 @@ export const Header: React.FC<HeaderProps> = ({
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners)
+  // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners + Web Push API)
   const [notifications, setNotifications] = useState<ArticleNotification[]>([]);
   const [watchedArticles, setWatchedArticles] = useState<WatchlistSubscription[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [liveAlert, setLiveAlert] = useState<ArticleNotification | null>(null);
-  const [pushFeedback, setPushFeedback] = useState<string | null>(null);
+  const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
+  const [webPushPermission, setWebPushPermission] = useState<WebPushPermissionStatus>(() => api.getWebPushPermissionState());
+  const [isActivatingPush, setIsActivatingPush] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const initialLoadRef = useRef(true);
@@ -139,14 +141,28 @@ export const Header: React.FC<HeaderProps> = ({
     }, 12000);
 
     api.playNotificationChime();
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(`NotMediaWiki: ${newest.articleTitle} foi editado`, {
-          body: `${newest.editorName}: ${newest.changeSummary}`,
-          icon: '/assets/aistudio/image_370f9ede.png',
-          tag: `article-${newest.articleSlug}-${newest.id}`,
-        });
-      } catch {}
+    api
+      .showBrowserPushNotification({
+        title: `NotMediaWiki: ${newest.articleTitle} foi editado`,
+        body: `${newest.editorName}: ${newest.changeSummary}`,
+        articleSlug: newest.articleSlug,
+        tag: `article-${newest.articleSlug}-${newest.id}`,
+      })
+      .catch(() => {});
+  };
+
+  const handleActivateWebPush = async () => {
+    if (!currentUser?.id || isActivatingPush) return;
+    setIsActivatingPush(true);
+    try {
+      const result = await api.requestWebPushPermission(currentUser.id);
+      setWebPushPermission(result.permission);
+      setPushFeedback({
+        type: result.permission === 'granted' ? 'success' : 'warning',
+        text: result.message,
+      });
+    } finally {
+      setIsActivatingPush(false);
     }
   };
 
@@ -162,6 +178,12 @@ export const Header: React.FC<HeaderProps> = ({
 
     initialLoadRef.current = true;
     seenNotifKeysRef.current.clear();
+
+    const perm = api.getWebPushPermissionState();
+    setWebPushPermission(perm);
+    if (perm === 'granted') {
+      api.syncExistingFcmRegistration(currentUser.id).catch(() => {});
+    }
 
     // 1. Real-time Firestore listener on user's persisted notifications
     const unsubNotifs = api.subscribeUserNotifications(currentUser.id, list => {
@@ -1048,12 +1070,13 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => {
                     setPushFeedback(null);
+                    setWebPushPermission(api.getWebPushPermissionState());
                     setIsNotifOpen(prev => !prev);
                   }}
                   aria-label="Notificações de artigos seguidos"
                   data-testid="header-notifications-bell"
                   className="relative p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
-                  title={`Notificações (${watchedArticles.length} artigos seguidos em tempo real)`}
+                  title={`Notificações (${watchedArticles.length} artigos seguidos • Push: ${webPushPermission})`}
                 >
                   <Bell className={`w-4 h-4 ${unreadNotifCount > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300'}`} />
                   {unreadNotifCount > 0 && (
@@ -1066,7 +1089,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* Notifications Popover Dropdown */}
                 {isNotifOpen && (
                   <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl py-2 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 space-y-1">
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100">
                           <Bell className="w-3.5 h-3.5 text-blue-600" />
@@ -1088,23 +1111,64 @@ export const Header: React.FC<HeaderProps> = ({
                           </button>
                         )}
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400">
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
                           <span>
                             Seguindo {watchedArticles.length} {watchedArticles.length === 1 ? 'artigo' : 'artigos'}
                           </span>
                         </span>
-                        <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Firestore Tempo Real
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-1.5 py-0.2 rounded font-mono border ${
+                              webPushPermission === 'granted'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                : webPushPermission === 'denied'
+                                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {webPushPermission === 'granted'
+                              ? 'Push Ativo'
+                              : webPushPermission === 'denied'
+                                ? 'Push Bloqueado'
+                                : webPushPermission === 'unsupported'
+                                  ? 'Push Indisponível'
+                                  : 'Push Desativado'}
+                          </span>
+                          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Tempo Real
+                          </span>
+                        </div>
                       </div>
                     </div>
 
+                    {watchedArticles.length > 0 && webPushPermission === 'default' && !pushFeedback && (
+                      <div className="mx-3 mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between gap-2">
+                        <div className="text-[11px] text-blue-800 dark:text-blue-200 leading-snug">
+                          Receba alertas no navegador mesmo fora do aplicativo quando artigos seguidos forem editados.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleActivateWebPush}
+                          disabled={isActivatingPush}
+                          className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold shrink-0 cursor-pointer disabled:opacity-50"
+                        >
+                          {isActivatingPush ? 'Ativando...' : 'Permitir'}
+                        </button>
+                      </div>
+                    )}
+
                     {pushFeedback && (
-                      <div className="mx-3 mt-2 px-2.5 py-1.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[11px]">
-                        {pushFeedback}
+                      <div
+                        className={`mx-3 mt-2 px-2.5 py-1.5 rounded border text-[11px] ${
+                          pushFeedback.type === 'success'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                        }`}
+                      >
+                        {pushFeedback.text}
                       </div>
                     )}
 
@@ -1174,20 +1238,23 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (currentUser?.id) {
-                            api.initializeFCM(currentUser.id).then(token => {
-                              setPushFeedback(
-                                token
-                                  ? 'Notificações Push FCM ativadas com sucesso!'
-                                  : 'Alertas em tempo real no Header ativos.'
-                              );
-                            });
-                          }
-                        }}
-                        className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                        onClick={handleActivateWebPush}
+                        disabled={isActivatingPush || webPushPermission === 'unsupported'}
+                        className={`cursor-pointer font-medium disabled:opacity-50 ${
+                          webPushPermission === 'granted'
+                            ? 'text-emerald-600 dark:text-emerald-400 hover:underline'
+                            : webPushPermission === 'denied'
+                              ? 'text-rose-600 dark:text-rose-400 hover:underline'
+                              : 'text-blue-600 dark:text-blue-400 hover:underline'
+                        }`}
                       >
-                        Ativar Push
+                        {isActivatingPush
+                          ? 'Configurando...'
+                          : webPushPermission === 'granted'
+                            ? 'Sincronizar Push FCM'
+                            : webPushPermission === 'denied'
+                              ? 'Push Bloqueado'
+                              : 'Ativar Web Push'}
                       </button>
                     </div>
                   </div>

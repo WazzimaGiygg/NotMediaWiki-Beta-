@@ -1,4 +1,4 @@
-// Firebase Cloud Messaging Service Worker for NotMediaWiki
+// Firebase Cloud Messaging & Web Push Service Worker for NotMediaWiki
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -10,57 +10,52 @@ const firebaseConfig = {
   messagingSenderId: "249427877153"
 };
 
+function buildNotificationOptions(payload) {
+  const data = payload?.data || {};
+  const notif = payload?.notification || {};
+  const slug = data.articleSlug || payload?.articleSlug || '';
+  const url = data.url || (slug ? `/#/wiki/${encodeURIComponent(slug)}` : '/');
+
+  return {
+    title: notif.title || data.title || payload?.title || 'NotMediaWiki - Artigo Seguido Editado',
+    options: {
+      body: notif.body || data.body || payload?.body || 'Um artigo que você está seguindo foi atualizado.',
+      icon: '/assets/aistudio/image_370f9ede.png',
+      badge: '/assets/aistudio/image_370f9ede.png',
+      tag: slug ? `article-edit-${slug}` : 'article-edit',
+      renotify: true,
+      data: {
+        url,
+        articleSlug: slug,
+        timestamp: Date.now(),
+      },
+    },
+  };
+}
+
 try {
   firebase.initializeApp(firebaseConfig);
   const messaging = firebase.messaging();
 
   messaging.onBackgroundMessage((payload) => {
-    console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano:', payload);
-    const notificationTitle =
-      payload.notification?.title ||
-      payload.data?.title ||
-      'NotMediaWiki - Artigo Seguido Atualizado';
-
-    const notificationOptions = {
-      body:
-        payload.notification?.body ||
-        payload.data?.body ||
-        'Um artigo da sua lista de páginas vigiadas foi alterado.',
-      icon: '/assets/aistudio/image_370f9ede.png',
-      badge: '/assets/aistudio/image_370f9ede.png',
-      tag: payload.data?.articleSlug ? `article-edit-${payload.data.articleSlug}` : 'article-edit',
-      data: {
-        url: payload.data?.url || (payload.data?.articleSlug ? `/#/wiki/${payload.data.articleSlug}` : '/'),
-        articleSlug: payload.data?.articleSlug,
-        timestamp: Date.now()
-      }
-    };
-
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    console.log('[firebase-messaging-sw.js] Mensagem FCM recebida em segundo plano:', payload);
+    const { title, options } = buildNotificationOptions(payload);
+    return self.registration.showNotification(title, options);
   });
 } catch (err) {
   console.warn('[firebase-messaging-sw.js] Falha ao inicializar FCM no Service Worker:', err);
 }
 
-// Fallback listener for standard Web Push events
+// Listener for standard Web Push events (outside the app / background)
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   try {
-    const data = event.data.json();
-    const title = data.notification?.title || data.data?.title || data.title || 'NotMediaWiki - Artigo Seguido Atualizado';
-    const body = data.notification?.body || data.data?.body || data.body || 'Um artigo vigiado foi alterado.';
-    const slug = data.data?.articleSlug || data.articleSlug;
-    const options = {
-      body,
-      icon: '/assets/aistudio/image_370f9ede.png',
-      badge: '/assets/aistudio/image_370f9ede.png',
-      tag: slug ? `article-edit-${slug}` : 'article-edit',
-      data: {
-        url: data.data?.url || (slug ? `/#/wiki/${slug}` : '/'),
-        articleSlug: slug,
-        timestamp: Date.now(),
-      },
-    };
+    const raw = event.data.json();
+    // Skip duplicate display if FCM compat SDK handles notification payload automatically
+    if (raw && raw.from && raw.notification) {
+      return;
+    }
+    const { title, options } = buildNotificationOptions(raw);
     event.waitUntil(self.registration.showNotification(title, options));
   } catch {
     const text = event.data.text();
@@ -68,20 +63,34 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification('NotMediaWiki - Artigo Alterado', {
         body: text || 'Um artigo seguido sofreu alterações.',
         icon: '/assets/aistudio/image_370f9ede.png',
+        badge: '/assets/aistudio/image_370f9ede.png',
       })
     );
   }
 });
 
+// Focus open window or open the edited article when user clicks the browser notification
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/';
+  const data = event.notification.data || {};
+  const targetUrl = data.url || '/';
+  const articleSlug = data.articleSlug || '';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      for (let client of windowClients) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
-          return client.focus();
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          client.focus();
+          if (articleSlug && client.postMessage) {
+            client.postMessage({
+              type: 'NAVIGATE_ARTICLE',
+              articleSlug,
+              url: targetUrl,
+            });
+          } else if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
+          return client;
         }
       }
       if (clients.openWindow) {
