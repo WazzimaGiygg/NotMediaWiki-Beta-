@@ -31,6 +31,7 @@ import {
   isArticleWatched,
   toggleWatchArticle,
   subscribeToUserWatchlist,
+  subscribeToFollowedArticlesEdits,
   notifyArticleWatchers,
   subscribeToUserNotifications,
   markNotificationAsRead,
@@ -874,6 +875,11 @@ export const api = {
     toggleWatchArticle(userId, article, notifyPush),
   subscribeUserWatchlist: (userId: string, callback: (watchlist: WatchlistSubscription[]) => void) =>
     subscribeToUserWatchlist(userId, callback),
+  subscribeFollowedArticlesEdits: (
+    userId: string,
+    onArticleEdited: (notification: ArticleNotification) => void,
+    onWatchlistUpdate?: (watchlist: WatchlistSubscription[]) => void
+  ) => subscribeToFollowedArticlesEdits(userId, onArticleEdited, onWatchlistUpdate),
   subscribeUserNotifications: (userId: string, callback: (notifications: ArticleNotification[]) => void) =>
     subscribeToUserNotifications(userId, callback),
   markNotificationAsRead: (notificationId: string) => markNotificationAsRead(notificationId),

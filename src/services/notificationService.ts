@@ -9,16 +9,129 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
-  limit,
 } from 'firebase/firestore';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
-import { app, db, auth } from '../firebase';
-import { WatchlistSubscription, ArticleNotification, FcmTokenRegistration } from '../types';
+import { app, db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { Article, WatchlistSubscription, ArticleNotification, FcmTokenRegistration } from '../types';
 
 const PATH_WATCHLIST = 'watchlist_subscriptions';
 const PATH_NOTIFICATIONS = 'article_notifications';
 const PATH_FCM_TOKENS = 'fcm_tokens';
+const PATH_ARTICLES = 'articles';
+
+export interface ArticleSnapshotBaseline {
+  latestRevisionId?: string;
+  updatedAt?: string;
+  wikitext?: string;
+}
+
+/**
+ * Pure helper that compares a new Firestore article snapshot against the last observed baseline
+ * for a followed article, returning an ArticleNotification if edited by another user.
+ */
+export function detectFollowedArticleChange(params: {
+  userId: string;
+  articleSlug: string;
+  articleTitleFallback?: string;
+  previous?: ArticleSnapshotBaseline;
+  current: Partial<Article> & { authorUid?: string; lastEditedBy?: string };
+}): {
+  changed: boolean;
+  nextBaseline: ArticleSnapshotBaseline;
+  notification?: ArticleNotification;
+} {
+  const { userId, articleSlug, articleTitleFallback, previous, current } = params;
+  const cleanSlug = articleSlug.trim().replace(/\s+/g, '_');
+
+  const nextBaseline: ArticleSnapshotBaseline = {
+    latestRevisionId: current.latestRevisionId,
+    updatedAt: current.updatedAt,
+    wikitext: current.wikitext,
+  };
+
+  if (!previous) {
+    return { changed: false, nextBaseline };
+  }
+
+  const revChanged = Boolean(
+    current.latestRevisionId &&
+    previous.latestRevisionId &&
+    current.latestRevisionId !== previous.latestRevisionId
+  );
+  const updatedAtChanged = Boolean(
+    current.updatedAt &&
+    previous.updatedAt &&
+    current.updatedAt !== previous.updatedAt
+  );
+  const wikitextChanged =
+    current.wikitext !== undefined &&
+    previous.wikitext !== undefined &&
+    current.wikitext !== previous.wikitext;
+
+  if (!revChanged && !updatedAtChanged && !wikitextChanged) {
+    return { changed: false, nextBaseline };
+  }
+
+  const editorUid = (current as any).authorUid || '';
+  if (editorUid && editorUid === userId) {
+    return { changed: false, nextBaseline };
+  }
+
+  const editorName = (current as any).lastEditedBy || 'Outro editor';
+  const revisionId = current.latestRevisionId || `rev-${Date.now()}`;
+  const timestamp = current.updatedAt || new Date().toISOString();
+
+  const notification: ArticleNotification = {
+    id: `notif_${userId}_${cleanSlug}_${revisionId}`,
+    userId,
+    articleSlug: cleanSlug,
+    articleTitle: current.title || articleTitleFallback || cleanSlug.replace(/_/g, ' '),
+    changeSummary: current.summary || 'O conteúdo do artigo seguido foi atualizado.',
+    editorName,
+    editorId: editorUid || 'external-editor',
+    timestamp,
+    isRead: false,
+    revisionId,
+  };
+
+  return { changed: true, nextBaseline, notification };
+}
+
+/**
+ * Merges and deduplicates notifications (by id or articleSlug+revisionId), sorted newest first.
+ */
+export function mergeArticleNotifications(
+  existing: ArticleNotification[],
+  incoming: ArticleNotification[]
+): ArticleNotification[] {
+  const byKey = new Map<string, ArticleNotification>();
+
+  const getKey = (n: ArticleNotification) =>
+    n.revisionId ? `${n.articleSlug}::${n.revisionId}` : n.id;
+
+  for (const item of existing) {
+    byKey.set(getKey(item), item);
+  }
+
+  for (const item of incoming) {
+    const key = getKey(item);
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, item);
+    } else {
+      // Preserve read state if already marked read or if incoming is from persisted Firestore doc
+      byKey.set(key, {
+        ...prev,
+        ...item,
+        isRead: prev.isRead || item.isRead,
+      });
+    }
+  }
+
+  return Array.from(byKey.values())
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 40);
+}
 
 /**
  * Generates an audio chime using Web Audio API for push alerts
@@ -186,11 +299,21 @@ export async function toggleWatchArticle(
   const subId = `${userId}_${cleanSlug}`;
   const subRef = doc(db, PATH_WATCHLIST, subId);
 
-  const existing = await getDoc(subRef);
+  let existing;
+  try {
+    existing = await getDoc(subRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `${PATH_WATCHLIST}/${subId}`);
+  }
+
   if (existing.exists()) {
     // Unwatch
-    await deleteDoc(subRef);
-    return { isWatched: false };
+    try {
+      await deleteDoc(subRef);
+      return { isWatched: false };
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `${PATH_WATCHLIST}/${subId}`);
+    }
   } else {
     // Watch
     const newSub: WatchlistSubscription = {
@@ -201,7 +324,11 @@ export async function toggleWatchArticle(
       createdAt: new Date().toISOString(),
       notifyPush,
     };
-    await setDoc(subRef, newSub);
+    try {
+      await setDoc(subRef, newSub);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `${PATH_WATCHLIST}/${subId}`);
+    }
 
     // Initialize FCM when user starts following articles
     initializeFCM(userId).catch(console.warn);
@@ -238,6 +365,118 @@ export function subscribeToUserWatchlist(
 }
 
 /**
+ * Subscribes in real time (via Firestore onSnapshot) to the user's followed articles
+ * AND attaches a live Firestore document listener (`articles/{slug}`) for each followed article.
+ * Whenever any followed article is edited in Firestore by another user, emits an alert notification.
+ */
+export function subscribeToFollowedArticlesEdits(
+  userId: string,
+  onArticleEdited: (notification: ArticleNotification) => void,
+  onWatchlistUpdate?: (watchlist: WatchlistSubscription[]) => void
+): () => void {
+  if (!userId) {
+    onWatchlistUpdate?.([]);
+    return () => {};
+  }
+
+  const articleUnsubs = new Map<string, () => void>();
+  const baselines = new Map<string, ArticleSnapshotBaseline>();
+  const emittedKeys = new Set<string>();
+  let isDisposed = false;
+
+  const q = query(collection(db, PATH_WATCHLIST), where('userId', '==', userId));
+  const unsubWatchlist = onSnapshot(
+    q,
+    (snapshot) => {
+      if (isDisposed) return;
+
+      const items: WatchlistSubscription[] = [];
+      const activeSlugs = new Set<string>();
+
+      snapshot.forEach((d) => {
+        const sub = d.data() as WatchlistSubscription;
+        items.push(sub);
+        const cleanSlug = sub.articleSlug.trim().replace(/\s+/g, '_');
+        if (cleanSlug) activeSlugs.add(cleanSlug);
+      });
+
+      onWatchlistUpdate?.(items);
+
+      // Remove listeners for articles no longer followed
+      for (const [slug, unsubArticle] of articleUnsubs.entries()) {
+        if (!activeSlugs.has(slug)) {
+          unsubArticle();
+          articleUnsubs.delete(slug);
+          baselines.delete(slug);
+        }
+      }
+
+      // Attach real-time onSnapshot listeners for newly followed articles
+      for (const sub of items) {
+        const cleanSlug = sub.articleSlug.trim().replace(/\s+/g, '_');
+        if (!cleanSlug || articleUnsubs.has(cleanSlug)) continue;
+
+        const articleRef = doc(db, PATH_ARTICLES, cleanSlug);
+        const unsubArticle = onSnapshot(
+          articleRef,
+          (docSnap) => {
+            if (isDisposed || !docSnap.exists()) return;
+            const articleData = docSnap.data() as Partial<Article> & {
+              authorUid?: string;
+              lastEditedBy?: string;
+            };
+
+            const res = detectFollowedArticleChange({
+              userId,
+              articleSlug: cleanSlug,
+              articleTitleFallback: sub.articleTitle,
+              previous: baselines.get(cleanSlug),
+              current: articleData,
+            });
+
+            baselines.set(cleanSlug, res.nextBaseline);
+
+            if (res.changed && res.notification) {
+              const dedupeKey = `${res.notification.articleSlug}::${res.notification.revisionId}`;
+              if (emittedKeys.has(dedupeKey)) return;
+              emittedKeys.add(dedupeKey);
+
+              onArticleEdited(res.notification);
+
+              // Persist notification for this user if authenticated so unread state survives reload
+              if (auth.currentUser?.uid === userId) {
+                setDoc(doc(db, PATH_NOTIFICATIONS, res.notification.id), res.notification).catch((persistErr) => {
+                  console.warn('Notice: Could not persist live followed-article notification:', persistErr);
+                });
+              }
+            }
+          },
+          (err) => {
+            console.warn(`Notice: Real-time listener for followed article "${cleanSlug}":`, err);
+          }
+        );
+
+        articleUnsubs.set(cleanSlug, unsubArticle);
+      }
+    },
+    (err) => {
+      console.warn('Erro ao monitorar artigos seguidos no Firestore:', err);
+      onWatchlistUpdate?.([]);
+    }
+  );
+
+  return () => {
+    isDisposed = true;
+    unsubWatchlist();
+    for (const unsubArticle of articleUnsubs.values()) {
+      unsubArticle();
+    }
+    articleUnsubs.clear();
+    baselines.clear();
+  };
+}
+
+/**
  * Dispatches push notification records to all users watching an edited article
  */
 export async function notifyArticleWatchers(params: {
@@ -261,7 +500,7 @@ export async function notifyArticleWatchers(params: {
       // Do not notify the editor who made the change
       if (sub.userId === params.editorId) continue;
 
-      const notifId = `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const notifId = `notif_${sub.userId}_${cleanSlug}_${params.revisionId || Date.now()}`;
       const notifDoc: ArticleNotification = {
         id: notifId,
         userId: sub.userId,
@@ -302,7 +541,7 @@ export async function notifyArticleWatchers(params: {
 }
 
 /**
- * Subscribes to the user's notifications in real time
+ * Subscribes to the user's notifications in real time (without requiring composite index)
  */
 export function subscribeToUserNotifications(
   userId: string,
@@ -313,30 +552,19 @@ export function subscribeToUserNotifications(
     return () => {};
   }
 
-  const q = query(
-    collection(db, PATH_NOTIFICATIONS),
-    where('userId', '==', userId),
-    orderBy('timestamp', 'desc'),
-    limit(40)
-  );
+  const q = query(collection(db, PATH_NOTIFICATIONS), where('userId', '==', userId));
 
   return onSnapshot(
     q,
     (snapshot) => {
       const notifs: ArticleNotification[] = [];
       snapshot.forEach((d) => notifs.push(d.data() as ArticleNotification));
-      callback(notifs);
+      notifs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      callback(notifs.slice(0, 40));
     },
     (err) => {
-      // Fallback query without orderBy if composite index is pending
-      console.warn('Listener com orderBy falhou, tentando fallback sem ordenação:', err);
-      const fallbackQuery = query(collection(db, PATH_NOTIFICATIONS), where('userId', '==', userId));
-      return onSnapshot(fallbackQuery, (snap) => {
-        const notifs: ArticleNotification[] = [];
-        snap.forEach((d) => notifs.push(d.data() as ArticleNotification));
-        notifs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        callback(notifs);
-      });
+      console.warn('Erro ao escutar notificações no Firestore:', err);
+      callback([]);
     }
   );
 }

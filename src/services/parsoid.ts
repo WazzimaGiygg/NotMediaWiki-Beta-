@@ -282,6 +282,9 @@ export class ClientParsoidService {
 
     // Explicit <pre> blocks
     processed = processed.replace(/<pre(?:\s+class=["']?([^"'>]+)["']?)?>([\s\S]*?)<\/pre>/gi, (_, customClass, code) => {
+      if (/^<code(?:\s+class="[^"]*")?>/i.test(code.trim())) {
+        return `<pre class="${customClass || 'language-none'}">${code}</pre>`;
+      }
       const langClass = customClass || 'language-none';
       const cleanCode = code.replace(/^[\r\n]+|[\r\n]+$/g, '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<pre class="${langClass}"><code class="${langClass}">${cleanCode}</code></pre>`;

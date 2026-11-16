@@ -248,18 +248,25 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
   const contentRef = useRef<HTMLElement>(null);
 
-  // Lightweight syntax highlighting on code blocks inside .wiki-content
-  useEffect(() => {
-    if (!contentRef.current || !data?.html) return;
-    enhanceCodeBlocks(contentRef.current);
-  }, [data?.html]);
-
   // Ensure all <ref> tags in the HTML are parsed into clickable, accessible superscripts
   const renderedHtml = useMemo(() => {
     if (!data?.html) return '';
     const { html: parsed } = parseFootnoteTagsInHtml(data.html);
     return parsed;
   }, [data?.html]);
+
+  // Enhance all code blocks inside .wiki-content with header bar, language badge, line numbers toggle, and Copy to Clipboard button
+  useEffect(() => {
+    if (!contentRef.current || !renderedHtml) return;
+
+    const timer = setTimeout(() => {
+      if (contentRef.current) {
+        enhanceCodeBlocks(contentRef.current);
+      }
+    }, 10);
+
+    return () => clearTimeout(timer);
+  }, [renderedHtml, isReaderMode]);
 
   // Handle clicking links rendered in Parsoid HTML (with interactive footnote backlinks and jumping)
   const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {

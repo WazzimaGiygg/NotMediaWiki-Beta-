@@ -31,8 +31,9 @@ import {
   Bell,
   CheckCheck,
   Trash2,
+  Star,
 } from 'lucide-react';
-import { UserSession, VpnDetectionLog, ArticleNotification } from '../types';
+import { UserSession, VpnDetectionLog, ArticleNotification, WatchlistSubscription } from '../types';
 import { api } from '../api';
 import {
   loginWithGoogle,
@@ -43,6 +44,7 @@ import {
   subscribeToMonthlyPoints,
   getCurrentMonthString,
 } from '../firebase';
+import { mergeArticleNotifications } from '../services/notificationService';
 import { onAuthStateChanged } from 'firebase/auth';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { performVpnAudit } from '../utils/vpnDetector';
@@ -112,41 +114,117 @@ export const Header: React.FC<HeaderProps> = ({
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Real-time Push & Watchlist Notifications
+  // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners)
   const [notifications, setNotifications] = useState<ArticleNotification[]>([]);
+  const [watchedArticles, setWatchedArticles] = useState<WatchlistSubscription[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [liveAlert, setLiveAlert] = useState<ArticleNotification | null>(null);
+  const [pushFeedback, setPushFeedback] = useState<string | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const initialLoadRef = useRef(true);
+  const seenNotifKeysRef = useRef<Set<string>>(new Set());
+  const liveAlertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const getNotificationKey = (n: ArticleNotification) =>
+    n.revisionId ? `${n.articleSlug}::${n.revisionId}` : n.id;
+
+  const triggerLiveAlert = (newest: ArticleNotification) => {
+    setLiveAlert(newest);
+    if (liveAlertTimerRef.current) {
+      clearTimeout(liveAlertTimerRef.current);
+    }
+    liveAlertTimerRef.current = setTimeout(() => {
+      setLiveAlert(null);
+    }, 12000);
+
+    api.playNotificationChime();
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`NotMediaWiki: ${newest.articleTitle} foi editado`, {
+          body: `${newest.editorName}: ${newest.changeSummary}`,
+          icon: '/assets/aistudio/image_370f9ede.png',
+          tag: `article-${newest.articleSlug}-${newest.id}`,
+        });
+      } catch {}
+    }
+  };
 
   useEffect(() => {
     if (!currentUser?.id) {
       setNotifications([]);
+      setWatchedArticles([]);
+      setLiveAlert(null);
       initialLoadRef.current = true;
+      seenNotifKeysRef.current.clear();
       return;
     }
-    const unsub = api.subscribeUserNotifications(currentUser.id, list => {
-      if (!initialLoadRef.current && list.length > 0) {
-        const prevIds = new Set(notifications.map(n => n.id));
-        const newest = list.find(n => !n.isRead && !prevIds.has(n.id));
-        if (newest) {
-          api.playNotificationChime();
-          if ('Notification' in window && Notification.permission === 'granted') {
-            try {
-              new Notification(`NotMediaWiki: ${newest.articleTitle} foi editado`, {
-                body: `${newest.editorName}: ${newest.changeSummary}`,
-                icon: '/assets/aistudio/image_370f9ede.png',
-                tag: `article-${newest.articleSlug}-${newest.id}`,
-              });
-            } catch {}
-          }
-        }
+
+    initialLoadRef.current = true;
+    seenNotifKeysRef.current.clear();
+
+    // 1. Real-time Firestore listener on user's persisted notifications
+    const unsubNotifs = api.subscribeUserNotifications(currentUser.id, list => {
+      if (initialLoadRef.current) {
+        list.forEach(n => seenNotifKeysRef.current.add(getNotificationKey(n)));
+        initialLoadRef.current = false;
+        setNotifications(prev => mergeArticleNotifications(list, prev));
+        return;
       }
-      initialLoadRef.current = false;
+
+      const newest = list.find(n => !n.isRead && !seenNotifKeysRef.current.has(getNotificationKey(n)));
+      list.forEach(n => seenNotifKeysRef.current.add(getNotificationKey(n)));
+
+      if (newest) {
+        triggerLiveAlert(newest);
+      }
+
       setNotifications(list);
     });
-    return () => unsub();
-  }, [currentUser?.id, notifications]);
+
+    // 2. Real-time Firestore listeners directly on followed articles (watchlist_subscriptions + articles/{slug})
+    const unsubFollowed = api.subscribeFollowedArticlesEdits(
+      currentUser.id,
+      liveNotif => {
+        const key = getNotificationKey(liveNotif);
+        if (seenNotifKeysRef.current.has(key)) return;
+        seenNotifKeysRef.current.add(key);
+
+        setNotifications(prev => mergeArticleNotifications(prev, [liveNotif]));
+        triggerLiveAlert(liveNotif);
+      },
+      watchlist => {
+        setWatchedArticles(watchlist);
+      }
+    );
+
+    return () => {
+      unsubNotifs();
+      unsubFollowed();
+      if (liveAlertTimerRef.current) {
+        clearTimeout(liveAlertTimerRef.current);
+      }
+    };
+  }, [currentUser?.id]);
+
+  const handleMarkAsRead = (notificationId: string) => {
+    setNotifications(prev => prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)));
+    api.markNotificationAsRead(notificationId);
+  };
+
+  const handleMarkAllAsRead = () => {
+    if (!currentUser?.id) return;
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    api.markAllNotificationsAsRead(currentUser.id);
+  };
+
+  const handleDeleteNotification = (notificationId: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    if (liveAlert?.id === notificationId) {
+      setLiveAlert(null);
+    }
+    api.deleteNotification(notificationId);
+  };
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -552,6 +630,55 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
+      {/* Real-time Firestore Notification Banner when a followed article is edited */}
+      {liveAlert && (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="followed-article-live-alert"
+          className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs border-b border-blue-700 dark:border-blue-800"
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400" />
+            </span>
+            <Bell className="w-4 h-4 shrink-0 text-blue-100" />
+            <div className="truncate">
+              <strong>Artigo seguido editado:</strong>{' '}
+              <span className="font-semibold underline decoration-blue-200/70">
+                {liveAlert.articleTitle}
+              </span>{' '}
+              <span className="text-blue-100">
+                — por {liveAlert.editorName} ({liveAlert.changeSummary})
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                handleMarkAsRead(liveAlert.id);
+                onNavigateArticle(liveAlert.articleSlug);
+                setLiveAlert(null);
+              }}
+              className="px-2.5 py-1 bg-white text-blue-700 hover:bg-blue-50 rounded text-[11px] font-semibold cursor-pointer transition-colors shadow-2xs"
+            >
+              Abrir artigo
+            </button>
+            <button
+              type="button"
+              onClick={() => setLiveAlert(null)}
+              className="p-1 hover:bg-blue-500/60 rounded text-blue-100 hover:text-white cursor-pointer"
+              title="Dispensar alerta"
+              aria-label="Dispensar alerta"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Identity & Global Controls */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-4">
         {/* Brand */}
@@ -885,7 +1012,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Authenticated user actions & profile */}
-          {googleUserEmail && currentUser && (
+          {(googleUserEmail || currentUser?.isGoogleUser) && currentUser && (
             <>
               {/* 3.05.3.af & 3.05.8.b - Checklist Diário & Pontos Mensais Trigger Button */}
               <button
@@ -918,11 +1045,17 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Push & Watchlist Notifications Bell */}
               <div ref={notifRef} className="relative">
                 <button
-                  onClick={() => setIsNotifOpen(prev => !prev)}
+                  type="button"
+                  onClick={() => {
+                    setPushFeedback(null);
+                    setIsNotifOpen(prev => !prev);
+                  }}
+                  aria-label="Notificações de artigos seguidos"
+                  data-testid="header-notifications-bell"
                   className="relative p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
-                  title="Notificações de artigos vigiados e alterações"
+                  title={`Notificações (${watchedArticles.length} artigos seguidos em tempo real)`}
                 >
-                  <Bell className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                  <Bell className={`w-4 h-4 ${unreadNotifCount > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300'}`} />
                   {unreadNotifCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold text-[9px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center animate-pulse shadow-xs">
                       {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
@@ -933,33 +1066,54 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* Notifications Popover Dropdown */}
                 {isNotifOpen && (
                   <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl py-2 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100">
-                        <Bell className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Notificações de Artigos Vigiados</span>
-                        {unreadNotifCount > 0 && (
-                          <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-mono text-[10px] px-1.5 py-0.2 rounded-full">
-                            {unreadNotifCount} novas
-                          </span>
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100">
+                          <Bell className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Notificações de Artigos Seguidos</span>
+                          {unreadNotifCount > 0 && (
+                            <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-mono text-[10px] px-1.5 py-0.2 rounded">
+                              {unreadNotifCount} {unreadNotifCount === 1 ? 'nova' : 'novas'}
+                            </span>
+                          )}
+                        </div>
+                        {unreadNotifCount > 0 && currentUser?.id && (
+                          <button
+                            type="button"
+                            onClick={handleMarkAllAsRead}
+                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <CheckCheck className="w-3 h-3" />
+                            <span>Marcar lidas</span>
+                          </button>
                         )}
                       </div>
-                      {unreadNotifCount > 0 && currentUser?.id && (
-                        <button
-                          onClick={() => api.markAllNotificationsAsRead(currentUser.id)}
-                          className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <CheckCheck className="w-3 h-3" />
-                          <span>Lidas</span>
-                        </button>
-                      )}
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                          <span>
+                            Seguindo {watchedArticles.length} {watchedArticles.length === 1 ? 'artigo' : 'artigos'}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Firestore Tempo Real
+                        </span>
+                      </div>
                     </div>
+
+                    {pushFeedback && (
+                      <div className="mx-3 mt-2 px-2.5 py-1.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[11px]">
+                        {pushFeedback}
+                      </div>
+                    )}
 
                     <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                       {notifications.length === 0 ? (
                         <div className="py-8 px-4 text-center text-slate-400 text-xs">
                           Nenhuma notificação no momento.
                           <div className="text-[11px] text-slate-500 mt-1">
-                            Clique em <strong>Vigiar</strong> em qualquer artigo para ser avisado sobre novas edições.
+                            Clique em <strong>Vigiar</strong> em qualquer artigo para ser alertado em tempo real quando ele for editado.
                           </div>
                         </div>
                       ) : (
@@ -967,7 +1121,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <div
                             key={notif.id}
                             onClick={() => {
-                              api.markNotificationAsRead(notif.id);
+                              handleMarkAsRead(notif.id);
                               onNavigateArticle(notif.articleSlug);
                               setIsNotifOpen(false);
                             }}
@@ -992,11 +1146,12 @@ export const Header: React.FC<HeaderProps> = ({
                               </div>
                             </div>
                             <button
+                              type="button"
                               onClick={e => {
                                 e.stopPropagation();
-                                api.deleteNotification(notif.id);
+                                handleDeleteNotification(notif.id);
                               }}
-                              className="p-1 text-slate-400 hover:text-rose-500 rounded transition-colors"
+                              className="p-1 text-slate-400 hover:text-rose-500 rounded transition-colors cursor-pointer"
                               title="Remover"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -1008,19 +1163,25 @@ export const Header: React.FC<HeaderProps> = ({
 
                     <div className="pt-2 px-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
                       <button
+                        type="button"
                         onClick={() => {
                           setIsNotifOpen(false);
-                          onSelectView('special');
+                          onNavigateArticle('Special:Watchlist');
                         }}
                         className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                       >
-                        Gerenciar páginas vigiadas →
+                        Gerenciar páginas seguidas →
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           if (currentUser?.id) {
                             api.initializeFCM(currentUser.id).then(token => {
-                              if (token) alert('Notificações Push FCM ativadas com sucesso!');
+                              setPushFeedback(
+                                token
+                                  ? 'Notificações Push FCM ativadas com sucesso!'
+                                  : 'Alertas em tempo real no Header ativos.'
+                              );
                             });
                           }
                         }}

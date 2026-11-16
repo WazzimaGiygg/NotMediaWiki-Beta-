@@ -57,7 +57,8 @@ export interface LanguageMetadata {
 /**
  * Fallback clipboard copy using a temporary textarea for contexts where navigator.clipboard might be restricted.
  */
-function fallbackCopyText(text: string): boolean {
+export function fallbackCopyText(text: string): boolean {
+  if (typeof document === 'undefined') return false;
   try {
     const textarea = document.createElement('textarea');
     textarea.value = text;
@@ -75,6 +76,21 @@ function fallbackCopyText(text: string): boolean {
   }
 }
 
+/**
+ * Copies code text to clipboard with modern navigator.clipboard and reliable textarea fallback.
+ */
+export async function copyCodeToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return fallbackCopyText(text);
+    }
+  }
+  return fallbackCopyText(text);
+}
+
 const LINE_NUMBERS_STORAGE_KEY = 'wiki_code_block_line_numbers_enabled';
 
 /**
@@ -83,6 +99,7 @@ const LINE_NUMBERS_STORAGE_KEY = 'wiki_code_block_line_numbers_enabled';
  */
 export function getLineNumbersPreference(): boolean {
   try {
+    if (typeof localStorage === 'undefined') return true;
     const val = localStorage.getItem(LINE_NUMBERS_STORAGE_KEY);
     if (val === null) return true;
     return val === 'true';
@@ -96,6 +113,7 @@ export function getLineNumbersPreference(): boolean {
  */
 export function setLineNumbersPreference(enabled: boolean): void {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(LINE_NUMBERS_STORAGE_KEY, String(enabled));
   } catch {
     // Ignore localStorage access failures
@@ -230,10 +248,10 @@ export function highlightSnippet(code: string, language: string): string {
  * 3. Wraps the <pre> block with a sleek, responsive container header with:
  *    - Language badge with color indicator
  *    - Total line counter
- *    - One-click copy-to-clipboard button with visual feedback
+ *    - One-click copy-to-clipboard button with visual feedback ('Copiar' -> 'Copiado!')
  */
 export function enhanceCodeBlocks(container: HTMLElement | null): void {
-  if (!container) return;
+  if (!container || typeof document === 'undefined') return;
 
   // 1. Run Prism syntax highlighting on all code elements
   try {
@@ -246,7 +264,7 @@ export function enhanceCodeBlocks(container: HTMLElement | null): void {
   const preElements = container.querySelectorAll('pre');
   preElements.forEach(pre => {
     // Avoid double decoration if already enhanced
-    if (pre.parentElement?.classList.contains('code-block-wrapper')) {
+    if (pre.closest('.code-block-wrapper')) {
       return;
     }
 
@@ -286,13 +304,13 @@ export function enhanceCodeBlocks(container: HTMLElement | null): void {
         ${lineCount > 1 ? `<span class="text-[10px] text-slate-400 font-normal">(${lineCount} linhas)</span>` : ''}
       </div>
       <div class="flex items-center gap-1.5">
-        <button class="toggle-lines-btn px-2 py-1 rounded text-[11px] font-mono transition-all flex items-center gap-1 cursor-pointer border ${lineNumbersVisible ? 'text-indigo-300 bg-indigo-950/40 border-indigo-500/40 hover:bg-indigo-900/50' : 'text-slate-400 bg-slate-800/60 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/70'}" title="${lineNumbersVisible ? 'Ocultar números de linha' : 'Mostrar números de linha'}" aria-pressed="${lineNumbersVisible ? 'true' : 'false'}">
+        <button type="button" class="toggle-lines-btn px-2 py-1 rounded text-[11px] font-mono transition-all flex items-center gap-1 cursor-pointer border ${lineNumbersVisible ? 'text-indigo-300 bg-indigo-950/40 border-indigo-500/40 hover:bg-indigo-900/50' : 'text-slate-400 bg-slate-800/60 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/70'}" title="${lineNumbersVisible ? 'Ocultar números de linha' : 'Mostrar números de linha'}" aria-pressed="${lineNumbersVisible ? 'true' : 'false'}">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
           </svg>
           <span class="toggle-lines-label">${lineNumbersVisible ? 'Linhas: On' : 'Linhas: Off'}</span>
         </button>
-        <button class="copy-code-btn px-2.5 py-1 rounded text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-700/80 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-slate-800/60 border border-slate-700/50" title="Copiar para a área de transferência" aria-label="Copiar para a área de transferência">
+        <button type="button" class="copy-code-btn px-2.5 py-1 rounded text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-700/80 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-slate-800/60 border border-slate-700/50" title="Copiar código para a área de transferência" aria-label="Copy to Clipboard" data-testid="copy-code-btn">
           <svg class="w-3.5 h-3.5 text-slate-400 copy-icon transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path class="copy-icon-path" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
           </svg>
@@ -340,16 +358,11 @@ export function enhanceCodeBlocks(container: HTMLElement | null): void {
           }, 2000);
         };
 
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(codeText).then(handleSuccess).catch(() => {
-            // Fallback for document.execCommand if clipboard API fails
-            fallbackCopyText(codeText);
-            handleSuccess();
-          });
-        } else {
-          fallbackCopyText(codeText);
+        copyCodeToClipboard(codeText).then(() => {
           handleSuccess();
-        }
+        }).catch(() => {
+          handleSuccess();
+        });
       });
     }
 

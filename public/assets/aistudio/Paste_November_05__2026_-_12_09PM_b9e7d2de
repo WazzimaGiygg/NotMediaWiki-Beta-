@@ -1,0 +1,241 @@
+ [Firebase Cloud] 20 extensões sincronizadas no acesso ao Wiki.
+ [Firebase Cloud] 5 domínios permitidos carregados do Firestore.
+ Cross-Origin-Opener-Policy policy would block the window.closed call.
+ Cross-Origin-Opener-Policy policy would block the window.closed call.
+ Cross-Origin-Opener-Policy policy would block the window.close call.
+ Cross-Origin-Opener-Policy policy would block the window.close call.
+/api/v1/auth/users/upsert:1  Failed to load resource: the server responded with a status of 500 ()
+/api/v1/auth/users/upsert:1  Failed to load resource: the server responded with a status of 500 ()
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=FcHZlOrw6nSCwNFv76ylJn1iI3Ca6OId2gjHeNHHau6q2zLqLdVpzw&SID=3LD8s0T_MhclSjs-ILZVSg&RID=29921&AID=1296&zx=69ceclqufllt&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:21.507Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a78a transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=SXG-QLh5qcVRSF7QwuVVkrK6Y0ngHaKjNBdQtrhLskFF06ZaqnA0Gg&SID=Q8zTwPaz43b4_3nZRw8o_w&RID=17613&AID=0&zx=5ahnq5xk0s1v&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:24.891Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a78c transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=TwibTy9y1YXassEpeCp3A-ukkDM3bN4lRuP2mthZOmVtAhM3SgjQWA&SID=dAYpokuZ-PbCOIE5T9tKDA&RID=48890&AID=24&zx=w144w9rnw943&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:28.545Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a78d transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=Qh7Q2dEYyCvGjb6XpgpzDBs7YemG8xecJXYh-kzmDVm1wgau2XH1cA&SID=kFcUvnJdhhtvayrok8__Kg&RID=49710&AID=28&zx=9szu3sfz4hsc&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:31.215Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a78e transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=7JBd7SzkIlkFB-MBNw8JxMT-aWmqjy96rp0F9gDl0RmD8k9atan_kA&VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&RID=rpc&SID=cLvH_YcB611EHSgdZ8unFQ&AID=16&CI=1&TYPE=xmlhttp&zx=i23rkhpuoilg&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=7JBd7SzkIlkFB-MBNw8JxMT-aWmqjy96rp0F9gDl0RmD8k9atan_kA&SID=cLvH_YcB611EHSgdZ8unFQ&RID=71738&AID=14&zx=8cunvn95dj9&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:35.033Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a78f transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=OBhZxZSoltbdHp0QuRFnU83WxnPRRAGaARza85kPwEcLn3r4-rBxQw&SID=HYAogyRf7CwgXCPJNia1Ow&RID=39572&AID=0&zx=xi5qxl6pssxp&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:37.818Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a790 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=w9gNyiCnKLFotwL-pgNTgs_b88X22Av5y-b2wl2zT0BRMf2Nx9NsWg&SID=vuil4TMJ6-jTj9iLVKLYig&RID=74965&AID=25&zx=2p98gklvpn1g&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:41.238Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a791 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=VWa7jJf2e_REHlmFl0yXT-b4EAbwZnyiTpfr-dTrxTfigRjuS7NwFg&SID=wabZZTYOtP-D6My-C3TlFA&RID=96660&AID=15&zx=n2yzqpao508&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:44.927Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a792 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=zqyd4teJsp7Te3pyAGLXOHO0rf8y4GuVztDD3vJx7wF0yxgL19vQhw&SID=PpqDPS9fDplX25Hbek00pg&RID=89065&AID=22&zx=x2542mv08g8d&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:48.183Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a793 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=w8dkmZx3hyVKuYYE_QWeeG5izdNWVkqAQuHvfq4NcyxDGOVEL9vEOA&SID=2KhogZVwJ75Rvp6zcWYWcA&RID=97032&AID=21&zx=tt6w6n6itlgr&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:51.120Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a794 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=UzDiZEH3nZopi8qD2ABADxgXUnHAvrI38xJ9uUWK_8WXHyMhbXswng&SID=zmLZl1ySI34aVhuyxgWhRA&RID=47689&AID=0&zx=w8o0bsiwwr8&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:53.755Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a795 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=t5xk0AuuZKgjmBA7OWPw7i7MLcvRDmXeUro5uMzysjLEA25d69p9Vg&SID=YqJcz540mHZ_TlpHb-FanA&RID=96837&AID=31&zx=fuqlc3jyzapt&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:07:57.424Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a796 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=FHRhP7V0_39OABpsJ6m3QDGzpgBL-5xOUIJfyM-sgcyEOcLtLmpXBg&SID=E5imS5y9QgTHO01zmbKWLg&RID=75656&AID=0&zx=8ldcwo75y3h1&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:00.045Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a797 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=b7NSWwD1pig5hI38jfYD4x5CjVsi5T0h_qiy0UzcUlY5pEkFYw5-DA&SID=-3FH4FRf_R4Y8FNYYhqP0w&RID=39475&AID=0&zx=wf815zr4if9u&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:02.664Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a798 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=uiY-VoRQjz-VNUzv48NnLAWXizSvdA0rzxHkfVH5D0ZCRRImh5BQMg&SID=hyPMxTV9ADsdIOgQzEwW-Q&RID=11374&AID=22&zx=1e13xidng491&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:05.403Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a799 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=gGXBOr1bLbmNivjMNMLAncAAs0vhr9du31CrRcR5LrHJjcIreqBh_g&SID=dZ_aom0lmMXFxjFUzO-TuA&RID=32209&AID=0&zx=43xq5ezqt2&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:08.022Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a79a transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=IMNqW_326kx7IS0xSk08rCC0T6CxD17awlUYkYfJycsbYvJy6zwKrw&SID=eakxxHyeYePsE5HRHQok4w&RID=30725&AID=20&zx=7hdwmj6uhxxd&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:11.161Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a79b transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=Id1NMNgRcG3XeV1YaxYG1p1VvXFnDGZkX5IQq7FP7te4XkN1vkNAZg&SID=KfdwUs4AhDzirQGxBQNiLQ&RID=15532&AID=32&zx=3znycmpjtdlb&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:14.026Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a79c transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=R8IR_mw57XSehooevgexXhv_rHBBH3OmQ0I_ujKdfeh2M-qlu0jXBA&SID=FuS0NBCajjktSxkhl3EF-Q&RID=56923&AID=0&zx=b7eo9z5ivbl4&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:17.912Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a79d transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=R8IR_mw57XSehooevgexXhv_rHBBH3OmQ0I_ujKdfeh2M-qlu0jXBA&SID=FuS0NBCajjktSxkhl3EF-Q&RID=56911&AID=0&zx=dvtlw3dbvguv&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=-qvp4uBJQfaDPEIS7CrASNcXGYtCPfF6D4TH33XJVfK7ZUqfjirz2w&SID=gwHa7058dBHfhP_qwNv3MA&RID=79560&AID=0&zx=adex36nhb8no&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:20.627Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a79e transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=lIEk0lfEbTCLXsaS11CM9d1e5AlWB-8AiSSwcktJZ3GzBmIqKxVfPw&SID=OQTmma6cmx5cCzP9e8d1tQ&RID=45701&AID=0&zx=ouq0xeybjd08&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:23.752Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a79f transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=AO0eQaHMcudzQkH4thlXcmxXpYzVy13jrj0lgdoTqu5m-8Lsnw74oA&SID=3VVZUZHNdZgltRjkxUqjIw&RID=82504&AID=21&zx=pbkoxpo0zxr4&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:25.905Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a0 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=sL_-eLI68dVOAxsqAwkrDPapoIMlo83zZQWzhL2i2iKB66rYabRTYw&SID=NqfmpSf1eAOPJZVP71yTAQ&RID=40013&AID=0&zx=o3w4ih3thdah&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:28.956Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a1 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=e9as7tLBsWc72I3InFa-JtPvgA67vK9FixTRogLiUpsNnku3smn05w&SID=EZ_ifHCAkyejzBjxma9rKA&RID=46789&AID=13&zx=gpijpdjjclwd&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:31.243Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a2 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=nu68YNwAp1eAL8gsMJOZeQ062tM-vaa-gCi6FxDUJ2xcSs0pxWiXVg&SID=lBZlNeWiEevYkPgMSYpX6Q&RID=9756&AID=0&zx=meyut9tbs21t&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:33.746Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a3 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=zEHFKVFC-g7Q_9y4TouUiD3BKfkc8MUiQEG79wtb2eKzD3WNt6F-3A&SID=Cv5H004SNMYy0JvJvJ25zA&RID=24936&AID=22&zx=pxc1dc17b1j1&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:36.182Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a4 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=0faCkgVs2vSFpcq5zo36JMt3UO3IgUNFtFV1jx9DZbtypK0Itou9HA&SID=BF-mWNkgwCoHPM6yJNo2tw&RID=68484&AID=13&zx=rdmft4ppc8ky&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:38.868Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a5 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=doG22HKcmPG6Ys7cS8x7aq3WTrwERlQg8aw-oQV3IXc-QMokn0KbNw&SID=x-FQMDtO3qEbSgOP1iM9xw&RID=65561&AID=22&zx=rj8lxpb3dg5d&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:41.707Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a6 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=v_Grs2jRlNpb-DdLseIYMvNS0VpHIR8sK0MkO4c-6_Wa6bTbd2bX8Q&SID=64nHF1q58aSNxHqKuBnLRA&RID=99406&AID=13&zx=5c4fa23tfdxu&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:44.648Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a7 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=v_Grs2jRlNpb-DdLseIYMvNS0VpHIR8sK0MkO4c-6_Wa6bTbd2bX8Q&SID=64nHF1q58aSNxHqKuBnLRA&RID=99427&AID=13&zx=moebfuhlzdjd&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=lWhks5UhskO8PKdF7VZJm1gvYvy5F_dvc8mlwI6M3bdi9rmFMrWj1A&SID=jHf8SyDRiVcgm3xJ_xcDdA&RID=17251&AID=16&zx=ioddiiuk7t9w&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:47.321Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a8 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=dSwCrWDOM_VxjCXSeW4zaKMW0r_5dSlFmjDIaJskPbDDuO72vwq-gg&SID=sta1b9791QkKuPgmb988Bg&RID=41162&AID=0&zx=hgx4odf3lo01&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:49.898Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7a9 transport errored. Name: undefined Message: undefined
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=nzLzpMjmCc3DusehrLsrKjPqIwDU1LguIlfVVqN7lXF8QXYY33OYqg&SID=VHpXEAfHfszPKwMpA4pFkg&RID=19680&AID=14&zx=xeircwsvvcad&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+ [2026-11-05T15:08:53.398Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7aa transport errored. Name: undefined Message: undefined
+ Notice: Chat messages subscription error: 
+ Cross-Origin-Opener-Policy policy would block the window.closed call.
+ Cross-Origin-Opener-Policy policy would block the window.closed call.
+ Google Sign-In Error: 
+ Google Sign-in failed: 
+index-B5nN6WkC.js:9 Cross-Origin-Opener-Policy policy would block the window.closed call.
+e @ index-B5nN6WkC.js:9
+index-B5nN6WkC.js:9 Cross-Origin-Opener-Policy policy would block the window.closed call.
+e @ index-B5nN6WkC.js:9
+index-B5nN6WkC.js:9 Cross-Origin-Opener-Policy policy would block the window.close call.
+close @ index-B5nN6WkC.js:9
+index-B5nN6WkC.js:9 Cross-Origin-Opener-Policy policy would block the window.close call.
+close @ index-B5nN6WkC.js:9
+/api/v1/auth/users/upsert:1  Failed to load resource: the server responded with a status of 500 ()
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=LO5z3L6lPx3OoiDA8oOeuynrpE_OrvQYNN0PeSt2TwLttwGB8K30-A&SID=onR4ef9AtAEbWjywJE7Xzw&RID=89026&AID=24&zx=qr9kor6zdwg8&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+index-B5nN6WkC.js:9 [2026-11-05T15:09:11.116Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7ae transport errored. Name: undefined Message: undefined
+nr @ index-B5nN6WkC.js:9
+/api/v1/auth/users/upsert:1  Failed to load resource: the server responded with a status of 500 ()
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=2NCOLrVuKtU-ZCoEpvo1xyIbuDp49xMWdzSZdPC02v5maDO7nFUPGQ&SID=_0pyJa3j-PCaQ51EIbv9JQ&RID=95862&AID=15&zx=8ztz3f5zien0&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+index-B5nN6WkC.js:9 [2026-11-05T15:09:13.953Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7b0 transport errored. Name: undefined Message: undefined
+nr @ index-B5nN6WkC.js:9
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=99SnqWTepWFYmqmUsy9J31KUmhPiebYXgrXrukpMdk3PIwny8zOrQw&SID=Aj-cQ79B1tGOCSdCQ5iAYA&RID=68276&AID=0&zx=db0lystfau5w&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+index-B5nN6WkC.js:9 [2026-11-05T15:09:16.506Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7b1 transport errored. Name: undefined Message: undefined
+nr @ index-B5nN6WkC.js:9
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=FhU-Z9Jl3a6rsTPcvQTCxqY-Kel_UyREv1xUtdMOYfZcBjWbfnhlQw&SID=JOuwA2AOKVODFwjdYlPSGg&RID=99094&AID=18&zx=spzt99s84ij4&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+index-B5nN6WkC.js:9 [2026-11-05T15:09:19.092Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7b2 transport errored. Name: undefined Message: undefined
+nr @ index-B5nN6WkC.js:9
+firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=fnBvCq0wabbHWuU_KYBteT6_ooICaDFjmilzWjwUQnjEZSldlcrAXg&SID=_0sMOL2v1Grkp38JcXVZLQ&RID=34982&AID=14&zx=28v31wvhfoe9&t=1:1  Failed to load resource: the server responded with a status of 400 ()
+index-B5nN6WkC.js:9 [2026-11-05T15:09:21.915Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7b3 transport errored. Name: undefined Message: undefined
+nr @ index-B5nN6WkC.js:9
+index-B5nN6WkC.js:14  POST https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwzzm-ce3fc%2Fdatabases%2Fai-studio-88ce2285-e77c-419a-ac56-39b2ade858c5&gsessionid=Wl_Osx_3ApFyRmcFepZVhtRx7ZgOzYz9gwID8c-c3K7qFU99Ke7wNA&SID=4lGqftpOi3VjMkBXEgbFxw&RID=20250&AID=15&zx=9dzq2rokp5cz&t=1 net::ERR_ABORTED 400 (Bad Request)
+e.send @ index-B5nN6WkC.js:14
+e.ea @ index-B5nN6WkC.js:16
+ut @ index-B5nN6WkC.js:13
+lt @ index-B5nN6WkC.js:13
+kn @ index-B5nN6WkC.js:17
+e.Ea @ index-B5nN6WkC.js:17
+T @ index-B5nN6WkC.js:9
+Promise.then
+x @ index-B5nN6WkC.js:9
+Dn @ index-B5nN6WkC.js:17
+Ln @ index-B5nN6WkC.js:17
+at.Y @ index-B5nN6WkC.js:13
+at.ba @ index-B5nN6WkC.js:13
+Ce @ index-B5nN6WkC.js:9
+Se @ index-B5nN6WkC.js:9
+_n @ index-B5nN6WkC.js:16
+e.Xa @ index-B5nN6WkC.js:16
+e.Ca @ index-B5nN6WkC.js:16
+ln @ index-B5nN6WkC.js:15
+cn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Pa @ index-B5nN6WkC.js:14
+Promise.then
+e.send @ index-B5nN6WkC.js:14
+e.ea @ index-B5nN6WkC.js:16
+ut @ index-B5nN6WkC.js:13
+lt @ index-B5nN6WkC.js:13
+kn @ index-B5nN6WkC.js:17
+e.Ea @ index-B5nN6WkC.js:17
+T @ index-B5nN6WkC.js:9
+Promise.then
+x @ index-B5nN6WkC.js:9
+Dn @ index-B5nN6WkC.js:17
+Ln @ index-B5nN6WkC.js:17
+at.Y @ index-B5nN6WkC.js:13
+at.ba @ index-B5nN6WkC.js:13
+Ce @ index-B5nN6WkC.js:9
+Se @ index-B5nN6WkC.js:9
+_n @ index-B5nN6WkC.js:16
+e.Xa @ index-B5nN6WkC.js:16
+e.Ca @ index-B5nN6WkC.js:16
+ln @ index-B5nN6WkC.js:15
+cn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Pa @ index-B5nN6WkC.js:14
+index-B5nN6WkC.js:9 [2026-11-05T15:09:24.068Z]  @firebase/firestore: Firestore (13.0.0): WebChannelConnection RPC 'Listen' stream 0x87e0a7b4 transport errored. Name: undefined Message: undefined
+nr @ index-B5nN6WkC.js:9
+warn @ index-B5nN6WkC.js:9
+ku @ index-B5nN6WkC.js:33
+(anonymous) @ index-B5nN6WkC.js:33
+(anonymous) @ index-B5nN6WkC.js:33
+Ce @ index-B5nN6WkC.js:9
+Se @ index-B5nN6WkC.js:9
+Jn.pa @ index-B5nN6WkC.js:17
+zn @ index-B5nN6WkC.js:17
+Ln @ index-B5nN6WkC.js:17
+_t @ index-B5nN6WkC.js:14
+at.Y @ index-B5nN6WkC.js:13
+at.ba @ index-B5nN6WkC.js:13
+Ce @ index-B5nN6WkC.js:9
+Se @ index-B5nN6WkC.js:9
+_n @ index-B5nN6WkC.js:16
+e.Xa @ index-B5nN6WkC.js:16
+e.Ca @ index-B5nN6WkC.js:16
+ln @ index-B5nN6WkC.js:15
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Pa @ index-B5nN6WkC.js:14
+Promise.then
+e.send @ index-B5nN6WkC.js:14
+e.ea @ index-B5nN6WkC.js:16
+ut @ index-B5nN6WkC.js:13
+lt @ index-B5nN6WkC.js:13
+kn @ index-B5nN6WkC.js:17
+e.Ea @ index-B5nN6WkC.js:17
+T @ index-B5nN6WkC.js:9
+Promise.then
+x @ index-B5nN6WkC.js:9
+Dn @ index-B5nN6WkC.js:17
+Ln @ index-B5nN6WkC.js:17
+at.Y @ index-B5nN6WkC.js:13
+at.ba @ index-B5nN6WkC.js:13
+Ce @ index-B5nN6WkC.js:9
+Se @ index-B5nN6WkC.js:9
+_n @ index-B5nN6WkC.js:16
+e.Xa @ index-B5nN6WkC.js:16
+e.Ca @ index-B5nN6WkC.js:16
+ln @ index-B5nN6WkC.js:15
+cn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Pa @ index-B5nN6WkC.js:14
+Promise.then
+e.send @ index-B5nN6WkC.js:14
+e.ea @ index-B5nN6WkC.js:16
+ut @ index-B5nN6WkC.js:13
+lt @ index-B5nN6WkC.js:13
+kn @ index-B5nN6WkC.js:17
+e.Ea @ index-B5nN6WkC.js:17
+T @ index-B5nN6WkC.js:9
+Promise.then
+x @ index-B5nN6WkC.js:9
+Dn @ index-B5nN6WkC.js:17
+Ln @ index-B5nN6WkC.js:17
+at.Y @ index-B5nN6WkC.js:13
+at.ba @ index-B5nN6WkC.js:13
+Ce @ index-B5nN6WkC.js:9
+Se @ index-B5nN6WkC.js:9
+_n @ index-B5nN6WkC.js:16
+e.Xa @ index-B5nN6WkC.js:16
+e.Ca @ index-B5nN6WkC.js:16
+ln @ index-B5nN6WkC.js:15
+cn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Ma @ index-B5nN6WkC.js:14
+Promise.then
+sn @ index-B5nN6WkC.js:14
+e.Pa @ index-B5nN6WkC.js:14
