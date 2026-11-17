@@ -20,9 +20,13 @@ import {
   ThumbsDown,
   TrendingUp,
   CheckCircle2,
+  BookOpen,
 } from 'lucide-react';
 import { UserPage, UserSession, UserPageTalkPost, UserBoxItem, UserDailyChecklist, UserMonthlyPointsLedger, UserKarmaProfile } from '../types';
 import { api } from '../api';
+import { clientParsoid } from '../services/parsoid';
+import { buildInfoboxUserWikitext, hasInfoboxInWikitext } from '../utils/infoboxUser';
+import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
 import {
   fetchUserPageFromFirestore,
   ensureUserPageInFirestore,
@@ -52,7 +56,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
 }) => {
   const [userPage, setUserPage] = useState<UserPage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pagina' | 'userboxes' | 'discussao' | 'checklist' | 'karma'>('pagina');
+  const [activeTab, setActiveTab] = useState<'pagina' | 'tutorial' | 'userboxes' | 'discussao' | 'checklist' | 'karma'>('pagina');
   const [dailyChecklist, setDailyChecklist] = useState<UserDailyChecklist | null>(null);
   const [monthlyLedger, setMonthlyLedger] = useState<UserMonthlyPointsLedger | null>(null);
   const [karmaProfile, setKarmaProfile] = useState<UserKarmaProfile | null>(null);
@@ -61,6 +65,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedWikitext, setEditedWikitext] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Talk Page Message State
   const [newTalkText, setNewTalkText] = useState('');
@@ -146,6 +151,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
   const handleSavePage = async () => {
     if (!userPage) return;
     setIsSaving(true);
+    setStatusFeedback(null);
     try {
       const updated: UserPage = {
         ...userPage,
@@ -155,8 +161,9 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
       await saveUserPageToFirestore(updated);
       setUserPage(updated);
       setIsEditing(false);
+      setStatusFeedback({ type: 'success', text: 'Página de usuário atualizada com sucesso no Firestore!' });
     } catch (err: any) {
-      alert(`Falha ao salvar página de usuário: ${err.message}`);
+      setStatusFeedback({ type: 'error', text: `Falha ao salvar página de usuário: ${err.message}` });
     } finally {
       setIsSaving(false);
     }
@@ -167,6 +174,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
     if (!userPage || !newTalkText.trim() || !currentUser) return;
 
     setIsSendingTalk(true);
+    setStatusFeedback(null);
     const post: UserPageTalkPost = {
       id: `talk-${Date.now()}`,
       authorId: currentUser.id,
@@ -183,7 +191,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
       setUserPage(prev => (prev ? { ...prev, talkPosts: [...(prev.talkPosts || []), post] } : null));
       setNewTalkText('');
     } catch (err: any) {
-      alert(`Erro ao postar na discussão do usuário: ${err.message}`);
+      setStatusFeedback({ type: 'error', text: `Erro ao postar na discussão do usuário: ${err.message}` });
     } finally {
       setIsSendingTalk(false);
     }
@@ -390,32 +398,146 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
               {(monthlyLedger?.totalMonthlyPoints || 0).toFixed(2)} pts
             </span>
           </button>
+          <button
+            onClick={() => setActiveTab('tutorial')}
+            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'tutorial'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Tutorial de Infobox</span>
+          </button>
         </div>
 
-        {/* Tab 1: Wikitext Body */}
-        {activeTab === 'pagina' && (
-          <div className="space-y-4 pt-2">
-            {isEditing ? (
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Edição do Wikitext da Página de Usuário ({userPage?.slug})
-                </label>
-                <textarea
-                  rows={14}
-                  value={editedWikitext}
-                  onChange={e => setEditedWikitext(e.target.value)}
-                  className="w-full p-3 font-mono text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
-                />
-                <p className="text-[11px] text-slate-400">
-                  Dica: Utilize formatação MediaWiki clássica como == Seções ==, '''negrito''', [[Links Internos]] e
-                  listas numeradas.
-                </p>
-              </div>
-            ) : (
-              <div className="prose dark:prose-invert max-w-none text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-lg border border-slate-100 dark:border-slate-800">
-                {userPage?.wikitext || 'Página de usuário em criação...'}
-              </div>
-            )}
+        {statusFeedback && (
+          <div
+            className={`px-3 py-2 rounded-md border text-xs flex items-center justify-between gap-2 ${
+              statusFeedback.type === 'success'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+            }`}
+          >
+            <span>{statusFeedback.text}</span>
+            <button
+              type="button"
+              onClick={() => setStatusFeedback(null)}
+              className="text-[11px] underline cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
+
+        {/* Tab 1: Wikitext Body (Rendered via Parsoid with automatic {{Infobox user}}) */}
+        {activeTab === 'pagina' && (() => {
+          const generatedUserInfobox = buildInfoboxUserWikitext({
+            username: targetUser.username,
+            userTag: tagDisplay,
+            role: targetUser.role,
+            email: targetUser.email,
+            location: userPage?.location || 'Brasil',
+            joined: (userPage?.createdAt || new Date().toISOString()).split('T')[0],
+            photoURL: targetUser.photoURL || userPage?.photoURL,
+            caption: `${roleInfo.label} no NotMediaWiki`,
+          });
+
+          const rawSource = userPage?.wikitext || '';
+          const effectiveWikitext = hasInfoboxInWikitext(rawSource)
+            ? rawSource
+            : `${generatedUserInfobox}\n\n${rawSource}`;
+          const parsedHtml = clientParsoid.parse(effectiveWikitext, `${targetUser.username}${tagDisplay}`).html;
+
+          return (
+            <div className="space-y-4 pt-2">
+              {isEditing ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Edição do Wikitext da Página de Usuário ({userPage?.slug})
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {!hasInfoboxInWikitext(editedWikitext) && (
+                        <button
+                          type="button"
+                          onClick={() => setEditedWikitext(prev => `${generatedUserInfobox}\n\n${prev}`)}
+                          className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded text-[11px] font-semibold cursor-pointer"
+                        >
+                          + Inserir meu {'{{Infobox user}}'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('tutorial')}
+                        className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 hover:bg-slate-50 rounded text-[11px] font-medium flex items-center gap-1 cursor-pointer"
+                      >
+                        <BookOpen className="w-3 h-3" />
+                        <span>Ver Tutorial de Infobox</span>
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={16}
+                    value={editedWikitext}
+                    onChange={e => setEditedWikitext(e.target.value)}
+                    className="w-full p-3 font-mono text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Dica: Personalize os campos do seu <code className="font-mono">{'{{Infobox user}}'}</code> (nome, e-mail, localização, idiomas, especialidades, site, GitHub) ou consulte a aba <strong>Tutorial de Infobox</strong>.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    className="wiki-content max-w-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden"
+                    dangerouslySetInnerHTML={{ __html: parsedHtml }}
+                  />
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/60 px-3.5 py-2.5 rounded-lg">
+                    <span>
+                      Quer personalizar seu cartão de identificação <strong>Infobox de Usuário</strong> ou usar <strong>Infobox Software</strong> nos artigos?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('tutorial')}
+                      className="text-blue-700 dark:text-blue-300 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Abrir Tutorial de Infobox →</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Tab: Infobox Usage Tutorial */}
+        {activeTab === 'tutorial' && (
+          <div className="pt-2">
+            <InfoboxTutorialPanel
+              defaultTab="user"
+              sampleUserInfobox={buildInfoboxUserWikitext({
+                username: targetUser.username,
+                userTag: tagDisplay,
+                role: targetUser.role,
+                email: targetUser.email,
+                location: userPage?.location || 'Brasil',
+                joined: (userPage?.createdAt || new Date().toISOString()).split('T')[0],
+                photoURL: targetUser.photoURL || userPage?.photoURL,
+                caption: `${roleInfo.label} no NotMediaWiki`,
+              })}
+              onInsertSnippet={
+                canEdit
+                  ? snippet => {
+                      setEditedWikitext(prev => `${snippet}${prev}`);
+                      setIsEditing(true);
+                      setActiveTab('pagina');
+                    }
+                  : undefined
+              }
+              insertButtonLabel="Inserir na minha página"
+            />
           </div>
         )}
 

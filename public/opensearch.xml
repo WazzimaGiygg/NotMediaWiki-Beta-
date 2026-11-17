@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>NotMediaWiki</ShortName>
+  <Description>Pesquisar na enciclopédia oficial NotMediaWiki (core.wazzimagiygg.com) — Projetos WazzimaGiygg</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <OutputEncoding>UTF-8</OutputEncoding>
+  <Image width="64" height="64" type="image/png">https://core.wazzimagiygg.com/assets/aistudio/image_370f9ede.png</Image>
+  <Url type="text/html" method="get" template="https://core.wazzimagiygg.com/#/wiki/{searchTerms}"/>
+  <Url type="application/x-suggestions+json" method="get" template="https://core.wazzimagiygg.com/api/v1/search/query?q={searchTerms}"/>
+  <SyndicationRight>open</SyndicationRight>
+  <Language>pt-BR</Language>
+</OpenSearchDescription>

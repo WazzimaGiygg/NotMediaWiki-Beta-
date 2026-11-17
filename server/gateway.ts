@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { getGeminiClient } from './services/geminiClient';
 import { contentService } from './services/content';
 import { parsoidService } from './services/parsoid';
 import { revisionService } from './services/revisions';
@@ -627,10 +627,10 @@ gatewayRouter.post('/bots/verify-citations', async (req: Request, res: Response)
     return res.status(400).json({ error: 'Parâmetro wikitext é obrigatório' });
   }
 
-  // 4.1.1.WV.1: Análise com Gemini 3.8 Flash
+  // 4.1.1.WV.1: Análise com Gemini 4 Hydrogen
   try {
-    if (process.env.GEMINI_API_KEY) {
-      const ai = new GoogleGenAI();
+    const ai = getGeminiClient();
+    if (ai) {
       const prompt = `Você é o CitationBot (4.1.1.WV.1), um robô de checagem e integridade bibliográfica do NotMediaWiki.
 Analise o wikitext do artigo "${title || 'Artigo'}".
 Identifique afirmações factuais, estatísticas, datas históricas ou alegações sem fontes bibliográficas (<ref>).
@@ -655,7 +655,7 @@ Wikitext do artigo:
 ${wikitext.substring(0, 10000)}`;
 
       const geminiRes = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -668,14 +668,14 @@ ${wikitext.substring(0, 10000)}`;
           const parsed = JSON.parse(responseText);
           return res.json({
             success: true,
-            source: 'gemini-3.8-flash',
+            source: 'gemini-4-hydrogen',
             analysis: parsed,
           });
         } catch {
           // Fallback if not valid JSON
           return res.json({
             success: true,
-            source: 'gemini-3.8-flash',
+            source: 'gemini-4-hydrogen',
             analysis: {
               hasMissingCitations: true,
               confidenceScore: 85,
@@ -940,6 +940,73 @@ gatewayRouter.post('/notifications/push-article-edit', requireAuth, async (req: 
     // Gracefully fall back if server-side credentials aren't active in preview environment
     console.warn('[FCM Dispatch Notice]:', err?.message || err);
     return res.json({ success: true, dispatched: 0, mode: 'fallback_client_only' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 9. GOOGLE SEARCH GROUNDING (gemini-4-hydrogen + googleSearch tool)
+// -----------------------------------------------------------------------------
+gatewayRouter.post('/search/grounded', async (req: Request, res: Response) => {
+  const rawQuery = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+  if (!rawQuery || rawQuery.length < 2) {
+    return res.status(400).json({ error: 'Informe um termo de busca com pelo menos 2 caracteres.' });
+  }
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return res.status(503).json({
+      error: 'Serviço de busca fundamentada indisponível no momento (chave de API não configurada no servidor).',
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-4-hydrogen',
+      contents: `Forneça um resumo enciclopédico objetivo, preciso e atualizado em português sobre: "${rawQuery}".
+Se houver informações oficiais sobre core.wazzimagiygg.com, NotMediaWiki ou Projetos WazzimaGiygg relacionadas ao tema, destaque-as prioritariamente.
+Mantenha a resposta concisa (1 a 2 parágrafos curtos) e factual.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+    });
+
+    const groundingMetadata = response.candidates?.[0]?.groundingMetadata as any;
+    const rawChunks: any[] = groundingMetadata?.groundingChunks || [];
+    const seenUris = new Set<string>();
+    const sources: Array<{ title: string; uri: string; isPrimaryDomain: boolean }> = [];
+
+    for (const chunk of rawChunks) {
+      const uri = chunk?.web?.uri;
+      const title = chunk?.web?.title;
+      if (typeof uri === 'string' && uri.trim() && !seenUris.has(uri)) {
+        seenUris.add(uri);
+        const isPrimaryDomain = uri.toLowerCase().includes('core.wazzimagiygg.com') || uri.toLowerCase().includes('wazzimagiygg.com');
+        sources.push({
+          title: typeof title === 'string' && title.trim() ? title.trim() : uri,
+          uri,
+          isPrimaryDomain,
+        });
+      }
+    }
+
+    // Prioritize core.wazzimagiygg.com / wazzimagiygg.com citations first
+    sources.sort((a, b) => Number(b.isPrimaryDomain) - Number(a.isPrimaryDomain));
+
+    return res.json({
+      success: true,
+      query: rawQuery,
+      answer: response.text || '',
+      sources,
+      webSearchQueries: Array.isArray(groundingMetadata?.webSearchQueries)
+        ? groundingMetadata.webSearchQueries
+        : [],
+    });
+  } catch (err: any) {
+    const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 502;
+    console.warn('[Search Grounding Error]:', err?.message || err);
+    return res.status(status).json({
+      error: err?.message || 'Falha ao consultar dados atualizados via Google Search.',
+    });
   }
 });
 

@@ -45,6 +45,7 @@ export function createExpressApp() {
     process.env.APP_URL,
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://core.wazzimagiygg.com',
     'https://wazzimagiygg.com',
   ].filter(Boolean) as string[];
 
@@ -106,11 +107,57 @@ export function createExpressApp() {
   // 6. Mount MediaWiki Microservices API Gateway
   app.use('/api/v1', gatewayRouter);
 
+  // 6.1. Dynamic XML Sitemap for search engine crawlers anchored on core.wazzimagiygg.com
+  app.get('/sitemap.xml', (_req: Request, res: Response) => {
+    const baseUrl = 'https://core.wazzimagiygg.com';
+    const articles = contentService.getAllArticles();
+    const today = new Date().toISOString().split('T')[0];
+
+    const escapeXml = (str: string) =>
+      str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+
+    const staticUrls = [
+      { loc: `${baseUrl}/`, lastmod: today, changefreq: 'daily', priority: '1.0' },
+      { loc: `${baseUrl}/#/special/AllPages`, lastmod: today, changefreq: 'daily', priority: '0.9' },
+      { loc: `${baseUrl}/#/special/RecentChanges`, lastmod: today, changefreq: 'hourly', priority: '0.8' },
+      { loc: `${baseUrl}/#/special/Categories`, lastmod: today, changefreq: 'daily', priority: '0.8' },
+    ];
+
+    const articleUrls = articles.map(art => ({
+      loc: `${baseUrl}/#/wiki/${encodeURIComponent(art.slug)}`,
+      lastmod: (art.updatedAt || art.createdAt || new Date().toISOString()).split('T')[0],
+      changefreq: 'weekly',
+      priority: art.namespace === 0 ? '0.95' : '0.6',
+    }));
+
+    const allUrls = [...staticUrls, ...articleUrls];
+    const xml = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      ...allUrls.map(
+        u =>
+          `  <url>\n    <loc>${escapeXml(u.loc)}</loc>\n    <lastmod>${escapeXml(u.lastmod)}</lastmod>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`
+      ),
+      '</urlset>',
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('X-Robots-Tag', 'all');
+    res.status(200).send(xml);
+  });
+
   // 7. Health check endpoint
   app.get('/health', (_req: Request, res: Response) => {
     res.json({
       status: 'healthy',
       platform: 'NotMediaWiki-Node-Microservices',
+      canonicalDomain: 'core.wazzimagiygg.com',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
     });

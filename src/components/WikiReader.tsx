@@ -19,6 +19,13 @@ import { CategoryTreeView } from './CategoryTreeView';
 import { subscribeToFirestoreArticle, auth } from '../firebase';
 import { parseFootnoteTagsInHtml } from '../utils/citationParser';
 import { downloadArticlePdf } from '../utils/pdfDownloader';
+import {
+  applyDynamicSeoMeta,
+  buildArticleJsonLd,
+  buildArticleMetaDescription,
+  buildCanonicalUrl,
+  SITE_BRAND_NAME,
+} from '../utils/seoManager';
 
 interface WikiReaderProps {
   slug: string;
@@ -184,6 +191,20 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
     return () => { isMounted = false; };
   }, [slug]);
+
+  // Apply dynamic per-article SEO metadata & Schema.org JSON-LD for core.wazzimagiygg.com
+  useEffect(() => {
+    if (!data?.article) return;
+    const article = data.article;
+    applyDynamicSeoMeta({
+      title: `${article.title} — ${SITE_BRAND_NAME}`,
+      description: buildArticleMetaDescription(article),
+      canonicalUrl: buildCanonicalUrl(article.slug),
+      ogType: 'article',
+      keywords: [article.title, ...(article.categories || []), 'NotMediaWiki', 'core.wazzimagiygg.com', 'WazzimaGiygg'],
+      jsonLd: buildArticleJsonLd(article),
+    });
+  }, [data?.article]);
 
   // Real-time Firestore onSnapshot subscription for the currently viewed article
   useEffect(() => {

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2 } from 'lucide-react';
 import { Article, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
 import { syncMediaWikiToFirestore, recordDailyChecklistAction, loginWithGoogle, auth } from '../firebase';
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
+import { INFOBOX_SOFTWARE_FIELDS, buildInfoboxSoftwareWikitext } from '../utils/infoboxSoftware';
+import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
 
 interface WikiEditorProps {
   slug: string;
@@ -36,6 +38,35 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewTimeMs, setPreviewTimeMs] = useState<number>(0);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Infobox Software Builder Modal state
+  const [isInfoboxModalOpen, setIsInfoboxModalOpen] = useState(false);
+  const [infoboxModalTab, setInfoboxModalTab] = useState<'builder' | 'tutorial'>('builder');
+  const [infoboxValues, setInfoboxValues] = useState<Record<string, string>>({});
+
+  const openInfoboxBuilder = () => {
+    setInfoboxValues(prev => ({
+      name: prev.name || title,
+      developer: prev.developer || '',
+      author: prev.author || '',
+      maintainer: prev.maintainer || '',
+      email: prev.email || '',
+      latest_release_version: prev.latest_release_version || '',
+      initial_release: prev.initial_release || '',
+      status: prev.status || 'Ativo',
+      programming_language: prev.programming_language || '',
+      operating_system: prev.operating_system || '',
+      platform: prev.platform || '',
+      genre: prev.genre || '',
+      license: prev.license || '',
+      repository: prev.repository || '',
+      website: prev.website || '',
+      support_url: prev.support_url || '',
+      logo: prev.logo || '',
+      caption: prev.caption || '',
+    }));
+    setIsInfoboxModalOpen(true);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -385,10 +416,11 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => insertMarkup('{{Infobox software\n| name = \n| developer = \n}}\n')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px]"
+            onClick={openInfoboxBuilder}
+            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px] cursor-pointer"
+            title="Abrir assistente de Infobox software (nome, e-mail, desenvolvedor, versão, licença, links e mais)"
           >
-            {'{Infobox}'}
+            {'{Infobox software}'}
           </button>
           <button
             type="button"
@@ -532,6 +564,148 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           </div>
         </div>
       </form>
+
+      {/* Infobox Software Builder & Usage Reference Modal */}
+      {isInfoboxModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Assistente de Infobox software"
+        >
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FileCode2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Assistente de Uso — {'{{Infobox software}}'}
+                  </h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Preencha os campos desejados. Campos vazios são ocultados automaticamente na renderização do artigo; e-mails e URLs viram links clicáveis.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setInfoboxModalTab('builder')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold cursor-pointer ${
+                      infoboxModalTab === 'builder'
+                        ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Construtor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInfoboxModalTab('tutorial')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold cursor-pointer ${
+                      infoboxModalTab === 'tutorial'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Tutorial de Uso
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsInfoboxModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded cursor-pointer"
+                  aria-label="Fechar assistente"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              {infoboxModalTab === 'tutorial' ? (
+                <InfoboxTutorialPanel
+                  defaultTab="software"
+                  onInsertSnippet={snippet => {
+                    insertMarkup(snippet);
+                    setIsInfoboxModalOpen(false);
+                  }}
+                  insertButtonLabel="Inserir no editor"
+                />
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {INFOBOX_SOFTWARE_FIELDS.map(field => (
+                      <div key={field.key} className="space-y-1">
+                        <label className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-200">
+                          <span>{field.label}</span>
+                          <code className="text-[10px] font-mono text-slate-400">| {field.key}</code>
+                        </label>
+                        <input
+                          type={field.type || 'text'}
+                          value={infoboxValues[field.key] ?? ''}
+                          onChange={e =>
+                            setInfoboxValues(prev => ({
+                              ...prev,
+                              [field.key]: e.target.value,
+                            }))
+                          }
+                          placeholder={field.placeholder}
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                        />
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                          {field.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-1.5">
+                    <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      Pré-visualização do Wikitext gerado:
+                    </div>
+                    <pre className="text-[11px] font-mono text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                      {buildInfoboxSoftwareWikitext(infoboxValues)}
+                    </pre>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  insertMarkup(buildInfoboxSoftwareWikitext());
+                  setIsInfoboxModalOpen(false);
+                }}
+                className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750 rounded text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
+              >
+                Inserir modelo completo em branco
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsInfoboxModalOpen(false)}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 rounded text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertMarkup(buildInfoboxSoftwareWikitext(infoboxValues));
+                    setIsInfoboxModalOpen(false);
+                  }}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold cursor-pointer shadow-xs"
+                >
+                  Inserir Infobox no Wikitext
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

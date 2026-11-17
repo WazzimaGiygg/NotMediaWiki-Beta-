@@ -19,6 +19,7 @@ import { UserSession } from './types';
 import { api } from './api';
 import { wrapExternalUrl } from './utils/urlHelper';
 import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
+import { applyDefaultSiteSeo, applyDynamicSeoMeta, PRIMARY_CANONICAL_ORIGIN, SITE_BRAND_NAME } from './utils/seoManager';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
@@ -53,6 +54,30 @@ export default function App() {
 
     return () => unsubAuth();
   }, []);
+
+  // Keep canonical & SEO metadata synchronized for non-article views
+  useEffect(() => {
+    if (currentView === 'reader') return;
+    if (currentView === 'search' && searchQuery.trim()) {
+      applyDynamicSeoMeta({
+        title: `Busca: ${searchQuery.trim()} — ${SITE_BRAND_NAME}`,
+        description: `Resultados oficiais de busca para "${searchQuery.trim()}" na enciclopédia NotMediaWiki (core.wazzimagiygg.com).`,
+        canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/`,
+        ogType: 'website',
+        jsonLd: null,
+      });
+    } else if (currentView === 'special') {
+      applyDynamicSeoMeta({
+        title: `Especial:${specialPageName} — ${SITE_BRAND_NAME}`,
+        description: `Página especial ${specialPageName} do NotMediaWiki oficial (core.wazzimagiygg.com) — Projetos WazzimaGiygg.`,
+        canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/#/special/${encodeURIComponent(specialPageName)}`,
+        ogType: 'website',
+        jsonLd: null,
+      });
+    } else {
+      applyDefaultSiteSeo();
+    }
+  }, [currentView, searchQuery, specialPageName]);
 
   useEffect(() => {
     // Sincronização de extensões com o Firebase Firestore ao acessar o Wiki

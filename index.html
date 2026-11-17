@@ -1,19 +1,121 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NotMediaWiki | Projetos WazzimaGiygg</title>
-    <meta name="description" content="NotMediaWiki — Plataforma de microserviços e base de conhecimento colaborativa com integração ao Firebase Firestore." />
-    <meta property="og:title" content="NotMediaWiki | Projetos WazzimaGiygg" />
-    <meta property="og:description" content="NotMediaWiki — Plataforma de microserviços e base de conhecimento colaborativa com integração ao Firebase Firestore." />
+    <meta
+      name="description"
+      content="NotMediaWiki (core.wazzimagiygg.com) — Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com artigos verificados em tempo real."
+    />
+    <meta
+      name="keywords"
+      content="NotMediaWiki, core.wazzimagiygg.com, WazzimaGiygg, Projetos WazzimaGiygg, enciclopédia colaborativa, wiki oficial, base de conhecimento, wikitext"
+    />
+    <meta name="author" content="Projetos WazzimaGiygg" />
+    <meta name="application-name" content="NotMediaWiki" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="theme-color" content="#2563eb" />
+
+    <!-- Canonical & Internationalization -->
+    <link rel="canonical" href="https://core.wazzimagiygg.com/" />
+    <link rel="alternate" hreflang="pt-BR" href="https://core.wazzimagiygg.com/" />
+    <link rel="alternate" hreflang="x-default" href="https://core.wazzimagiygg.com/" />
+    <link
+      rel="search"
+      type="application/opensearchdescription+xml"
+      title="NotMediaWiki (core.wazzimagiygg.com)"
+      href="/opensearch.xml"
+    />
+
+    <!-- OpenGraph Social Cards -->
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/assets/aistudio/image_370f9ede.png" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="NotMediaWiki | Projetos WazzimaGiygg" />
+    <meta property="og:url" content="https://core.wazzimagiygg.com/" />
+    <meta property="og:title" content="NotMediaWiki | Projetos WazzimaGiygg" />
+    <meta
+      property="og:description"
+      content="NotMediaWiki (core.wazzimagiygg.com) — Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com artigos verificados em tempo real."
+    />
+    <meta property="og:image" content="https://core.wazzimagiygg.com/assets/aistudio/image_370f9ede.png" />
+    <meta property="og:image:alt" content="Logotipo oficial do NotMediaWiki — Projetos WazzimaGiygg" />
+
+    <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/assets/aistudio/image_370f9ede.png" />
+    <meta name="twitter:title" content="NotMediaWiki | Projetos WazzimaGiygg" />
+    <meta
+      name="twitter:description"
+      content="NotMediaWiki (core.wazzimagiygg.com) — Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com artigos verificados em tempo real."
+    />
+    <meta name="twitter:image" content="https://core.wazzimagiygg.com/assets/aistudio/image_370f9ede.png" />
+
     <link rel="icon" type="image/png" href="/assets/aistudio/image_370f9ede.png" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/assets/aistudio/image_370f9ede.png" />
+
+    <!-- Schema.org Structured Data (JSON-LD) for core.wazzimagiygg.com -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://core.wazzimagiygg.com/#organization",
+            "name": "Projetos WazzimaGiygg",
+            "alternateName": ["NotMediaWiki", "WazzimaGiygg", "core.wazzimagiygg.com"],
+            "url": "https://core.wazzimagiygg.com/",
+            "sameAs": [
+              "https://core.wazzimagiygg.com/",
+              "https://wazzimagiygg.com/"
+            ],
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://core.wazzimagiygg.com/assets/aistudio/image_370f9ede.png"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://core.wazzimagiygg.com/#website",
+            "name": "NotMediaWiki | Projetos WazzimaGiygg",
+            "alternateName": "core.wazzimagiygg.com",
+            "url": "https://core.wazzimagiygg.com/",
+            "inLanguage": "pt-BR",
+            "publisher": {
+              "@id": "https://core.wazzimagiygg.com/#organization"
+            },
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": "https://core.wazzimagiygg.com/#/wiki/{search_term_string}"
+              },
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://core.wazzimagiygg.com/#webapp",
+            "name": "NotMediaWiki | Projetos WazzimaGiygg",
+            "url": "https://core.wazzimagiygg.com/",
+            "applicationCategory": "ReferenceApplication",
+            "operatingSystem": "All",
+            "inLanguage": "pt-BR",
+            "description": "Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com artigos verificados, histórico de revisões e busca avançada em tempo real.",
+            "publisher": {
+              "@id": "https://core.wazzimagiygg.com/#organization"
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "BRL"
+            }
+          }
+        ]
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">

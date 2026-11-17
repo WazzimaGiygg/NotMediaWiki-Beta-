@@ -149,19 +149,98 @@ export class ParsoidService {
 
       ast.push({ type: 'Infobox', subType: type.trim(), rows });
 
+      const labelMap: Record<string, string> = {
+        developer: 'Desenvolvedor',
+        desenvolvedor: 'Desenvolvedor',
+        author: 'Autor',
+        autor: 'Autor',
+        maintainer: 'Mantenedor',
+        mantenedor: 'Mantenedor',
+        email: 'E-mail',
+        'e-mail': 'E-mail',
+        contact_email: 'E-mail de Contato',
+        initial_release: 'Lançamento Inicial',
+        latest_release_version: 'Versão Atual',
+        version: 'Versão',
+        versao: 'Versão',
+        latest_release_date: 'Data da Versão',
+        status: 'Status',
+        programming_language: 'Linguagem',
+        linguagem: 'Linguagem',
+        operating_system: 'Sistema Operacional',
+        sistema_operacional: 'Sistema Operacional',
+        platform: 'Plataforma',
+        plataforma: 'Plataforma',
+        genre: 'Categoria',
+        category: 'Categoria',
+        categoria: 'Categoria',
+        license: 'Licença',
+        licenca: 'Licença',
+        repository: 'Repositório',
+        repositorio: 'Repositório',
+        website: 'Site Oficial',
+        site: 'Site Oficial',
+        support_url: 'Suporte',
+        suporte: 'Suporte',
+        documentation: 'Documentação',
+        key_characteristics: 'Características',
+        tag: 'Tag Exclusiva',
+        role: 'Função',
+        papel: 'Função',
+        funcao: 'Função',
+        location: 'Localização',
+        localizacao: 'Localização',
+        languages: 'Idiomas',
+        idiomas: 'Idiomas',
+        joined: 'Membro desde',
+        membro_desde: 'Membro desde',
+        specialties: 'Especialidades',
+        especialidades: 'Especialidades',
+        interesses: 'Interesses',
+        github: 'GitHub',
+        social: 'Rede Social',
+      };
+
+      const titleRow = rows.find(r => ['name', 'nome'].includes(r.key.toLowerCase()) && r.value.trim());
+      const logoRow = rows.find(r => ['logo', 'image', 'imagem'].includes(r.key.toLowerCase()) && r.value.trim());
+      const captionRow = rows.find(r => ['caption', 'legenda'].includes(r.key.toLowerCase()) && r.value.trim());
+      const infoboxTitle = titleRow?.value.trim() || pageTitle;
+
       let infoboxHtml = `<aside class="infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 rounded p-4 text-sm shadow-sm">`;
-      infoboxHtml += `<div class="font-bold text-center text-base pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">${rows.find(r => r.key === 'name')?.value || pageTitle}</div>`;
-      
+      infoboxHtml += `<div class="font-bold text-center text-base pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">${infoboxTitle}</div>`;
+
+      if (logoRow && /^(https?:\/\/|\/assets\/)/i.test(logoRow.value.trim())) {
+        const safeSrc = logoRow.value.trim().replace(/"/g, '&quot;');
+        infoboxHtml += `<div class="mb-3 flex flex-col items-center gap-1.5 pb-2 border-b border-slate-200/70 dark:border-slate-800/70">`;
+        infoboxHtml += `<img src="${safeSrc}" alt="${infoboxTitle.replace(/"/g, '&quot;')}" class="max-h-24 w-auto object-contain rounded" />`;
+        if (captionRow) {
+          infoboxHtml += `<span class="text-[11px] text-slate-500 dark:text-slate-400 text-center">${captionRow.value.trim()}</span>`;
+        }
+        infoboxHtml += `</div>`;
+      }
+
       infoboxHtml += `<table class="w-full text-xs border-collapse">`;
       for (const row of rows) {
-        if (row.key === 'name') continue;
-        const prettyKey = row.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        // Clean inner formatting
-        const formattedVal = row.value
-          .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label || target)
-          .replace(/\[(https?:\/\/[^\s]+)\s+([^\]]+)\]/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline">$2</a>');
-        
-        infoboxHtml += `<tr class="border-b border-slate-100 dark:border-slate-800/60"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-1/3">${prettyKey}</th><td class="py-1.5 text-slate-600 dark:text-slate-400">${formattedVal}</td></tr>`;
+        const lowerKey = row.key.toLowerCase().replace(/\s+/g, '_');
+        if (['name', 'nome', 'logo', 'image', 'imagem', 'caption', 'legenda'].includes(lowerKey)) continue;
+        if (!row.value || !row.value.trim()) continue;
+
+        const prettyKey = labelMap[lowerKey] || row.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const trimmedVal = row.value.trim();
+        let formattedVal: string;
+
+        if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(trimmedVal)) {
+          formattedVal = `<a href="mailto:${trimmedVal}" class="text-blue-600 dark:text-blue-400 underline break-all">${trimmedVal}</a>`;
+        } else if (/^https?:\/\/[^\s<>"']+$/i.test(trimmedVal)) {
+          const display = trimmedVal.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+          formattedVal = `<a href="${trimmedVal}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline break-all">${display}</a>`;
+        } else {
+          formattedVal = trimmedVal
+            .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label || target)
+            .replace(/\[(https?:\/\/[^\s\]]+)\s+([^\]]+)\]/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline">$2</a>');
+        }
+
+        infoboxHtml += `<tr class="border-b border-slate-100 dark:border-slate-800/60"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-2/5">${prettyKey}</th><td class="py-1.5 text-slate-600 dark:text-slate-400 break-words">${formattedVal}</td></tr>`;
       }
       infoboxHtml += `</table></aside>`;
       return infoboxHtml;

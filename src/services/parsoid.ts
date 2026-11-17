@@ -1,4 +1,5 @@
 import { wrapExternalUrl } from '../utils/urlHelper';
+import { getInfoboxFieldLabel, formatInfoboxFieldValue } from '../utils/infoboxSoftware';
 
 export interface TocItem {
   id: string;
@@ -132,20 +133,34 @@ export class ClientParsoidService {
 
       ast.push({ type: 'Infobox', subType: type.trim(), rows });
 
+      const titleRow = rows.find(r => ['name', 'nome'].includes(r.key.toLowerCase()) && r.value.trim());
+      const logoRow = rows.find(r => ['logo', 'image', 'imagem'].includes(r.key.toLowerCase()) && r.value.trim());
+      const captionRow = rows.find(r => ['caption', 'legenda'].includes(r.key.toLowerCase()) && r.value.trim());
+      const infoboxTitle = titleRow?.value.trim() || pageTitle;
+
       let infoboxHtml = `<aside class="infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 rounded p-4 text-sm shadow-sm">`;
-      infoboxHtml += `<div class="font-bold text-center text-base pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">${rows.find(r => r.key === 'name')?.value || pageTitle}</div>`;
-      
+      infoboxHtml += `<div class="font-bold text-center text-base pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">${infoboxTitle}</div>`;
+
+      if (logoRow && /^(https?:\/\/|\/assets\/)/i.test(logoRow.value.trim())) {
+        const safeSrc = logoRow.value.trim().replace(/"/g, '&quot;');
+        infoboxHtml += `<div class="mb-3 flex flex-col items-center gap-1.5 pb-2 border-b border-slate-200/70 dark:border-slate-800/70">`;
+        infoboxHtml += `<img src="${safeSrc}" alt="${infoboxTitle.replace(/"/g, '&quot;')}" class="max-h-24 w-auto object-contain rounded" />`;
+        if (captionRow) {
+          infoboxHtml += `<span class="text-[11px] text-slate-500 dark:text-slate-400 text-center">${captionRow.value.trim()}</span>`;
+        }
+        infoboxHtml += `</div>`;
+      }
+
       infoboxHtml += `<table class="w-full text-xs border-collapse">`;
       for (const row of rows) {
-        if (row.key === 'name') continue;
-        const prettyKey = row.key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-        const formattedVal = row.value
-          .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_: string, target: string, label: string) => label || target)
-          .replace(/\[(https?:\/\/[^\s]+)\s+([^\]]+)\]/g, (_: string, url: string, text: string) => {
-            return `<a href="${wrapExternalUrl(url)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline">${text}</a>`;
-          });
-        
-        infoboxHtml += `<tr class="border-b border-slate-100 dark:border-slate-800/60"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-1/3">${prettyKey}</th><td class="py-1.5 text-slate-600 dark:text-slate-400">${formattedVal}</td></tr>`;
+        const lowerKey = row.key.toLowerCase();
+        if (['name', 'nome', 'logo', 'image', 'imagem', 'caption', 'legenda'].includes(lowerKey)) continue;
+        if (!row.value || !row.value.trim()) continue;
+
+        const prettyKey = getInfoboxFieldLabel(row.key);
+        const formattedVal = formatInfoboxFieldValue(row.key, row.value, wrapExternalUrl);
+
+        infoboxHtml += `<tr class="border-b border-slate-100 dark:border-slate-800/60"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-2/5">${prettyKey}</th><td class="py-1.5 text-slate-600 dark:text-slate-400 break-words">${formattedVal}</td></tr>`;
       }
       infoboxHtml += `</table></aside>`;
       return infoboxHtml;

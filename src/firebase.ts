@@ -29,6 +29,7 @@ import {
   FIREBASE_PROJECT_ID,
   getFirebaseConnectionInfo,
 } from './firebaseConfig';
+import { buildInitialUserPageWikitext } from './utils/infoboxUser';
 import {
   Article,
   Revision,
@@ -2306,7 +2307,7 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
       await setDoc(pageRef, userPage, { merge: true });
     }
   } else {
-    const initialWikitext = `== Apresentação ==\nOlá! Bem-vindo(a) à página oficial de usuário de '''${user.username}''' (${tag}) no NotMediaWiki.\n\n=== Sobre Mim ===\n* Membro da comunidade do NotMediaWiki com privilégios de '''${roleTitle}'''.\n* Dedicado à expansão e curadoria de conhecimento enciclopédico livre e transparente.\n\n=== Interesses Enciclopédicos ===\n# Tecnologia e Sistemas Distribuídos\n# Governança de Software Livre e Mídia Digital\n# Conformidade com LGPD e Marco Civil da Internet\n\n=== Contato ===\nPara entrar em contato, deixe uma mensagem na minha seção de discussão abaixo ou inicie um Chat em Tempo Real.`;
+    const initialWikitext = buildInitialUserPageWikitext(user, tag, roleTitle);
 
     const userboxes: UserBoxItem[] = [
       { id: 'ub-role', label: user.role.toUpperCase(), text: `Este usuário é ${roleTitle} da enciclopédia`, bgClass: 'bg-purple-100 dark:bg-purple-950/70', textClass: 'text-purple-800 dark:text-purple-300' },
@@ -2336,7 +2337,7 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
           authorUsername: 'NotMediaWiki Boas-Vindas',
           authorTag: '#0001',
           authorRole: 'bureaucrat',
-          text: `Olá ${user.username}! Seja muito bem-vindo(a) ao NotMediaWiki. Sua página de usuário pessoal foi criada automaticamente com sua tag exclusiva ${tag} para evitar duplicidades de nickname. Sinta-se à vontade para editar sua página e personalizar seus userboxes!`,
+          text: `Olá ${user.username}! Seja muito bem-vindo(a) ao NotMediaWiki. Sua página de usuário pessoal foi criada automaticamente com seu Infobox de Usuário e sua tag exclusiva ${tag}. Consulte a aba "Tutorial de Infobox" para personalizar seus dados e aprender a usar infoboxes nos artigos!`,
           timestamp: new Date().toISOString(),
         }
       ],

@@ -1,6 +1,6 @@
 {
   "name": "NotMediaWiki | Projetos WazzimaGiygg",
-  "description": "NotMediaWiki — Plataforma de microserviços e base de conhecimento colaborativa com integração ao Firebase Firestore.",
+  "description": "NotMediaWiki (core.wazzimagiygg.com) — Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com artigos verificados em tempo real.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

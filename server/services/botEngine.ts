@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { getGeminiClient } from './geminiClient';
 import { contentService } from './content';
 import { revisionService } from './revisions';
 import { UserRole } from './auth';
@@ -335,9 +335,9 @@ class BotEngine {
   // BOT 2: Citation Checker Engine (4.1.1.WV.1) via Gemini
   // ---------------------------------------------------------------------------
   public async checkCitations(title: string, wikitext: string) {
-    if (process.env.GEMINI_API_KEY) {
+    const ai = getGeminiClient();
+    if (ai) {
       try {
-        const ai = new GoogleGenAI();
         const prompt = `Você é o CitationBot (4.1.1.WV.1), um agente de integridade enciclopédica do NotMediaWiki.
 Analise detalhadamente o wikitext do verbete "${title}".
 Identifique se há afirmações estatísticas, numéricas, biográficas ou científicas sem fontes verificáveis (<ref>).
@@ -361,7 +361,7 @@ Wikitext:
 ${wikitext.substring(0, 12000)}`;
 
         const geminiRes = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-4-hydrogen',
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -370,7 +370,7 @@ ${wikitext.substring(0, 12000)}`;
 
         if (geminiRes.text) {
           const parsed = JSON.parse(geminiRes.text);
-          return { success: true, source: 'gemini-2.5-flash', analysis: parsed };
+          return { success: true, source: 'gemini-4-hydrogen', analysis: parsed };
         }
       } catch (err: any) {
         console.warn('[CitationBot Gemini Error]:', err.message);

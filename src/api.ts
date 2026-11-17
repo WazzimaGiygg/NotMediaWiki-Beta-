@@ -66,6 +66,7 @@ import {
   subscribeToUserKarmaProfile,
   fetchTopKarmaEditorsFromFirestore,
   calculateKarmaRank,
+  ensureUserPageInFirestore,
   auth,
 } from './firebase';
 
@@ -595,15 +596,16 @@ export const api = {
   },
 
   async createUser(data: { username: string; role: string; email?: string }): Promise<UserSession> {
+    let createdUser: UserSession;
     try {
       const resData = await safeFetch<{ user: UserSession }>(`${BASE_URL}/auth/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      return resData.user;
+      createdUser = resData.user;
     } catch {
-      return {
+      createdUser = {
         id: `user-${Date.now()}`,
         username: data.username,
         role: data.role as any,
@@ -611,6 +613,15 @@ export const api = {
         avatar: data.username.substring(0, 2).toUpperCase(),
         email: data.email,
       };
+    }
+
+    // Automatically initialize the new account's personal page with {{Infobox user}}
+    try {
+      const ensured = await ensureUserPageInFirestore(createdUser);
+      return ensured.user;
+    } catch (err) {
+      console.warn('Notice: Could not auto-create user page with Infobox on createUser:', err);
+      return createdUser;
     }
   },
 
@@ -907,5 +918,20 @@ export const api = {
   markAllNotificationsAsRead: (userId: string) => markAllNotificationsAsRead(userId),
   deleteNotification: (notificationId: string) => deleteNotification(notificationId),
   playNotificationChime: () => playNotificationChime(),
+
+  // Google Search Grounding (server-side gemini-4-hydrogen + googleSearch)
+  async querySearchGrounding(query: string): Promise<{
+    success: boolean;
+    query: string;
+    answer: string;
+    sources: Array<{ title: string; uri: string; isPrimaryDomain?: boolean }>;
+    webSearchQueries: string[];
+  }> {
+    return safeFetch(`${BASE_URL}/search/grounded`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+  },
 };
 

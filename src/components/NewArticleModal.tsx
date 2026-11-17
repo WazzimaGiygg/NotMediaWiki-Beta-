@@ -10,8 +10,40 @@ interface NewArticleModalProps {
 const TEMPLATES = [
   {
     id: 'standard',
-    label: 'Artigo Padrão com Infobox',
-    wikitext: `{{Infobox software\n| name = [Nome]\n| developer = [Desenvolvedor]\n| initial_release = 2026\n| programming_language = TypeScript / Node.js\n| license = MIT\n}}\n\n'''[Nome]''' é um software e projeto relevante.\n\n== Visão Geral ==\nEscreva a introdução e o resumo aqui...\n\n== Arquitetura ==\n* Componente 1: Descrição\n* Componente 2: Descrição\n\n== Referências ==\n<ref>Fonte bibliográfica inicial.</ref>\n\n[[Category:Software]]\n[[Category:Tecnologia]]\n`
+    label: 'Artigo Padrão com Infobox Software',
+    wikitext: `{{Infobox software
+| name = [Nome]
+| developer = [Desenvolvedor]
+| author = [Autor ou Equipe]
+| email = contato@wazzimagiygg.com
+| latest_release_version = 1.0.0
+| initial_release = 2026
+| status = Ativo
+| programming_language = TypeScript / Node.js
+| operating_system = Multiplataforma (Web, Linux, Windows, macOS)
+| platform = Web / Cloud
+| genre = Software / Aplicação Web
+| license = MIT
+| repository = https://github.com/wazzimagiygg
+| website = https://core.wazzimagiygg.com
+| support_url = https://support.wazzimagiygg.com/
+}}
+
+'''[Nome]''' é um software e projeto relevante.
+
+== Visão Geral ==
+Escreva a introdução e o resumo aqui...
+
+== Arquitetura ==
+* Componente 1: Descrição
+* Componente 2: Descrição
+
+== Referências ==
+<ref>Fonte bibliográfica inicial.</ref>
+
+[[Category:Software]]
+[[Category:Tecnologia]]
+`
   },
   {
     id: 'tech',
