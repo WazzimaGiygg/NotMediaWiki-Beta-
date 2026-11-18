@@ -9,6 +9,11 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { RelatedArticles } from './RelatedArticles';
 import { TableOfContents } from './TableOfContents';
 import { ArticleFootnotes } from './ArticleFootnotes';
+import {
+  RealtimeUpdateToast,
+  RealtimeToastPayload,
+  detectCollaboratorArticleUpdate,
+} from './RealtimeUpdateToast';
 import { WikiReportModal } from './WikiReportModal';
 import { ArticleRatingWidget } from './ArticleRatingWidget';
 import { ArticleFeedbackWidget } from './ArticleFeedbackWidget';
@@ -151,13 +156,9 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   // Real-time Firestore onSnapshot subscription state
   const loadedRevIdRef = useRef<string | null>(null);
   const loadedWikitextRef = useRef<string | null>(null);
-  const [realtimeToast, setRealtimeToast] = useState<{
-    visible: boolean;
-    editorName: string;
-    summary: string;
-    timestamp: string;
-    revId: string;
-  } | null>(null);
+  const loadedUpdatedAtRef = useRef<string | null>(null);
+  const dismissedRevIdRef = useRef<string | null>(null);
+  const [realtimeToast, setRealtimeToast] = useState<RealtimeToastPayload | null>(null);
   const [refreshingRealtime, setRefreshingRealtime] = useState<boolean>(false);
 
   useEffect(() => {
@@ -165,6 +166,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     setLoading(true);
     setError(null);
     setRealtimeToast(null);
+    dismissedRevIdRef.current = null;
 
     api.getRenderedArticle(slug)
       .then(res => {
@@ -172,6 +174,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           setData(res);
           loadedRevIdRef.current = res.article.latestRevisionId || null;
           loadedWikitextRef.current = res.article.wikitext || null;
+          loadedUpdatedAtRef.current = res.article.updatedAt || null;
           setLoading(false);
         }
       })
@@ -217,30 +220,20 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     const unsubscribe = subscribeToFirestoreArticle(
       slug,
       (liveArticle) => {
-        const currentRev = loadedRevIdRef.current;
-        const currentWikitext = loadedWikitextRef.current;
+        const update = detectCollaboratorArticleUpdate(
+          liveArticle as any,
+          {
+            revisionId: loadedRevIdRef.current,
+            wikitext: loadedWikitextRef.current,
+            updatedAt: loadedUpdatedAtRef.current,
+          },
+          currentUser,
+          auth.currentUser?.uid,
+          dismissedRevIdRef.current
+        );
 
-        // Verify if revision ID or wikitext content changed in Firestore
-        const isNewRev = liveArticle.latestRevisionId && currentRev && liveArticle.latestRevisionId !== currentRev;
-        const isNewWikitext = liveArticle.wikitext && currentWikitext && liveArticle.wikitext !== currentWikitext;
-
-        if (isNewRev || isNewWikitext) {
-          const editorUid = (liveArticle as any).authorUid || (liveArticle as any).author?.id;
-          const currentUserId = currentUser?.id || auth.currentUser?.uid;
-
-          // Alert only if the edit was made by another user while this page is open
-          if (!currentUserId || !editorUid || editorUid !== currentUserId) {
-            const editorName = (liveArticle as any).lastEditedBy || (liveArticle as any).author?.name || 'Outro usuário';
-            const summary = liveArticle.summary || (liveArticle as any).comment || 'Edição no conteúdo';
-
-            setRealtimeToast({
-              visible: true,
-              editorName,
-              summary,
-              timestamp: liveArticle.updatedAt || new Date().toISOString(),
-              revId: liveArticle.latestRevisionId || 'nova',
-            });
-          }
+        if (update) {
+          setRealtimeToast(update);
         }
       },
       (err) => {
@@ -253,6 +246,13 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     };
   }, [slug, currentUser]);
 
+  const handleDismissRealtimeToast = () => {
+    if (realtimeToast?.revId) {
+      dismissedRevIdRef.current = realtimeToast.revId;
+    }
+    setRealtimeToast(null);
+  };
+
   const handleReloadArticle = async () => {
     if (!slug) return;
     setRefreshingRealtime(true);
@@ -261,6 +261,8 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
       setData(res);
       loadedRevIdRef.current = res.article.latestRevisionId || null;
       loadedWikitextRef.current = res.article.wikitext || null;
+      loadedUpdatedAtRef.current = res.article.updatedAt || null;
+      dismissedRevIdRef.current = null;
       setRealtimeToast(null);
       api.getRevisions(slug).then(setRevisions).catch(console.error);
     } catch (err) {
@@ -1067,62 +1069,16 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     )}
 
     {/* Real-time Firestore onSnapshot update toast notification */}
-    {realtimeToast && realtimeToast.visible && (
-      <aside
-        role="alert"
-        aria-live="polite"
-        className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md w-full bg-white dark:bg-slate-900 border-2 border-blue-500/80 dark:border-blue-500/60 rounded-xl shadow-2xl p-4 transition-all duration-300 animate-slide-up"
-      >
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5">
-            <RefreshCw className={`w-4 h-4 ${refreshingRealtime ? 'animate-spin' : ''}`} />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                <span>Artigo editado por outro usuário</span>
-                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-              </h4>
-              <button
-                onClick={() => setRealtimeToast(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                aria-label="Fechar notificação"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-              O editor <strong>{realtimeToast.editorName}</strong> acabou de salvar alterações neste artigo.
-            </p>
-
-            {realtimeToast.summary && (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic mt-0.5 truncate">
-                "{realtimeToast.summary}"
-              </p>
-            )}
-
-            <div className="flex items-center gap-2 mt-3">
-              <button
-                onClick={handleReloadArticle}
-                disabled={refreshingRealtime}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshingRealtime ? 'animate-spin' : ''}`} />
-                <span>{refreshingRealtime ? 'Atualizando...' : 'Atualizar conteúdo'}</span>
-              </button>
-              <button
-                onClick={() => setRealtimeToast(null)}
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-              >
-                Continuar lendo
-              </button>
-            </div>
-          </div>
-        </div>
-      </aside>
-    )}
+    <RealtimeUpdateToast
+      toast={realtimeToast}
+      isRefreshing={refreshingRealtime}
+      onReload={handleReloadArticle}
+      onDismiss={handleDismissRealtimeToast}
+      onViewHistory={() => {
+        setRealtimeToast(null);
+        onHistory(slug);
+      }}
+    />
   </div>
 );
 };
