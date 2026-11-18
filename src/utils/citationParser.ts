@@ -1,6 +1,106 @@
 import { CitationFootnote, CitationBacklink, ParsoidAstReferenceNode } from '../types';
 import { wrapExternalUrl } from './urlHelper';
 
+export type CitationStyle = 'wiki' | 'abnt' | 'apa' | 'bibtex';
+
+export interface StructuredCitationFields {
+  type?: 'web' | 'book' | 'journal';
+  author?: string;
+  title?: string;
+  year?: string;
+  publisher?: string;
+  url?: string;
+  accessDate?: string;
+  name?: string;
+  group?: string;
+}
+
+/**
+ * Parses MediaWiki citation templates such as {{cite web|...}}, {{citar web|...}},
+ * {{cite book|...}}, {{citar livro|...}}, {{cite journal|...}}, {{citar periódico|...}}.
+ */
+export function parseCitationTemplate(rawText: string): StructuredCitationFields | null {
+  if (!rawText) return null;
+  const tplMatch = rawText.trim().match(/^\{\{\s*(cite|citar)\s+([^|}]+)([\s\S]*?)\}\}$/i);
+  if (!tplMatch) return null;
+
+  const rawType = tplMatch[2].trim().toLowerCase();
+  const paramsStr = tplMatch[3] || '';
+  const params: Record<string, string> = {};
+
+  paramsStr.split('|').forEach(part => {
+    const eqIdx = part.indexOf('=');
+    if (eqIdx > 0) {
+      const key = part.slice(0, eqIdx).trim().toLowerCase();
+      const val = part.slice(eqIdx + 1).trim();
+      if (key && val) {
+        params[key] = val;
+      }
+    }
+  });
+
+  const author =
+    params.author ||
+    params.autor ||
+    params.autores ||
+    (params.last && params.first ? `${params.last}, ${params.first}` : params.last) ||
+    (params.sobrenome && params.nome ? `${params.sobrenome}, ${params.nome}` : params.sobrenome);
+
+  const title = params.title || params.título || params.titulo;
+  const url = params.url || params.link;
+  const rawDate = params.year || params.ano || params.date || params.data;
+  const yearMatch = rawDate ? rawDate.match(/\b(19\d\d|20\d\d)\b/) : null;
+  const year = yearMatch ? yearMatch[1] : rawDate;
+  const publisher =
+    params.publisher ||
+    params.editora ||
+    params.website ||
+    params.site ||
+    params.publicado ||
+    params.obra ||
+    params.journal ||
+    params.periódico;
+  const accessDate = params['access-date'] || params.accessdate || params.acessodata;
+
+  let type: 'web' | 'book' | 'journal' = 'web';
+  if (rawType.includes('book') || rawType.includes('livro')) type = 'book';
+  else if (rawType.includes('journal') || rawType.includes('periódico') || rawType.includes('periodico') || rawType.includes('artigo')) type = 'journal';
+
+  return { type, author, title, year, publisher, url, accessDate };
+}
+
+/**
+ * Builds clean MediaWiki <ref> markup from structured bibliographic fields.
+ */
+export function buildRefMarkup(fields: StructuredCitationFields): string {
+  const attrs: string[] = [];
+  if (fields.name?.trim()) {
+    attrs.push(`name="${fields.name.trim().replace(/"/g, '')}"`);
+  }
+  if (fields.group?.trim()) {
+    attrs.push(`group="${fields.group.trim().replace(/"/g, '')}"`);
+  }
+  const attrStr = attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
+
+  const templateName =
+    fields.type === 'book'
+      ? 'citar livro'
+      : fields.type === 'journal'
+      ? 'citar periódico'
+      : 'citar web';
+
+  const parts: string[] = [];
+  if (fields.author?.trim()) parts.push(`autor=${fields.author.trim()}`);
+  if (fields.title?.trim()) parts.push(`título=${fields.title.trim()}`);
+  if (fields.publisher?.trim()) parts.push(`publicado=${fields.publisher.trim()}`);
+  if (fields.year?.trim()) parts.push(`data=${fields.year.trim()}`);
+  if (fields.url?.trim()) parts.push(`url=${fields.url.trim()}`);
+  if (fields.accessDate?.trim()) parts.push(`acessodata=${fields.accessDate.trim()}`);
+
+  const body = parts.length > 0 ? `{{${templateName}|${parts.join('|')}}}` : '';
+  return `<ref${attrStr}>${body}</ref>`;
+}
+
 /**
  * Parses and extracts metadata (URL, domain, author, year, title) from citation text.
  */
@@ -12,12 +112,18 @@ export function parseCitationMetadata(rawText: string): {
   year?: string;
   title?: string;
 } {
+  const tpl = parseCitationTemplate(rawText);
   const urls: string[] = [];
-  const urlRegex = /https?:\/\/[^\s\]"'>]+/gi;
+  if (tpl?.url) {
+    urls.push(tpl.url);
+  }
+  const urlRegex = /https?:\/\/[^\s\]"'>|}]+/gi;
   let match: RegExpExecArray | null;
 
   while ((match = urlRegex.exec(rawText)) !== null) {
-    urls.push(match[0]);
+    if (!urls.includes(match[0])) {
+      urls.push(match[0]);
+    }
   }
 
   const primaryUrl = urls[0];
@@ -33,24 +139,30 @@ export function parseCitationMetadata(rawText: string): {
   }
 
   // Extract year e.g. (2025) or 2024
-  let year: string | undefined;
-  const yearMatch = rawText.match(/\b(19\d\d|20\d\d)\b/);
-  if (yearMatch) {
-    year = yearMatch[1];
+  let year: string | undefined = tpl?.year;
+  if (!year) {
+    const yearMatch = rawText.match(/\b(19\d\d|20\d\d)\b/);
+    if (yearMatch) {
+      year = yearMatch[1];
+    }
   }
 
   // Extract author if formatted as: "LastName, FirstName" or "Author Name (Year)"
-  let author: string | undefined;
-  const authorMatch = rawText.match(/^([A-Z][a-zA-Z\s,.-]+?)(?:\s*\(\d{4}\)|\.|\:)/);
-  if (authorMatch && authorMatch[1].length > 2 && authorMatch[1].length < 60) {
-    author = authorMatch[1].trim();
+  let author: string | undefined = tpl?.author;
+  if (!author) {
+    const authorMatch = rawText.match(/^([A-ZÀ-Ý][a-zA-ZÀ-ÿ\s,.-]+?)(?:\s*\(\d{4}\)|\.|\:)/);
+    if (authorMatch && authorMatch[1].length > 2 && authorMatch[1].length < 60) {
+      author = authorMatch[1].trim();
+    }
   }
 
   // Extract title if enclosed in quotes: "Title" or “Title”
-  let title: string | undefined;
-  const titleMatch = rawText.match(/["“]([^"”]+)["”]/);
-  if (titleMatch) {
-    title = titleMatch[1].trim();
+  let title: string | undefined = tpl?.title;
+  if (!title) {
+    const titleMatch = rawText.match(/["“]([^"”]+)["”]/);
+    if (titleMatch) {
+      title = titleMatch[1].trim();
+    }
   }
 
   return { urls, primaryUrl, domain, author, year, title };
@@ -58,11 +170,46 @@ export function parseCitationMetadata(rawText: string): {
 
 /**
  * Formats raw citation wikitext/markup into accessible, safe HTML.
- * Handles external links [https://... Text], bare URLs, internal wiki links [[...]],
- * bold '''...''', and italics ''...''.
+ * Handles {{citar web|...}} / {{cite web|...}} templates, external links [https://... Text],
+ * bare URLs, internal wiki links [[...]], bold '''...''', and italics ''...''.
  */
 export function formatCitationHtml(rawText: string): string {
   if (!rawText) return '';
+
+  const tpl = parseCitationTemplate(rawText);
+  if (tpl) {
+    const segments: string[] = [];
+    if (tpl.author) {
+      segments.push(`<span class="font-medium text-slate-900 dark:text-slate-100">${tpl.author}</span>.`);
+    }
+    if (tpl.title) {
+      if (tpl.url) {
+        const safe = wrapExternalUrl(tpl.url);
+        segments.push(
+          `<a href="${safe}" target="_blank" rel="noopener noreferrer" class="citation-external-link text-blue-600 dark:text-blue-400 underline decoration-blue-300 dark:decoration-blue-600 underline-offset-2 inline-flex items-center gap-1 hover:text-blue-800 dark:hover:text-blue-300 font-medium">“${tpl.title}”<span class="text-[10px] text-slate-400 select-none">↗</span></a>.`
+        );
+      } else {
+        segments.push(`<em class="italic text-slate-800 dark:text-slate-200">“${tpl.title}”</em>.`);
+      }
+    } else if (tpl.url) {
+      const safe = wrapExternalUrl(tpl.url);
+      segments.push(
+        `<a href="${safe}" target="_blank" rel="noopener noreferrer" class="citation-external-link text-blue-600 dark:text-blue-400 underline decoration-blue-300 dark:decoration-blue-600 underline-offset-2 inline-flex items-center gap-1 hover:text-blue-800 dark:hover:text-blue-300">${tpl.url}<span class="text-[10px] text-slate-400 select-none">↗</span></a>.`
+      );
+    }
+    if (tpl.publisher) {
+      segments.push(`<span class="italic text-slate-700 dark:text-slate-300">${tpl.publisher}</span>.`);
+    }
+    if (tpl.year) {
+      segments.push(`<span>(${tpl.year})</span>.`);
+    }
+    if (tpl.accessDate) {
+      segments.push(`<span class="text-slate-500 dark:text-slate-400">Acesso em: ${tpl.accessDate}.</span>`);
+    }
+    if (segments.length > 0) {
+      return segments.join(' ');
+    }
+  }
 
   let text = rawText.trim();
 
@@ -339,17 +486,96 @@ export function extractCitationsFromWikitext(wikitext: string): {
 }
 
 /**
- * Helper to copy citation plain text to user clipboard.
+ * Strips MediaWiki markup from raw citation text for plain-text bibliographic exports.
  */
-export async function copyCitationToClipboard(citation: CitationFootnote): Promise<boolean> {
-  const plainText = citation.rawText
+export function stripCitationMarkup(rawText: string): string {
+  const tpl = parseCitationTemplate(rawText);
+  if (tpl) {
+    return [tpl.author, tpl.title, tpl.publisher, tpl.year ? `(${tpl.year})` : undefined, tpl.url]
+      .filter(Boolean)
+      .join('. ')
+      .replace(/\.\./g, '.')
+      .trim();
+  }
+
+  return rawText
     .replace(/\[https?:\/\/[^\s]+\s+([^\]]+)\]/g, '$1')
     .replace(/\[(https?:\/\/[^\s\]]+)\]/g, '$1')
     .replace(/\[\[(?:[^|\]]+\|)?([^\]]+)\]\]/g, '$1')
     .replace(/'''?/g, '')
     .trim();
+}
 
-  const formatted = `[${citation.index}] ${plainText}`;
+/**
+ * Formats citation according to ABNT NBR 6023 style.
+ */
+export function formatCitationAsAbnt(citation: CitationFootnote): string {
+  const tpl = parseCitationTemplate(citation.rawText);
+  const authorRaw = citation.author || tpl?.author;
+  const authorAbnt = authorRaw ? `${authorRaw.toUpperCase()}. ` : '';
+  const title = citation.title || tpl?.title || stripCitationMarkup(citation.rawText);
+  const publisher = tpl?.publisher ? `${tpl.publisher}, ` : '';
+  const year = citation.year || tpl?.year ? `${citation.year || tpl?.year}.` : 's.d.';
+  const urlPart = citation.primaryUrl ? ` Disponível em: <${citation.primaryUrl}>.` : '';
+  return `${authorAbnt}${title}. ${publisher}${year}${urlPart}`.replace(/\.\./g, '.').trim();
+}
+
+/**
+ * Formats citation according to APA 7th edition style.
+ */
+export function formatCitationAsApa(citation: CitationFootnote): string {
+  const tpl = parseCitationTemplate(citation.rawText);
+  const author = citation.author || tpl?.author || citation.domain || 'NotMediaWiki';
+  const year = citation.year || tpl?.year || 'n.d.';
+  const title = citation.title || tpl?.title || stripCitationMarkup(citation.rawText);
+  const publisher = tpl?.publisher ? ` ${tpl.publisher}.` : '';
+  const urlPart = citation.primaryUrl ? ` ${citation.primaryUrl}` : '';
+  return `${author} (${year}). ${title}.${publisher}${urlPart}`.replace(/\.\./g, '.').trim();
+}
+
+/**
+ * Formats citation into BibTeX format for academic citation exports.
+ */
+export function formatCitationAsBibtex(citation: CitationFootnote): string {
+  const tpl = parseCitationTemplate(citation.rawText);
+  const key = (citation.name || `ref${citation.index}`).replace(/[^a-zA-Z0-9]/g, '');
+  const title = citation.title || tpl?.title || stripCitationMarkup(citation.rawText).slice(0, 80).trim();
+  const year = citation.year || tpl?.year || new Date().getFullYear().toString();
+  const author = citation.author || tpl?.author || 'Wiki Contributor';
+  const publisher = tpl?.publisher ? `,\n  publisher = {${tpl.publisher}}` : '';
+  const url = citation.primaryUrl ? `,\n  url = {${citation.primaryUrl}}` : '';
+
+  return `@misc{${key},\n  author = {${author}},\n  title = {${title}},\n  year = {${year}}${publisher}${url}\n}`;
+}
+
+/**
+ * Formats a citation string according to the chosen bibliographic style.
+ */
+export function formatCitationByStyle(citation: CitationFootnote, style: CitationStyle): string {
+  if (style === 'abnt') return formatCitationAsAbnt(citation);
+  if (style === 'apa') return formatCitationAsApa(citation);
+  if (style === 'bibtex') return formatCitationAsBibtex(citation);
+  return `[${citation.index}] ${stripCitationMarkup(citation.rawText)}`;
+}
+
+/**
+ * Exports all citations from an article as a complete BibTeX (.bib) file string.
+ */
+export function exportCitationsAsBibtex(citations: CitationFootnote[], articleTitle?: string): string {
+  const header = articleTitle
+    ? `% Referências bibliográficas — ${articleTitle} (NotMediaWiki)\n% Gerado automaticamente a partir das tags <ref>\n\n`
+    : `% Referências bibliográficas — NotMediaWiki\n\n`;
+  return header + citations.map(c => formatCitationAsBibtex(c)).join('\n\n') + '\n';
+}
+
+/**
+ * Helper to copy citation text to user clipboard in the selected bibliographic style.
+ */
+export async function copyCitationToClipboard(
+  citation: CitationFootnote,
+  style: CitationStyle = 'wiki'
+): Promise<boolean> {
+  const formatted = formatCitationByStyle(citation, style);
 
   if (navigator?.clipboard?.writeText) {
     try {
@@ -360,19 +586,6 @@ export async function copyCitationToClipboard(citation: CitationFootnote): Promi
     }
   }
   return false;
-}
-
-/**
- * Formats citation into BibTeX format for academic citation exports.
- */
-export function formatCitationAsBibtex(citation: CitationFootnote): string {
-  const key = (citation.name || `ref${citation.index}`).replace(/[^a-zA-Z0-9]/g, '');
-  const title = citation.title || citation.rawText.slice(0, 50).trim();
-  const year = citation.year || new Date().getFullYear().toString();
-  const author = citation.author || 'Wiki Contributor';
-  const url = citation.primaryUrl ? `,\n  url = {${citation.primaryUrl}}` : '';
-
-  return `@misc{${key},\n  author = {${author}},\n  title = {${title}},\n  year = {${year}}${url}\n}`;
 }
 
 /**

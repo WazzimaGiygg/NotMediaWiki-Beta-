@@ -935,6 +935,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             ast={data?.ast}
             references={data?.references}
             wikitext={article.wikitext}
+            articleTitle={article.title}
             onNavigate={onNavigate}
           />
 

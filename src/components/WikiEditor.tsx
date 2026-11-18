@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2 } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen } from 'lucide-react';
 import { Article, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
@@ -7,6 +7,8 @@ import { syncMediaWikiToFirestore, recordDailyChecklistAction, loginWithGoogle, 
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
 import { INFOBOX_SOFTWARE_FIELDS, buildInfoboxSoftwareWikitext } from '../utils/infoboxSoftware';
 import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
+import { ArticleFootnotes } from './ArticleFootnotes';
+import { ReferenceManagerModal } from './ReferenceManagerModal';
 
 interface WikiEditorProps {
   slug: string;
@@ -43,6 +45,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [isInfoboxModalOpen, setIsInfoboxModalOpen] = useState(false);
   const [infoboxModalTab, setInfoboxModalTab] = useState<'builder' | 'tutorial'>('builder');
   const [infoboxValues, setInfoboxValues] = useState<Record<string, string>>({});
+
+  // Bibliographic Reference Manager Modal state
+  const [isRefModalOpen, setIsRefModalOpen] = useState(false);
 
   const openInfoboxBuilder = () => {
     setInfoboxValues(prev => ({
@@ -432,9 +437,19 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           <button
             type="button"
             onClick={() => insertMarkup('<ref>', '</ref>', 'Citation source')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px]"
+            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px] cursor-pointer"
+            title="Inserir tag <ref> simples"
           >
             &lt;ref&gt;
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsRefModalOpen(true)}
+            className="px-2 py-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded text-amber-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+            title="Abrir Gestor de Referências Bibliográficas (inserir ou reutilizar <ref>)"
+          >
+            <BookOpen className="w-3 h-3 text-amber-600" />
+            <span>Referências</span>
           </button>
           <button
             type="button"
@@ -496,11 +511,18 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               {previewError ? (
                 <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded">{previewError}</div>
               ) : (
-                <div
-                  ref={previewRef}
-                  className="wiki-content prose max-w-none text-slate-800 font-serif text-sm leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-slate-400 italic">No content to render</p>' }}
-                />
+                <>
+                  <div
+                    ref={previewRef}
+                    className="wiki-content prose max-w-none text-slate-800 font-serif text-sm leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-slate-400 italic">No content to render</p>' }}
+                  />
+                  <ArticleFootnotes
+                    wikitext={wikitext}
+                    articleTitle={title}
+                    className="mt-6 pt-4"
+                  />
+                </>
               )}
             </div>
           )}
@@ -706,6 +728,13 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           </div>
         </div>
       )}
+      {/* Bibliographic Reference Manager Modal */}
+      <ReferenceManagerModal
+        isOpen={isRefModalOpen}
+        wikitext={wikitext}
+        onClose={() => setIsRefModalOpen(false)}
+        onInsertMarkup={markup => insertMarkup(markup)}
+      />
     </div>
   );
 };
