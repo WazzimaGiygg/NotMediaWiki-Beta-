@@ -43,6 +43,8 @@ interface WikiReaderProps {
   onProgressChange?: (progress: number) => void;
   onOpenChecklist?: () => void;
   onRandomArticle?: () => void;
+  isZenMode?: boolean;
+  onZenModeChange?: (enabled: boolean) => void;
 }
 
 export const WikiReader: React.FC<WikiReaderProps> = ({
@@ -55,6 +57,8 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   onProgressChange,
   onOpenChecklist,
   onRandomArticle,
+  isZenMode: controlledZenMode,
+  onZenModeChange,
 }) => {
   const [data, setData] = useState<RenderedArticleResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -117,10 +121,28 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     }
   };
 
-  // Focus / Reader Mode state (Distraction-Free)
+  // Focus / Reader Mode & Zen Mode state (Distraction-Free)
   const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
+  const [internalZenMode, setInternalZenMode] = useState<boolean>(false);
+  const isZenActive = controlledZenMode !== undefined ? controlledZenMode : internalZenMode;
+  const setZenMode = (enabled: boolean) => {
+    setInternalZenMode(enabled);
+    if (enabled) {
+      setIsReaderMode(false);
+    }
+    onZenModeChange?.(enabled);
+  };
+  const isDistractionFree = isReaderMode || isZenActive;
+
   const [readerFontSize, setReaderFontSize] = useState<'base' | 'lg' | 'xl'>('lg');
   const [readerFontFamily, setReaderFontFamily] = useState<'serif' | 'sans'>('serif');
+
+  // Ensure Zen Mode resets on unmount so global Header/Footer are restored
+  useEffect(() => {
+    return () => {
+      onZenModeChange?.(false);
+    };
+  }, [onZenModeChange]);
 
   // PDF Generation & Download state
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
@@ -142,16 +164,20 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     }
   };
 
-  // Keyboard shortcut: Esc to exit reader mode
+  // Keyboard shortcut: Esc to exit Zen Mode or Reader Mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isReaderMode) {
-        setIsReaderMode(false);
+      if (e.key === 'Escape') {
+        if (isZenActive) {
+          setZenMode(false);
+        } else if (isReaderMode) {
+          setIsReaderMode(false);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isReaderMode]);
+  }, [isReaderMode, isZenActive]);
 
   // Real-time Firestore onSnapshot subscription state
   const loadedRevIdRef = useRef<string | null>(null);
@@ -476,13 +502,30 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   return (
     <div className="relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-      {/* Floating Sticky Reader Mode Header Controls when active */}
-      {isReaderMode && (
-        <div className="sticky top-3 z-30 mb-8 p-3.5 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-lg flex flex-wrap items-center justify-between gap-3 animate-fade-in transition-all">
+      {/* Minimal Floating Bar for Zen Mode or Reader Mode */}
+      {isDistractionFree && (
+        <div
+          data-testid={isZenActive ? 'zen-mode-bar' : 'reader-mode-bar'}
+          className={`sticky top-3 z-30 mb-8 px-4 py-2.5 rounded-xl backdrop-blur-md border flex flex-wrap items-center justify-between gap-3 transition-all ${
+            isZenActive
+              ? 'max-w-[68ch] mx-auto bg-white/85 dark:bg-slate-900/85 border-slate-200/70 dark:border-slate-800/70 shadow-sm'
+              : 'bg-white/95 dark:bg-slate-900/95 border-slate-200 dark:border-slate-800 shadow-lg'
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800/60">
-              <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Modo de Leitura Focado</span>
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                isZenActive
+                  ? 'bg-indigo-50/90 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800/60'
+                  : 'bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+              }`}
+            >
+              {isZenActive ? (
+                <Maximize2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              ) : (
+                <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <span>{isZenActive ? 'Modo Zen' : 'Modo de Leitura Focado'}</span>
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
               {wordCount.toLocaleString()} palavras · ~{readingTimeMin} min de leitura
@@ -553,36 +596,39 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               </button>
             </div>
 
-            {/* Download PDF button in reader mode */}
-            <button
-              onClick={handleDownloadPdf}
-              disabled={isGeneratingPdf}
-              className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-              title="Baixar artigo em PDF"
-            >
-              {isGeneratingPdf ? (
-                <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-              )}
-              <span className="hidden sm:inline">{isGeneratingPdf ? 'Baixando...' : 'PDF'}</span>
-            </button>
+            {/* Download PDF button in reader mode (hidden in Zen Mode to keep chrome minimal) */}
+            {!isZenActive && (
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+                className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Baixar artigo em PDF"
+              >
+                {isGeneratingPdf ? (
+                  <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+                )}
+                <span className="hidden sm:inline">{isGeneratingPdf ? 'Baixando...' : 'PDF'}</span>
+              </button>
+            )}
 
-            {/* Exit Reader Mode */}
+            {/* Exit Zen / Reader Mode */}
             <button
-              onClick={() => setIsReaderMode(false)}
+              onClick={() => (isZenActive ? setZenMode(false) : setIsReaderMode(false))}
+              data-testid={isZenActive ? 'exit-zen-mode-btn' : 'exit-reader-mode-btn'}
               className="px-3 py-1.5 text-xs font-semibold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-              title="Sair do Modo de Leitura (Esc)"
+              title={isZenActive ? 'Sair do Modo Zen (Esc)' : 'Sair do Modo de Leitura (Esc)'}
             >
               <Minimize2 className="w-3.5 h-3.5" />
-              <span>Sair (Esc)</span>
+              <span>{isZenActive ? 'Sair do Modo Zen' : 'Sair (Esc)'}</span>
             </button>
           </div>
         </div>
       )}
 
       {/* SEO Breadcrumbs Navigation at the top of WikiReader */}
-      {!isReaderMode && (
+      {!isDistractionFree && (
         <Breadcrumbs
           article={article}
           categories={categories && categories.length > 0 ? categories : article.categories}
@@ -592,7 +638,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
       )}
 
       {/* Article Sub-header Tabs & Action Bar */}
-      {!isReaderMode && (
+      {!isDistractionFree && (
         <div className="border-b border-slate-200 dark:border-slate-800 pb-2 mb-6 flex flex-wrap items-center justify-between gap-4">
           {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
           <div className="flex items-center gap-1">
@@ -622,7 +668,17 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           </div>
 
           {/* Action Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setZenMode(true)}
+              data-testid="zen-mode-btn"
+              className="px-3 py-1.5 text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Ativar Modo Zen (oculta cabeçalho global, barras laterais e rodapés, focando apenas no texto)"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Modo Zen</span>
+            </button>
             <button
               onClick={() => setIsReaderMode(true)}
               className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
@@ -710,9 +766,17 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         </div>
       )}
 
-      <div className={isReaderMode ? "max-w-3xl mx-auto py-2" : "grid grid-cols-1 lg:grid-cols-12 gap-8"}>
-        {/* Left Column: Article Directory / Quick Switcher (Hidden in Reader Mode) */}
-        {!isReaderMode && (
+      <div
+        className={
+          isZenActive
+            ? 'max-w-[68ch] mx-auto py-4 sm:py-8'
+            : isReaderMode
+            ? 'max-w-3xl mx-auto py-2'
+            : 'grid grid-cols-1 lg:grid-cols-12 gap-8'
+        }
+      >
+        {/* Left Column: Article Directory / Quick Switcher (Hidden in Zen/Reader Mode) */}
+        {!isDistractionFree && (
           <div className="hidden lg:block lg:col-span-3 space-y-6">
           {/* Dynamic Sticky Table of Contents Sidebar Component */}
           <TableOfContents
@@ -813,11 +877,11 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         )}
 
         {/* Right / Main Column: Article Content */}
-        <main className={isReaderMode ? "w-full" : "lg:col-span-9"}>
+        <main className={isDistractionFree ? "w-full" : "lg:col-span-9"}>
           {/* Article Title */}
-          <div className="border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
+          <div className={`border-b border-slate-200 dark:border-slate-800 pb-3 ${isZenActive ? 'mb-8' : 'mb-4'}`}>
             {/* Subpage Breadcrumbs Hierarchy */}
-            {breadcrumbs.length > 0 && (
+            {!isZenActive && breadcrumbs.length > 0 && (
               <nav aria-label="Subpáginas" className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5 flex-wrap font-sans">
                 <span className="text-slate-400 dark:text-slate-500 font-medium">&lt;</span>
                 {breadcrumbs.map((crumb, idx) => (
@@ -834,58 +898,64 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               </nav>
             )}
 
-            <h1 className="text-3xl font-serif font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center justify-between">
+            <h1
+              className={`${
+                isZenActive ? 'text-4xl sm:text-[2.6rem] leading-tight' : 'text-3xl'
+              } font-serif font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center justify-between`}
+            >
               <span>{article.title}</span>
-              {article.isProtected && (
+              {!isZenActive && article.isProtected && (
                 <span className="text-xs font-sans font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 flex items-center gap-1">
                   <Shield className="w-3 h-3 text-amber-600 dark:text-amber-400" /> Protected
                 </span>
               )}
             </h1>
 
-            {/* Zero-Pill Unboxed Metadata (strict adherence to frontend-design constitution) */}
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-2 font-sans">
-              <span>Wikipedia, the free encyclopedia</span>
-              <span aria-hidden="true">·</span>
-              <span>Namespace {article.namespace === 0 ? 'Main' : article.namespace === 1 ? 'Talk' : article.namespace}</span>
-              <span aria-hidden="true">·</span>
-              <span>{(article.views ?? 0).toLocaleString()} views</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5" title="Total word count and estimated reading time">
-                <FileText className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                <span>{wordCount.toLocaleString()} words</span>
-                <span className="text-slate-400 dark:text-slate-500 font-normal">({readingTimeMin} min read)</span>
-              </span>
-              <span aria-hidden="true">·</span>
-              <button
-                onClick={() => onHistory(slug)}
-                className="hover:underline text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 font-mono cursor-pointer transition-colors"
-                title="Ver histórico de edições deste artigo"
-              >
-                <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                <span>{revisions.length} {revisions.length === 1 ? 'edição' : 'edições'}</span>
-              </button>
-              {revisions[0]?.author && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <button
-                    onClick={() => onNavigate(`Usuario:${revisions[0].author.username || revisions[0].author.name}`)}
-                    className="hover:underline text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 font-sans cursor-pointer transition-colors"
-                    title={`Ver perfil e Karma de ${revisions[0].author.name}`}
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    <span>Último editor: <strong>{revisions[0].author.name}</strong></span>
-                  </button>
-                </>
-              )}
-              <span aria-hidden="true">·</span>
-              <span className="text-emerald-700 dark:text-emerald-400 font-mono">Parsoid: {parseTimeMs}ms</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono text-slate-400 dark:text-slate-500">rev: {article.latestRevisionId}</span>
-            </div>
+            {/* Zero-Pill Unboxed Metadata (Hidden in Zen Mode for pure focus) */}
+            {!isZenActive && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-2 font-sans">
+                <span>Wikipedia, the free encyclopedia</span>
+                <span aria-hidden="true">·</span>
+                <span>Namespace {article.namespace === 0 ? 'Main' : article.namespace === 1 ? 'Talk' : article.namespace}</span>
+                <span aria-hidden="true">·</span>
+                <span>{(article.views ?? 0).toLocaleString()} views</span>
+                <span aria-hidden="true">·</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5" title="Total word count and estimated reading time">
+                  <FileText className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                  <span>{wordCount.toLocaleString()} words</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-normal">({readingTimeMin} min read)</span>
+                </span>
+                <span aria-hidden="true">·</span>
+                <button
+                  onClick={() => onHistory(slug)}
+                  className="hover:underline text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 font-mono cursor-pointer transition-colors"
+                  title="Ver histórico de edições deste artigo"
+                >
+                  <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                  <span>{revisions.length} {revisions.length === 1 ? 'edição' : 'edições'}</span>
+                </button>
+                {revisions[0]?.author && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button
+                      onClick={() => onNavigate(`Usuario:${revisions[0].author.username || revisions[0].author.name}`)}
+                      className="hover:underline text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 font-sans cursor-pointer transition-colors"
+                      title={`Ver perfil e Karma de ${revisions[0].author.name}`}
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span>Último editor: <strong>{revisions[0].author.name}</strong></span>
+                    </button>
+                  </>
+                )}
+                <span aria-hidden="true">·</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-mono">Parsoid: {parseTimeMs}ms</span>
+                <span aria-hidden="true">·</span>
+                <span className="font-mono text-slate-400 dark:text-slate-500">rev: {article.latestRevisionId}</span>
+              </div>
+            )}
 
             {/* BLP Ethics Council Compliance Badge & Trigger (Standard mode only) */}
-            {!isReaderMode && (
+            {!isDistractionFree && (
               <div className="mt-3 p-2.5 rounded-lg bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-purple-900 dark:text-purple-300">
                 <div className="flex items-center gap-2">
                   <HeartHandshake className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
@@ -903,21 +973,25 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             )}
           </div>
 
-          {/* Collapsible Inline TOC for mobile/tablet viewports and Reader Mode */}
-          <TableOfContents
-            contentRef={contentRef}
-            html={renderedHtml || html}
-            initialToc={toc}
-            variant="inline"
-            defaultOpen={false}
-            className={isReaderMode ? 'mb-6' : 'mb-6 lg:hidden'}
-          />
+          {/* Collapsible Inline TOC for mobile/tablet viewports and Reader Mode (Hidden in Zen Mode) */}
+          {!isZenActive && (
+            <TableOfContents
+              contentRef={contentRef}
+              html={renderedHtml || html}
+              initialToc={toc}
+              variant="inline"
+              defaultOpen={false}
+              className={isReaderMode ? 'mb-6' : 'mb-6 lg:hidden'}
+            />
+          )}
 
           {/* Rendered HTML Container */}
           <article
             id="wiki-article-container"
             ref={contentRef}
             className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 ${
+              isZenActive ? 'zen-mode-article' : ''
+            } ${
               readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
             } ${
               readerFontSize === 'base'
@@ -930,36 +1004,46 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
 
-          {/* Numbered Citations & Footnotes Component parsed from Parsoid AST (Preserved in Reader Mode) */}
-          <ArticleFootnotes
-            ast={data?.ast}
-            references={data?.references}
-            wikitext={article.wikitext}
-            articleTitle={article.title}
-            onNavigate={onNavigate}
-          />
+          {/* Numbered Citations & Footnotes Component parsed from Parsoid AST (Hidden in Zen Mode) */}
+          {!isZenActive && (
+            <ArticleFootnotes
+              ast={data?.ast}
+              references={data?.references}
+              wikitext={article.wikitext}
+              articleTitle={article.title}
+              onNavigate={onNavigate}
+            />
+          )}
 
-          {/* Reader Mode End Banner & Quick Exit Button */}
-          {isReaderMode && (
-            <div className="mt-12 py-8 border-t border-slate-200 dark:border-slate-800 text-center space-y-3">
+          {/* Reader Mode / Zen Mode End Banner & Quick Exit Button */}
+          {isDistractionFree && (
+            <div className="mt-12 py-8 border-t border-slate-200/70 dark:border-slate-800/70 text-center space-y-3">
               <p className="text-sm text-slate-500 dark:text-slate-400 font-serif italic">
                 Fim do artigo · {wordCount.toLocaleString()} palavras lidas
               </p>
               <button
                 onClick={() => {
-                  setIsReaderMode(false);
+                  if (isZenActive) {
+                    setZenMode(false);
+                  } else {
+                    setIsReaderMode(false);
+                  }
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
                 className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg shadow-sm transition-colors cursor-pointer"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
-                <span>Sair do Modo de Leitura e voltar à visão padrão</span>
+                <span>
+                  {isZenActive
+                    ? 'Sair do Modo Zen e voltar à visão padrão'
+                    : 'Sair do Modo de Leitura e voltar à visão padrão'}
+                </span>
               </button>
             </div>
           )}
 
           {/* Article Voting & Feedback Component (Standard mode only) */}
-          {!isReaderMode && (
+          {!isDistractionFree && (
             <ArticleFeedbackWidget
               articleSlug={slug}
               articleTitle={article.title}
@@ -971,7 +1055,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* 3.05.8.b.c - Article Evaluation Widget (Daily Checklist Mission +1.00 pt) (Standard mode only) */}
-          {!isReaderMode && (
+          {!isDistractionFree && (
             <ArticleRatingWidget
               articleSlug={slug}
               articleTitle={article.title}
@@ -981,7 +1065,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* Article Categories & Interactive Filter UI Component (Standard mode only) */}
-          {!isReaderMode && (
+          {!isDistractionFree && (
             <ArticleCategories
               categories={categories && categories.length > 0 ? categories : (article.categories || [])}
               allArticles={allArticles}
@@ -991,7 +1075,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* Semantic MediaWiki & Cargo Structured Factbox (Standard mode only) */}
-          {!isReaderMode && semanticData.facts && semanticData.facts.length > 0 && (
+          {!isDistractionFree && semanticData.facts && semanticData.facts.length > 0 && (
             <SemanticFactbox
               facts={semanticData.facts}
               articleTitle={article.title}
@@ -1000,7 +1084,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* Canonical MediaWiki CategoryTree (Embedded for Namespace 14 - Categoria) (Standard mode only) */}
-          {!isReaderMode && parsedTitle.namespaceId === 14 && (
+          {!isDistractionFree && parsedTitle.namespaceId === 14 && (
             <div className="mt-8 border border-slate-200 dark:border-slate-800 rounded-lg p-5 bg-white dark:bg-slate-900 shadow-xs">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <FolderTree className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -1018,7 +1102,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* Related Articles Component (Visible on mobile/tablet viewports where sidebar is hidden) (Standard mode only) */}
-          {!isReaderMode && (
+          {!isDistractionFree && (
             <RelatedArticles
               currentSlug={slug}
               currentArticle={article}
@@ -1031,7 +1115,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* Microservices Execution & Article Reader Footer (Standard mode only) */}
-          {!isReaderMode && (
+          {!isDistractionFree && (
             <div className="mt-8 p-4 rounded-lg bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-medium font-sans shadow-xs" title="Total de palavras no artigo">

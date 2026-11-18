@@ -27,6 +27,31 @@
   margin-bottom: 1.15rem;
 }
 
+/* Optimized Distraction-Free Typography for Modo Zen */
+.wiki-content.zen-mode-article {
+  line-height: 1.9;
+  letter-spacing: 0.005em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wiki-content.zen-mode-article p {
+  margin-bottom: 1.45rem;
+}
+
+.wiki-content.zen-mode-article h2 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  letter-spacing: -0.015em;
+}
+
+.wiki-content.zen-mode-article h3 {
+  margin-top: 1.85rem;
+  margin-bottom: 0.65rem;
+  font-size: 1.2rem;
+}
+
 .wiki-content h2 {
   font-family: 'Inter', sans-serif;
   font-size: 1.35rem;

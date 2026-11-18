@@ -31,6 +31,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
+
+  // Reset Zen Mode whenever navigating away from the article reader
+  useEffect(() => {
+    if (currentView !== 'reader' && isZenMode) {
+      setIsZenMode(false);
+    }
+  }, [currentView, isZenMode]);
   const [adminSubTab, setAdminSubTab] = useState<string>('users');
   const [readingProgress, setReadingProgress] = useState<number>(0);
 
@@ -371,53 +379,57 @@ export default function App() {
     <LgpdRequestsProvider currentUser={currentUser}>
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Global Header */}
-      <Header
-        currentView={currentView}
-        onSelectView={view => {
-          setCurrentView(view);
-          if (view === 'home') {
-            window.location.hash = '#/home';
-          } else if (view === 'reader') {
-            window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
-          } else if (view === 'special') {
-            setSpecialPageName('SpecialPages');
-            window.location.hash = '#/special/SpecialPages';
-          } else if (view === 'directory') {
+      {!(isZenMode && currentView === 'reader') && (
+        <Header
+          currentView={currentView}
+          onSelectView={view => {
+            setCurrentView(view);
+            if (view === 'home') {
+              window.location.hash = '#/home';
+            } else if (view === 'reader') {
+              window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+            } else if (view === 'special') {
+              setSpecialPageName('SpecialPages');
+              window.location.hash = '#/special/SpecialPages';
+            } else if (view === 'directory') {
+              window.location.hash = '#/usuarios';
+            } else if (view === 'promo_video') {
+              window.location.hash = '#/video-comercial';
+            } else if (view === 'dev_admin') {
+              window.location.hash = `#/admin`;
+            }
+          }}
+          currentUser={currentUser}
+          onUserChanged={setCurrentUser}
+          onNavigateArticle={handleNavigateArticle}
+          onOpenSearch={handleOpenSearch}
+          onOpenNewArticle={() => setIsNewArticleModalOpen(true)}
+          activeArticleSlug={activeArticleSlug}
+          readingProgress={readingProgress}
+          onOpenChat={() => setIsChatOpen(true)}
+          onOpenDirectory={() => {
+            setCurrentView('directory');
             window.location.hash = '#/usuarios';
-          } else if (view === 'promo_video') {
-            window.location.hash = '#/video-comercial';
-          } else if (view === 'dev_admin') {
-            window.location.hash = `#/admin`;
-          }
-        }}
-        currentUser={currentUser}
-        onUserChanged={setCurrentUser}
-        onNavigateArticle={handleNavigateArticle}
-        onOpenSearch={handleOpenSearch}
-        onOpenNewArticle={() => setIsNewArticleModalOpen(true)}
-        activeArticleSlug={activeArticleSlug}
-        readingProgress={readingProgress}
-        onOpenChat={() => setIsChatOpen(true)}
-        onOpenDirectory={() => {
-          setCurrentView('directory');
-          window.location.hash = '#/usuarios';
-        }}
-        onOpenMyUserPage={() => {
-          if (currentUser) {
-            setSelectedUserForPage(currentUser);
-            setCurrentView('user_page');
-            window.location.hash = '#/minha-pagina';
-          }
-        }}
-        onOpenChecklist={() => setIsChecklistOpen(true)}
-        onRandomArticle={handleRandomArticle}
-      />
+          }}
+          onOpenMyUserPage={() => {
+            if (currentUser) {
+              setSelectedUserForPage(currentUser);
+              setCurrentView('user_page');
+              window.location.hash = '#/minha-pagina';
+            }
+          }}
+          onOpenChecklist={() => setIsChecklistOpen(true)}
+          onRandomArticle={handleRandomArticle}
+        />
+      )}
 
       {/* Floating Google Quick Login Popup (Top Right Corner) */}
-      <GoogleOneTapPopup
-        currentUser={currentUser}
-        onUserChanged={setCurrentUser}
-      />
+      {!(isZenMode && currentView === 'reader') && (
+        <GoogleOneTapPopup
+          currentUser={currentUser}
+          onUserChanged={setCurrentUser}
+        />
+      )}
 
       {/* Main View Container */}
       <main className="flex-1">
@@ -450,6 +462,8 @@ export default function App() {
               onProgressChange={setReadingProgress}
               onOpenChecklist={() => setIsChecklistOpen(true)}
               onRandomArticle={handleRandomArticle}
+              isZenMode={isZenMode}
+              onZenModeChange={setIsZenMode}
             />
           </ErrorBoundary>
         )}
@@ -562,41 +576,43 @@ export default function App() {
       </main>
 
       {/* Global NotMediaWiki Status Bar & Attribution */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 px-4 sm:px-6 text-xs text-slate-500 dark:text-slate-400 transition-colors">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-bold text-slate-800 dark:text-slate-200">NotMediaWiki</span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Faz parte do desenvolvimento de projetos <strong className="text-slate-700 dark:text-slate-300">WazzimaGiygg</strong>, do site{' '}
+      {!(isZenMode && currentView === 'reader') && (
+        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 px-4 sm:px-6 text-xs text-slate-500 dark:text-slate-400 transition-colors">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-bold text-slate-800 dark:text-slate-200">NotMediaWiki</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                Faz parte do desenvolvimento de projetos <strong className="text-slate-700 dark:text-slate-300">WazzimaGiygg</strong>, do site{' '}
+                <a
+                  href={wrapExternalUrl("https://wazzimagiygg.com")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                >
+                  wazzimagiygg.com
+                </a>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400 dark:text-slate-500">
+              <span>Parsoid AST</span>
+              <span>·</span>
+              <span>Firebase Cloud</span>
+              <span>·</span>
               <a
                 href={wrapExternalUrl("https://wazzimagiygg.com")}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                className="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 underline"
               >
                 wazzimagiygg.com
               </a>
-            </span>
+            </div>
           </div>
-
-          <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400 dark:text-slate-500">
-            <span>Parsoid AST</span>
-            <span>·</span>
-            <span>Firebase Cloud</span>
-            <span>·</span>
-            <a
-              href={wrapExternalUrl("https://wazzimagiygg.com")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 underline"
-            >
-              wazzimagiygg.com
-            </a>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Modal to add new article */}
       <NewArticleModal
