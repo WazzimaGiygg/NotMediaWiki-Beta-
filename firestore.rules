@@ -458,6 +458,38 @@ service cloud.firestore {
       );
     }
 
+    function isValidArticleDraft(data) {
+      return data.keys().hasOnly([
+          'id', 'userId', 'articleSlug', 'title', 'wikitext', 'summary', 'isMinor', 'updatedAt'
+        ])
+        && data.keys().hasAll(['id', 'userId', 'articleSlug', 'title', 'wikitext', 'updatedAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 256
+        && data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128
+        && data.articleSlug is string && data.articleSlug.size() > 0 && data.articleSlug.size() <= 255
+        && data.title is string && data.title.size() <= 255
+        && data.wikitext is string && data.wikitext.size() <= 500000
+        && (!('summary' in data) || (data.summary is string && data.summary.size() <= 1000))
+        && (!('isMinor' in data) || data.isMinor is bool)
+        && data.updatedAt is string && data.updatedAt.size() > 0 && data.updatedAt.size() <= 64;
+    }
+
+    match /article_drafts/{draftId} {
+      allow read: if isAuthenticated() && (
+        resource == null || resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated()
+        && isValidArticleDraft(request.resource.data)
+        && request.resource.data.id == draftId;
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && isValidArticleDraft(request.resource.data)
+        && request.resource.data.id == draftId
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
     // Default Deny
     match /{document=**} {
       allow read, write: if false;

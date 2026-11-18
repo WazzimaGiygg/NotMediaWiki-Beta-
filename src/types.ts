@@ -717,3 +717,18 @@ export interface FcmTokenRegistration {
   notifyNewArticles?: boolean;
   vapidKeyConfigured?: boolean;
 }
+
+export type AutoSaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
+
+export interface ArticleDraft {
+  id: string;
+  userId: string;
+  articleSlug: string;
+  title: string;
+  wikitext: string;
+  summary: string;
+  isMinor: boolean;
+  updatedAt: string;
+  storageSource?: 'firestore' | 'local';
+}
+

@@ -360,6 +360,22 @@
         "userAgent": { "type": "string", "maxLength": 500 }
       },
       "required": ["id", "userId", "token", "updatedAt"]
+    },
+    "ArticleDraft": {
+      "title": "ArticleDraft",
+      "description": "Auto-saved article draft persisted per user and article slug in Firestore",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 256 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "articleSlug": { "type": "string", "maxLength": 255 },
+        "title": { "type": "string", "maxLength": 255 },
+        "wikitext": { "type": "string", "maxLength": 500000 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "isMinor": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "articleSlug", "title", "wikitext", "updatedAt"]
     }
   },
   "firestore": {
@@ -450,6 +466,10 @@
     "/fcm_tokens/{tokenId}": {
       "schema": { "$ref": "#/entities/FcmTokenRegistration" },
       "description": "Device Firebase Cloud Messaging Web Push registration tokens"
+    },
+    "/article_drafts/{draftId}": {
+      "schema": { "$ref": "#/entities/ArticleDraft" },
+      "description": "Per-user auto-saved article drafts to prevent content loss while editing"
     }
   }
 }

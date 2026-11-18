@@ -1,9 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen } from 'lucide-react';
-import { Article, UserSession } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2 } from 'lucide-react';
+import { Article, ArticleDraft, AutoSaveStatus, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
 import { syncMediaWikiToFirestore, recordDailyChecklistAction, loginWithGoogle, auth } from '../firebase';
+import {
+  AUTOSAVE_INACTIVITY_MS,
+  AUTOSAVE_PERIODIC_MS,
+  saveArticleDraft,
+  loadArticleDraft,
+  deleteArticleDraft,
+  hasMeaningfulDraftChanges,
+  formatDraftTimestamp,
+} from '../services/draftService';
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
 import { INFOBOX_SOFTWARE_FIELDS, buildInfoboxSoftwareWikitext } from '../utils/infoboxSoftware';
 import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
@@ -49,6 +58,23 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   // Bibliographic Reference Manager Modal state
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
 
+  // Firestore Auto-Save state
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
+  const [lastDraftSource, setLastDraftSource] = useState<'firestore' | 'local' | null>(null);
+  const [recoverableDraft, setRecoverableDraft] = useState<ArticleDraft | null>(null);
+
+  const baselineRef = useRef<{ title: string; wikitext: string; summary: string }>({
+    title: slug.replace(/_/g, ' '),
+    wikitext: '',
+    summary: '',
+  });
+  const lastPersistedSnapshotRef = useRef<string>('');
+  const latestEditorStateRef = useRef({ title, wikitext, summary, isMinor });
+  latestEditorStateRef.current = { title, wikitext, summary, isMinor };
+
+  const effectiveUserId = auth.currentUser?.uid || currentUser?.id || 'guest';
+
   const openInfoboxBuilder = () => {
     setInfoboxValues(prev => ({
       name: prev.name || title,
@@ -76,6 +102,28 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
+    setRecoverableDraft(null);
+    setAutoSaveStatus('idle');
+    setLastDraftSavedAt(null);
+    setLastDraftSource(null);
+
+    const checkExistingDraft = async (baseTitle: string, baseWikitext: string) => {
+      try {
+        const draft = await loadArticleDraft(effectiveUserId, slug);
+        if (
+          isMounted &&
+          draft &&
+          hasMeaningfulDraftChanges(
+            { title: draft.title, wikitext: draft.wikitext, summary: draft.summary },
+            { title: baseTitle, wikitext: baseWikitext, summary: '' }
+          )
+        ) {
+          setRecoverableDraft(draft);
+        }
+      } catch {
+        // Ignore draft lookup failures
+      }
+    };
 
     api.getArticle(slug)
       .then(art => {
@@ -83,22 +131,119 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           setTitle(art.title);
           setWikitext(art.wikitext);
           setInitialWikitext(art.wikitext);
+          baselineRef.current = { title: art.title, wikitext: art.wikitext, summary: '' };
+          lastPersistedSnapshotRef.current = JSON.stringify([art.title, art.wikitext, '', false]);
           setLoading(false);
+          checkExistingDraft(art.title, art.wikitext);
         }
       })
       .catch(() => {
         // New article template
         if (isMounted) {
-          setTitle(slug.replace(/_/g, ' '));
-          const template = `'''${slug.replace(/_/g, ' ')}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`;
+          const defaultTitle = slug.replace(/_/g, ' ');
+          const template = `'''${defaultTitle}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`;
+          setTitle(defaultTitle);
           setWikitext(template);
           setInitialWikitext('');
+          baselineRef.current = { title: defaultTitle, wikitext: template, summary: '' };
+          lastPersistedSnapshotRef.current = JSON.stringify([defaultTitle, template, '', false]);
           setLoading(false);
+          checkExistingDraft(defaultTitle, template);
         }
       });
 
     return () => { isMounted = false; };
-  }, [slug]);
+  }, [slug, effectiveUserId]);
+
+  const persistDraftNow = useCallback(async () => {
+    if (loading || saving || currentUser?.isBanned || recoverableDraft) return;
+    const current = latestEditorStateRef.current;
+    if (!hasMeaningfulDraftChanges(current, baselineRef.current)) {
+      return;
+    }
+
+    const snapshot = JSON.stringify([current.title, current.wikitext, current.summary, current.isMinor]);
+    if (snapshot === lastPersistedSnapshotRef.current) {
+      return;
+    }
+
+    setAutoSaveStatus('saving');
+    try {
+      const saved = await saveArticleDraft({
+        userId: effectiveUserId,
+        articleSlug: slug,
+        title: current.title,
+        wikitext: current.wikitext,
+        summary: current.summary,
+        isMinor: current.isMinor,
+      });
+      lastPersistedSnapshotRef.current = snapshot;
+      setLastDraftSavedAt(saved.updatedAt);
+      setLastDraftSource(saved.storageSource || 'firestore');
+      setAutoSaveStatus('saved');
+    } catch {
+      setLastDraftSource('local');
+      setAutoSaveStatus('error');
+    }
+  }, [loading, saving, currentUser?.isBanned, recoverableDraft, effectiveUserId, slug]);
+
+  // Auto-save on typing inactivity (debounced)
+  useEffect(() => {
+    if (loading || saving || currentUser?.isBanned || recoverableDraft) return;
+
+    const current = { title, wikitext, summary };
+    if (!hasMeaningfulDraftChanges(current, baselineRef.current)) {
+      return;
+    }
+
+    const snapshot = JSON.stringify([title, wikitext, summary, isMinor]);
+    if (snapshot === lastPersistedSnapshotRef.current) {
+      return;
+    }
+
+    setAutoSaveStatus('pending');
+    const inactivityTimer = setTimeout(() => {
+      void persistDraftNow();
+    }, AUTOSAVE_INACTIVITY_MS);
+
+    return () => clearTimeout(inactivityTimer);
+  }, [title, wikitext, summary, isMinor, loading, saving, currentUser?.isBanned, recoverableDraft, persistDraftNow]);
+
+  // Periodic auto-save safety net (every 30s if dirty)
+  useEffect(() => {
+    if (loading || saving || currentUser?.isBanned || recoverableDraft) return;
+
+    const intervalId = setInterval(() => {
+      void persistDraftNow();
+    }, AUTOSAVE_PERIODIC_MS);
+
+    return () => clearInterval(intervalId);
+  }, [loading, saving, currentUser?.isBanned, recoverableDraft, persistDraftNow]);
+
+  const handleRestoreDraft = () => {
+    if (!recoverableDraft) return;
+    setTitle(recoverableDraft.title);
+    setWikitext(recoverableDraft.wikitext);
+    setSummary(recoverableDraft.summary || '');
+    setIsMinor(Boolean(recoverableDraft.isMinor));
+    lastPersistedSnapshotRef.current = JSON.stringify([
+      recoverableDraft.title,
+      recoverableDraft.wikitext,
+      recoverableDraft.summary || '',
+      Boolean(recoverableDraft.isMinor),
+    ]);
+    setLastDraftSavedAt(recoverableDraft.updatedAt);
+    setLastDraftSource(recoverableDraft.storageSource || 'firestore');
+    setAutoSaveStatus('saved');
+    setRecoverableDraft(null);
+  };
+
+  const handleDiscardDraft = async () => {
+    setRecoverableDraft(null);
+    setAutoSaveStatus('idle');
+    setLastDraftSavedAt(null);
+    await deleteArticleDraft(effectiveUserId, slug);
+  };
 
   // Live Parsoid parse preview effect
   useEffect(() => {
@@ -234,6 +379,15 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         }).catch(console.warn);
       }
 
+      // Clear auto-saved draft after successful publication
+      const activeUid = auth.currentUser?.uid || activeUser?.id || effectiveUserId;
+      deleteArticleDraft(activeUid, slug).catch(console.warn);
+      if (cleanSlug !== slug) {
+        deleteArticleDraft(activeUid, cleanSlug).catch(console.warn);
+      }
+      setAutoSaveStatus('idle');
+      setLastDraftSavedAt(null);
+
       setSuccessMessage(`Artigo "${res.article.title}" salvo com sucesso no Firebase Firestore! (+0.20 pt no Checklist Diário - 3.05.8.b.b)`);
       setTimeout(() => {
         onSaved(res.article.slug);
@@ -275,37 +429,135 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           </div>
         </div>
 
-        {/* View Layout Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded">
-          <button
-            onClick={() => setActiveTab('split')}
-            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-              activeTab === 'split' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Columns className="w-3 h-3" />
-            Dual Split
-          </button>
-          <button
-            onClick={() => setActiveTab('edit')}
-            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-              activeTab === 'edit' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Code className="w-3 h-3" />
-            Wikitext
-          </button>
-          <button
-            onClick={() => setActiveTab('preview')}
-            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-              activeTab === 'preview' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Eye className="w-3 h-3" />
-            Parsoid Preview
-          </button>
+        {/* Auto-Save Status + View Layout Tabs */}
+        <div className="flex flex-wrap items-center justify-end gap-2.5">
+          {autoSaveStatus !== 'idle' && (
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[11px] font-medium transition-colors ${
+                autoSaveStatus === 'saving'
+                  ? 'bg-slate-50 border-slate-200 text-slate-600'
+                  : autoSaveStatus === 'saved'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : autoSaveStatus === 'pending'
+                  ? 'bg-amber-50 border-amber-200 text-amber-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-700'
+              }`}
+              title={
+                lastDraftSource === 'firestore'
+                  ? 'Rascunho sincronizado automaticamente no Firebase Firestore'
+                  : 'Rascunho salvo localmente no navegador (faça login para sincronizar no Firestore)'
+              }
+            >
+              {autoSaveStatus === 'saving' && (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
+                  <span>Salvando rascunho...</span>
+                </>
+              )}
+              {autoSaveStatus === 'pending' && (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span>Alterações não salvas</span>
+                  <button
+                    type="button"
+                    onClick={() => void persistDraftNow()}
+                    className="ml-1 underline hover:text-amber-950 cursor-pointer"
+                  >
+                    Salvar agora
+                  </button>
+                </>
+              )}
+              {autoSaveStatus === 'saved' && (
+                <>
+                  <Cloud className="w-3 h-3 text-emerald-600" />
+                  <span>
+                    Rascunho salvo{lastDraftSavedAt ? ` às ${formatDraftTimestamp(lastDraftSavedAt)}` : ''}
+                    {lastDraftSource === 'firestore' ? ' (Firestore)' : ' (Local)'}
+                  </span>
+                </>
+              )}
+              {autoSaveStatus === 'error' && (
+                <>
+                  <CloudOff className="w-3 h-3 text-rose-600" />
+                  <span>Falha na nuvem (salvo localmente)</span>
+                  <button
+                    type="button"
+                    onClick={() => void persistDraftNow()}
+                    className="ml-1 underline hover:text-rose-900 cursor-pointer"
+                  >
+                    Tentar novamente
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* View Layout Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded">
+            <button
+              onClick={() => setActiveTab('split')}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                activeTab === 'split' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Columns className="w-3 h-3" />
+              Dual Split
+            </button>
+            <button
+              onClick={() => setActiveTab('edit')}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                activeTab === 'edit' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Code className="w-3 h-3" />
+              Wikitext
+            </button>
+            <button
+              onClick={() => setActiveTab('preview')}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                activeTab === 'preview' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Eye className="w-3 h-3" />
+              Parsoid Preview
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Recoverable Draft Banner */}
+      {recoverableDraft && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-950 text-xs rounded-lg flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <RotateCcw className="w-4 h-4 text-amber-700 shrink-0" />
+            <div>
+              <strong className="font-semibold">Rascunho automático encontrado</strong>
+              <span className="ml-1.5 text-amber-800">
+                Salvo {recoverableDraft.storageSource === 'firestore' ? 'no Firestore' : 'localmente'} em{' '}
+                {new Date(recoverableDraft.updatedAt).toLocaleString('pt-BR')}. Deseja continuar de onde parou?
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleRestoreDraft}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Restaurar rascunho
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDiscardDraft()}
+              className="px-2.5 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-medium flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Alerts */}
       {currentUser?.isBanned && (
