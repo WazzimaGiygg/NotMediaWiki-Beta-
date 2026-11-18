@@ -36,7 +36,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
     setLoading(true);
     setGroundedData(null);
     setGroundingError(null);
-    api.querySearch(q)
+    api.searchArticles(q)
       .then(res => {
         setResults(res);
         setLoading(false);

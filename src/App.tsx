@@ -373,6 +373,7 @@ export default function App() {
   const handleOpenSearch = (query: string) => {
     setSearchQuery(query);
     setCurrentView('search');
+    window.location.hash = `#/search?q=${encodeURIComponent(query)}`;
   };
 
   return (
@@ -462,6 +463,7 @@ export default function App() {
               onProgressChange={setReadingProgress}
               onOpenChecklist={() => setIsChecklistOpen(true)}
               onRandomArticle={handleRandomArticle}
+              onSearch={handleOpenSearch}
               isZenMode={isZenMode}
               onZenModeChange={setIsZenMode}
             />

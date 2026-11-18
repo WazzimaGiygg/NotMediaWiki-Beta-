@@ -396,28 +396,99 @@ export const api = {
   // ---------------------------------------------------------------------------
   // 4. Search Service
   // ---------------------------------------------------------------------------
-  async querySearch(q: string, namespace?: number): Promise<SearchMatch[]> {
-    try {
-      const params = new URLSearchParams({ q });
-      if (namespace !== undefined) params.append('namespace', namespace.toString());
-      const data = await safeFetch<{ results: SearchMatch[] }>(`${BASE_URL}/search/query?${params.toString()}`);
-      if (data.results && data.results.length > 0) return data.results;
-    } catch {
-      // Fallback to searching Firestore articles directly
+  async searchArticles(query: string, namespace?: number): Promise<SearchMatch[]> {
+    const cleanQuery = (query || '').trim();
+    if (!cleanQuery) return [];
+
+    const normalize = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    const normQuery = normalize(cleanQuery);
+    const terms = normQuery.split(/\s+/).filter(Boolean);
+
+    // Fetch articles directly from Firestore (with built-in cache/seed fallback)
+    const articles = await fetchArticlesFromFirestore(namespace);
+
+    const matches: SearchMatch[] = [];
+    for (const article of articles) {
+      const titleNorm = normalize(article.title || '');
+      const slugNorm = normalize((article.slug || '').replace(/_/g, ' '));
+      const summaryNorm = normalize(article.summary || '');
+      const bodyNorm = normalize(article.wikitext || '');
+      const categoriesNorm = (article.categories || []).map(normalize);
+
+      let score = 0;
+      if (titleNorm === normQuery || slugNorm === normQuery) score += 1.0;
+      else if (titleNorm.startsWith(normQuery) || slugNorm.startsWith(normQuery)) score += 0.85;
+      else if (titleNorm.includes(normQuery) || slugNorm.includes(normQuery)) score += 0.7;
+
+      if (categoriesNorm.some(c => c.includes(normQuery))) score += 0.45;
+      if (summaryNorm.includes(normQuery)) score += 0.35;
+      if (bodyNorm.includes(normQuery)) score += 0.25;
+
+      // Multi-term partial match boost
+      if (score === 0 && terms.length > 1) {
+        const matchedTerms = terms.filter(
+          t => titleNorm.includes(t) || bodyNorm.includes(t) || categoriesNorm.some(c => c.includes(t))
+        );
+        if (matchedTerms.length === terms.length) {
+          score = 0.4;
+        }
+      }
+
+      if (score > 0) {
+        const plainBody = (article.wikitext || '')
+          .replace(/\{\{[\s\S]*?\}\}/g, ' ')
+          .replace(/\[\[(?:[^|\]]+\|)?([^\]]+)\]\]/g, '$1')
+          .replace(/<ref[\s\S]*?<\/ref>/gi, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/'''?/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        let snippet = article.summary || '';
+        if (!snippet && plainBody) {
+          const idx = normalize(plainBody).indexOf(normQuery);
+          if (idx >= 0) {
+            const start = Math.max(0, idx - 50);
+            const end = Math.min(plainBody.length, idx + cleanQuery.length + 110);
+            snippet = `${start > 0 ? '...' : ''}${plainBody.slice(start, end).trim()}${end < plainBody.length ? '...' : ''}`;
+          } else {
+            snippet = `${plainBody.slice(0, 150)}${plainBody.length > 150 ? '...' : ''}`;
+          }
+        }
+
+        matches.push({
+          slug: article.slug,
+          title: article.title,
+          namespace: article.namespace,
+          snippet: snippet || 'Artigo da base de conhecimento NotMediaWiki.',
+          score: Math.min(1, Number(score.toFixed(2))),
+          categories: article.categories || [],
+        });
+      }
     }
 
-    const articles = await fetchArticlesFromFirestore(namespace);
-    const lower = q.toLowerCase();
-    return articles
-      .filter(a => a.title.toLowerCase().includes(lower) || a.wikitext.toLowerCase().includes(lower))
-      .map(a => ({
-        slug: a.slug,
-        title: a.title,
-        namespace: a.namespace,
-        snippet: a.summary || a.wikitext.substring(0, 140) + '...',
-        score: a.title.toLowerCase() === lower ? 1.0 : 0.8,
-        categories: a.categories || [],
-      }));
+    if (matches.length > 0) {
+      return matches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+    }
+
+    // Fallback to backend CirrusSearch endpoint if Firestore returned no direct match
+    try {
+      const params = new URLSearchParams({ q: cleanQuery });
+      if (namespace !== undefined) params.append('namespace', namespace.toString());
+      const data = await safeFetch<{ results: SearchMatch[] }>(`${BASE_URL}/search/query?${params.toString()}`);
+      return data.results || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async querySearch(q: string, namespace?: number): Promise<SearchMatch[]> {
+    return this.searchArticles(q, namespace);
   },
 
   async suggest(prefix: string): Promise<Array<{ title: string; slug: string; snippet?: string; namespace?: number; categories?: string[] }>> {

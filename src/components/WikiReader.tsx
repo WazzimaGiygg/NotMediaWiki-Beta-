@@ -9,6 +9,7 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { RelatedArticles } from './RelatedArticles';
 import { TableOfContents } from './TableOfContents';
 import { ArticleFootnotes } from './ArticleFootnotes';
+import { WikiGlobalSearchBar } from './WikiGlobalSearchBar';
 import {
   RealtimeUpdateToast,
   RealtimeToastPayload,
@@ -43,6 +44,7 @@ interface WikiReaderProps {
   onProgressChange?: (progress: number) => void;
   onOpenChecklist?: () => void;
   onRandomArticle?: () => void;
+  onSearch?: (query: string) => void;
   isZenMode?: boolean;
   onZenModeChange?: (enabled: boolean) => void;
 }
@@ -57,6 +59,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   onProgressChange,
   onOpenChecklist,
   onRandomArticle,
+  onSearch,
   isZenMode: controlledZenMode,
   onZenModeChange,
 }) => {
@@ -637,34 +640,48 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         />
       )}
 
-      {/* Article Sub-header Tabs & Action Bar */}
+      {/* Article Sub-header Tabs, Global Search Bar & Action Bar */}
       {!isDistractionFree && (
-        <div className="border-b border-slate-200 dark:border-slate-800 pb-2 mb-6 flex flex-wrap items-center justify-between gap-4">
-          {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onNavigate(subjectSlug)}
-              className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
-                !isTalk
-                  ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
-                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              {subjectLabel}
-            </button>
-            {talkSlug && (
+        <div className="border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => onNavigate(talkSlug)}
-                className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isTalk
+                onClick={() => onNavigate(subjectSlug)}
+                className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
+                  !isTalk
                     ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
                     : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
-                <MessageSquare className="w-3.5 h-3.5" />
-                Discussão
+                {subjectLabel}
               </button>
-            )}
+              {talkSlug && (
+                <button
+                  onClick={() => onNavigate(talkSlug)}
+                  className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isTalk
+                      ? 'border-blue-600 text-blue-800 dark:text-blue-400 font-semibold'
+                      : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Discussão
+                </button>
+              )}
+            </div>
+
+            {/* Global Search Bar querying Firestore via api.searchArticles */}
+            <WikiGlobalSearchBar
+              onSearch={q => {
+                if (onSearch) {
+                  onSearch(q);
+                } else {
+                  window.location.hash = `#/search?q=${encodeURIComponent(q)}`;
+                }
+              }}
+              onNavigateArticle={onNavigate}
+            />
           </div>
 
           {/* Action Controls */}
