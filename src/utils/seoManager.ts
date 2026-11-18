@@ -52,22 +52,108 @@ export function buildArticleMetaDescription(article: Pick<Article, 'title' | 'su
   return trimmed;
 }
 
+export interface BreadcrumbItem {
+  position: number;
+  label: string;
+  href: string;
+  slug?: string;
+  kind: 'home' | 'category' | 'subpage' | 'article';
+}
+
+/**
+ * Builds the canonical breadcrumb hierarchy for an article:
+ * Home -> Categories (up to 2 levels) -> Subpage parents (if any) -> Article Title.
+ */
+export function buildBreadcrumbTrail(
+  article: Pick<Article, 'slug' | 'title' | 'categories'>,
+  extraCategories?: string[],
+  subpageCrumbs?: Array<{ label: string; slug: string }>
+): BreadcrumbItem[] {
+  const items: BreadcrumbItem[] = [
+    {
+      position: 1,
+      label: 'Início',
+      href: `${PRIMARY_CANONICAL_ORIGIN}/`,
+      kind: 'home',
+    },
+  ];
+
+  const mergedCategories = Array.from(
+    new Set(
+      [...(extraCategories || []), ...(article.categories || [])]
+        .map(c => c.replace(/^(Categoria|Category):/i, '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (mergedCategories.length > 0) {
+    // Include up to 2 category hierarchy levels (e.g. Primary Category > Subcategory)
+    mergedCategories.slice(0, 2).forEach(cat => {
+      const catSlug = `Categoria:${cat.replace(/\s+/g, '_')}`;
+      items.push({
+        position: items.length + 1,
+        label: cat,
+        href: buildCanonicalUrl(catSlug),
+        slug: catSlug,
+        kind: 'category',
+      });
+    });
+  } else {
+    items.push({
+      position: items.length + 1,
+      label: 'Enciclopédia',
+      href: `${PRIMARY_CANONICAL_ORIGIN}/#/special/AllPages`,
+      kind: 'category',
+    });
+  }
+
+  if (subpageCrumbs && subpageCrumbs.length > 0) {
+    subpageCrumbs.forEach(crumb => {
+      items.push({
+        position: items.length + 1,
+        label: crumb.label,
+        href: buildCanonicalUrl(crumb.slug),
+        slug: crumb.slug,
+        kind: 'subpage',
+      });
+    });
+  }
+
+  items.push({
+    position: items.length + 1,
+    label: article.title,
+    href: buildCanonicalUrl(article.slug),
+    slug: article.slug,
+    kind: 'article',
+  });
+
+  return items;
+}
+
 /**
  * Builds rich Schema.org JSON-LD (@graph with Article + BreadcrumbList) for an encyclopedia article
  * on core.wazzimagiygg.com.
  */
-export function buildArticleJsonLd(article: Article): Record<string, any> {
+export function buildArticleJsonLd(
+  article: Article,
+  extraCategories?: string[],
+  subpageCrumbs?: Array<{ label: string; slug: string }>
+): Record<string, any> {
   const canonicalUrl = buildCanonicalUrl(article.slug);
   const description = buildArticleMetaDescription(article);
+  const effectiveCategories = Array.from(
+    new Set([...(extraCategories || []), ...(article.categories || [])].filter(Boolean))
+  );
   const keywords = Array.from(
     new Set([
       article.title,
-      ...(article.categories || []),
+      ...effectiveCategories,
       'NotMediaWiki',
       'WazzimaGiygg',
       'core.wazzimagiygg.com',
     ])
   );
+  const trail = buildBreadcrumbTrail(article, extraCategories, subpageCrumbs);
 
   return {
     '@context': 'https://schema.org',
@@ -87,7 +173,7 @@ export function buildArticleJsonLd(article: Article): Record<string, any> {
         datePublished: article.createdAt || new Date().toISOString(),
         dateModified: article.updatedAt || article.createdAt || new Date().toISOString(),
         keywords: keywords.join(', '),
-        articleSection: article.categories?.[0] || 'Enciclopédia',
+        articleSection: effectiveCategories[0] || 'Enciclopédia',
         image: DEFAULT_OG_IMAGE,
         author: {
           '@type': 'Organization',
@@ -111,26 +197,12 @@ export function buildArticleJsonLd(article: Article): Record<string, any> {
       },
       {
         '@type': 'BreadcrumbList',
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'NotMediaWiki (core.wazzimagiygg.com)',
-            item: `${PRIMARY_CANONICAL_ORIGIN}/`,
-          },
-          {
-            '@type': 'ListItem',
-            position: 2,
-            name: article.categories?.[0] || 'Artigos',
-            item: `${PRIMARY_CANONICAL_ORIGIN}/#/special/AllPages`,
-          },
-          {
-            '@type': 'ListItem',
-            position: 3,
-            name: article.title,
-            item: canonicalUrl,
-          },
-        ],
+        itemListElement: trail.map(item => ({
+          '@type': 'ListItem',
+          position: item.position,
+          name: item.kind === 'home' ? 'NotMediaWiki (core.wazzimagiygg.com)' : item.label,
+          item: item.href,
+        })),
       },
     ],
   };

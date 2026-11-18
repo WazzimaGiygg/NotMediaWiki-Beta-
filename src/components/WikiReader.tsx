@@ -5,6 +5,7 @@ import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
 import { ArticleCategories } from './ArticleCategories';
+import { Breadcrumbs } from './Breadcrumbs';
 import { RelatedArticles } from './RelatedArticles';
 import { TableOfContents } from './TableOfContents';
 import { ArticleFootnotes } from './ArticleFootnotes';
@@ -196,15 +197,17 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   useEffect(() => {
     if (!data?.article) return;
     const article = data.article;
+    const effectiveCategories = data.categories && data.categories.length > 0 ? data.categories : article.categories || [];
+    const subpageCrumbs = getSubpageBreadcrumbs(parseTitle(article.slug || article.title));
     applyDynamicSeoMeta({
       title: `${article.title} — ${SITE_BRAND_NAME}`,
       description: buildArticleMetaDescription(article),
       canonicalUrl: buildCanonicalUrl(article.slug),
       ogType: 'article',
-      keywords: [article.title, ...(article.categories || []), 'NotMediaWiki', 'core.wazzimagiygg.com', 'WazzimaGiygg'],
-      jsonLd: buildArticleJsonLd(article),
+      keywords: [article.title, ...effectiveCategories, 'NotMediaWiki', 'core.wazzimagiygg.com', 'WazzimaGiygg'],
+      jsonLd: buildArticleJsonLd(article, effectiveCategories, subpageCrumbs),
     });
-  }, [data?.article]);
+  }, [data?.article, data?.categories]);
 
   // Real-time Firestore onSnapshot subscription for the currently viewed article
   useEffect(() => {
@@ -574,6 +577,16 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* SEO Breadcrumbs Navigation at the top of WikiReader */}
+      {!isReaderMode && (
+        <Breadcrumbs
+          article={article}
+          categories={categories && categories.length > 0 ? categories : article.categories}
+          subpageCrumbs={breadcrumbs}
+          onNavigate={onNavigate}
+        />
       )}
 
       {/* Article Sub-header Tabs & Action Bar */}
