@@ -429,6 +429,7 @@ export interface UnblockRequest {
 
 export interface DataRemovalRequest {
   id: string;
+  userId?: string;
   protocolNumber: string;
   requesterNameOrAlias: string;
   requesterEmail?: string;

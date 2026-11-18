@@ -39,7 +39,7 @@ import { AllowedDomainsManager } from './AllowedDomainsManager';
 import { ArbitrationCouncil } from './admin/ArbitrationCouncil';
 import { CheckUserVerification } from './admin/CheckUserVerification';
 import { UnblockEvaluation } from './admin/UnblockEvaluation';
-import { DataRemovalRequests } from './admin/DataRemovalRequests';
+import { AdminLgpdDashboard } from './admin/AdminLgpdDashboard';
 import { EmergencyContact } from './admin/EmergencyContact';
 import { LgpdMarcoCivilRules } from './admin/LgpdMarcoCivilRules';
 import { VpnAdminChecker } from './admin/VpnAdminChecker';
@@ -238,7 +238,10 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
         )}
 
         {activeTab === 'data_removal' && (
-          <DataRemovalRequests currentUser={currentUser} />
+          <AdminLgpdDashboard
+            currentUser={currentUser}
+            onNavigateArticle={onNavigateArticle}
+          />
         )}
 
         {activeTab === 'emergency' && (

@@ -20,6 +20,7 @@ import { api } from './api';
 import { wrapExternalUrl } from './utils/urlHelper';
 import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
 import { applyDefaultSiteSeo, applyDynamicSeoMeta, PRIMARY_CANONICAL_ORIGIN, SITE_BRAND_NAME } from './utils/seoManager';
+import { LgpdRequestsProvider } from './context/LgpdRequestsContext';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
@@ -185,7 +186,13 @@ export default function App() {
       } else if (hash === '#/unblock' || hash === '#/desbloqueio') {
         setAdminSubTab('unblock');
         setCurrentView('dev_admin');
-      } else if (hash === '#/data-removal' || hash === '#/remocao-dados') {
+      } else if (
+        hash === '#/data-removal' ||
+        hash === '#/remocao-dados' ||
+        hash === '#/solicitacao-exclusao' ||
+        hash === '#/admin/admintools/solicitacaodeexlusao' ||
+        hash === '#/admin/admintools/solicitacaodeexclusao'
+      ) {
         setAdminSubTab('data_removal');
         setCurrentView('dev_admin');
       } else if (hash === '#/emergency' || hash === '#/emergencia') {
@@ -357,6 +364,7 @@ export default function App() {
   };
 
   return (
+    <LgpdRequestsProvider currentUser={currentUser}>
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Global Header */}
       <Header
@@ -624,5 +632,6 @@ export default function App() {
         </button>
       )}
     </div>
+    </LgpdRequestsProvider>
   );
 }
