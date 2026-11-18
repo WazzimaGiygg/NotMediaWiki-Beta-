@@ -26,6 +26,7 @@ import { CategoryTreeView } from './CategoryTreeView';
 import { subscribeToFirestoreArticle, auth } from '../firebase';
 import { parseFootnoteTagsInHtml } from '../utils/citationParser';
 import { downloadArticlePdf } from '../utils/pdfDownloader';
+import { exportArticleToPdfViaPrint } from '../utils/printPdfExporter';
 import {
   applyDynamicSeoMeta,
   buildArticleJsonLd,
@@ -71,6 +72,21 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isWatched, setIsWatched] = useState<boolean>(false);
   const [watchLoading, setWatchLoading] = useState<boolean>(false);
+  const [isPrintingPdf, setIsPrintingPdf] = useState<boolean>(false);
+
+  const handlePrintExportPdf = async () => {
+    if (!data?.article) return;
+    setIsPrintingPdf(true);
+    try {
+      await exportArticleToPdfViaPrint({
+        title: data.article.title,
+        slug: data.article.slug,
+        siteName: SITE_BRAND_NAME,
+      });
+    } finally {
+      setIsPrintingPdf(false);
+    }
+  };
 
   useEffect(() => {
     if (currentUser?.id && slug) {
@@ -632,17 +648,19 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
       {/* SEO Breadcrumbs Navigation at the top of WikiReader */}
       {!isDistractionFree && (
-        <Breadcrumbs
-          article={article}
-          categories={categories && categories.length > 0 ? categories : article.categories}
-          subpageCrumbs={breadcrumbs}
-          onNavigate={onNavigate}
-        />
+        <div className="no-print">
+          <Breadcrumbs
+            article={article}
+            categories={categories && categories.length > 0 ? categories : article.categories}
+            subpageCrumbs={breadcrumbs}
+            onNavigate={onNavigate}
+          />
+        </div>
       )}
 
       {/* Article Sub-header Tabs, Global Search Bar & Action Bar */}
       {!isDistractionFree && (
-        <div className="border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 flex flex-col gap-3">
+        <div className="wiki-reader-toolbar no-print border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Dynamic MediaWiki Namespace tabs: Subject / Talk */}
             <div className="flex items-center gap-1">
@@ -750,12 +768,14 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               <span>Relatório PDF</span>
             </button>
             <button
-              onClick={() => window.print()}
-              className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              title="Imprimir artigo diretamente (formatação otimizada para papel/impressora)"
+              onClick={handlePrintExportPdf}
+              disabled={isPrintingPdf}
+              data-testid="export-pdf-print-btn"
+              className="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title="Exportar artigo como PDF via API de impressão do navegador (@media print)"
             >
-              <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-              <span>Imprimir</span>
+              <Printer className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+              <span>{isPrintingPdf ? 'Preparando PDF...' : 'Imprimir / Exportar PDF'}</span>
             </button>
             <button
               onClick={handleDownloadPdf}
@@ -915,6 +935,17 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               </nav>
             )}
 
+            {/* Print-only institutional header shown via @media print */}
+            <div className="print-only mb-4 pb-2 border-b border-slate-300 text-[10pt] text-slate-600 font-sans">
+              <div className="flex items-center justify-between">
+                <strong className="text-slate-900">{SITE_BRAND_NAME}</strong>
+                <span>Exportado em {new Date().toLocaleDateString('pt-BR')}</span>
+              </div>
+              <div className="text-[8.5pt] text-slate-500 mt-0.5 break-all">
+                {buildCanonicalUrl(article.slug)} · Revisão {article.latestRevisionId}
+              </div>
+            </div>
+
             <h1
               className={`${
                 isZenActive ? 'text-4xl sm:text-[2.6rem] leading-tight' : 'text-3xl'
@@ -1061,24 +1092,28 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
           {/* Article Voting & Feedback Component (Standard mode only) */}
           {!isDistractionFree && (
-            <ArticleFeedbackWidget
-              articleSlug={slug}
-              articleTitle={article.title}
-              authorUid={revisions[0]?.author?.id}
-              authorName={revisions[0]?.author?.name || revisions[0]?.author?.username || 'Wikipedian'}
-              currentUser={currentUser || null}
-              onNavigateUser={(userSlug) => onNavigate(`Usuario:${userSlug}`)}
-            />
+            <div className="no-print">
+              <ArticleFeedbackWidget
+                articleSlug={slug}
+                articleTitle={article.title}
+                authorUid={revisions[0]?.author?.id}
+                authorName={revisions[0]?.author?.name || revisions[0]?.author?.username || 'Wikipedian'}
+                currentUser={currentUser || null}
+                onNavigateUser={(userSlug) => onNavigate(`Usuario:${userSlug}`)}
+              />
+            </div>
           )}
 
           {/* 3.05.8.b.c - Article Evaluation Widget (Daily Checklist Mission +1.00 pt) (Standard mode only) */}
           {!isDistractionFree && (
-            <ArticleRatingWidget
-              articleSlug={slug}
-              articleTitle={article.title}
-              currentUser={currentUser || null}
-              onOpenChecklist={onOpenChecklist}
-            />
+            <div className="no-print">
+              <ArticleRatingWidget
+                articleSlug={slug}
+                articleTitle={article.title}
+                currentUser={currentUser || null}
+                onOpenChecklist={onOpenChecklist}
+              />
+            </div>
           )}
 
           {/* Article Categories & Interactive Filter UI Component (Standard mode only) */}
@@ -1133,7 +1168,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
           {/* Microservices Execution & Article Reader Footer (Standard mode only) */}
           {!isDistractionFree && (
-            <div className="mt-8 p-4 rounded-lg bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="no-print mt-8 p-4 rounded-lg bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-medium font-sans shadow-xs" title="Total de palavras no artigo">
                   <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
@@ -1153,6 +1188,11 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               </div>
             </div>
           )}
+
+          {/* Print-only document footer stamp */}
+          <div className="print-only mt-8 pt-3 border-t border-slate-300 text-[8.5pt] text-slate-600 font-sans">
+            Documento gerado via API de impressão do navegador · {SITE_BRAND_NAME} · {wordCount.toLocaleString()} palavras · Revisão {article.latestRevisionId}
+          </div>
         </main>
       </div>
     </div>

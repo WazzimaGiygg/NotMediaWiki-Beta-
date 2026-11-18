@@ -380,11 +380,20 @@ html.dark .wiki-content .infobox {
    Hides navigation, sticky bars, sidebars, action toolbars, and floating UI.
    Ensures core wiki content is cleanly rendered and readable for paper printing.
    ========================================================================== */
+.print-only {
+  display: none;
+}
+
 @media print {
+  .print-only {
+    display: block !important;
+  }
+
   /* Hide non-printable global layout and navigation controls */
   header,
   footer,
   .no-print,
+  .wiki-reader-toolbar,
   nav,
   aside,
   [role="navigation"] {
@@ -416,6 +425,7 @@ html.dark .wiki-content .infobox {
   /* Hide wiki reader UI toolbars, buttons, action tabs, and sidebars */
   button,
   [class*="border-b"][class*="pb-2"][class*="mb-6"],
+  [class*="border-b"][class*="pb-3"][class*="mb-6"],
   [class*="lg:col-span-3"],
   [class*="lg:hidden"],
   .toc-container,
