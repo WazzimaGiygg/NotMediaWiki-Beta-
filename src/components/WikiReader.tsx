@@ -712,11 +712,12 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         {/* Left Column: Article Directory / Quick Switcher (Hidden in Reader Mode) */}
         {!isReaderMode && (
           <div className="hidden lg:block lg:col-span-3 space-y-6">
-          {/* Dynamic Table of Contents Sidebar Component */}
+          {/* Dynamic Sticky Table of Contents Sidebar Component */}
           <TableOfContents
             contentRef={contentRef}
-            html={html}
+            html={renderedHtml || html}
             initialToc={toc}
+            variant="sidebar"
           />
 
           {/* Quick Wiki Article Directory */}
@@ -900,15 +901,15 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             )}
           </div>
 
-          {/* Mobile Collapsible TOC for small viewports (Standard mode only) */}
-          {!isReaderMode && (
-            <TableOfContents
-              contentRef={contentRef}
-              html={html}
-              initialToc={toc}
-              className="mb-6 lg:hidden"
-            />
-          )}
+          {/* Collapsible Inline TOC for mobile/tablet viewports and Reader Mode */}
+          <TableOfContents
+            contentRef={contentRef}
+            html={renderedHtml || html}
+            initialToc={toc}
+            variant="inline"
+            defaultOpen={false}
+            className={isReaderMode ? 'mb-6' : 'mb-6 lg:hidden'}
+          />
 
           {/* Rendered HTML Container */}
           <article
