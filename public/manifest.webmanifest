@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "NotMediaWiki | Projetos WazzimaGiygg",
+  "short_name": "NotMediaWiki",
+  "description": "Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com leitura offline e artigos verificados em tempo real.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/assets/aistudio/image_370f9ede.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

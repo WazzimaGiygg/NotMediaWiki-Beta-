@@ -15,6 +15,7 @@ import { DailyChecklistModal } from './components/DailyChecklistModal';
 import { SpecialPagesHub } from './components/SpecialPagesHub';
 import { GoogleOneTapPopup } from './components/GoogleOneTapPopup';
 import { PromoVideoStudio } from './components/PromoVideoStudio';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { MessageSquare } from 'lucide-react';
 import { UserSession } from './types';
 import { api } from './api';
@@ -632,6 +633,9 @@ export default function App() {
         currentUser={currentUser}
         onUserChanged={setCurrentUser}
       />
+
+      {/* Offline connectivity indicator */}
+      <OfflineIndicator />
 
       {/* Floating Chat Trigger Button */}
       {!isChatOpen && (

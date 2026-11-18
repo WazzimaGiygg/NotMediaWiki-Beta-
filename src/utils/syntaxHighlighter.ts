@@ -1,9 +1,10 @@
 import Prism from 'prismjs';
 
-// Import essential languages for technical documentation and wiki content
+// Import essential & popular programming languages in Prism dependency order
 import 'prismjs/components/prism-markup'; // HTML / XML / SVG
 import 'prismjs/components/prism-css';
 import 'prismjs/components/prism-clike';
+import 'prismjs/components/prism-markup-templating'; // Required by PHP
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-jsx';
@@ -17,9 +18,60 @@ import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-graphql';
 import 'prismjs/components/prism-docker';
 import 'prismjs/components/prism-regex';
+import 'prismjs/components/prism-c';
+import 'prismjs/components/prism-cpp';
+import 'prismjs/components/prism-csharp';
+import 'prismjs/components/prism-java';
+import 'prismjs/components/prism-kotlin';
+import 'prismjs/components/prism-swift';
+import 'prismjs/components/prism-go';
+import 'prismjs/components/prism-rust';
+import 'prismjs/components/prism-php';
+import 'prismjs/components/prism-ruby';
+import 'prismjs/components/prism-toml';
+import 'prismjs/components/prism-diff';
+import 'prismjs/components/prism-lua';
+import 'prismjs/components/prism-powershell';
 
 /**
- * Normalizes common language aliases or MediaWiki syntaxhighlight language codes.
+ * Canonical Prism.js language identifiers registered for .wiki-content code blocks.
+ */
+export const SUPPORTED_PRISM_LANGUAGES = [
+  'markup',
+  'css',
+  'clike',
+  'javascript',
+  'typescript',
+  'jsx',
+  'tsx',
+  'json',
+  'bash',
+  'sql',
+  'markdown',
+  'python',
+  'yaml',
+  'graphql',
+  'docker',
+  'regex',
+  'c',
+  'cpp',
+  'csharp',
+  'java',
+  'kotlin',
+  'swift',
+  'go',
+  'rust',
+  'php',
+  'ruby',
+  'toml',
+  'diff',
+  'lua',
+  'powershell',
+] as const;
+
+/**
+ * Normalizes common language aliases or MediaWiki syntaxhighlight language codes
+ * to canonical Prism.js grammar keys.
  */
 export function normalizeLanguage(rawLang?: string | null): string {
   if (!rawLang) return 'code';
@@ -27,8 +79,13 @@ export function normalizeLanguage(rawLang?: string | null): string {
 
   const map: Record<string, string> = {
     js: 'javascript',
+    mjs: 'javascript',
+    cjs: 'javascript',
     ts: 'typescript',
+    mts: 'typescript',
+    cts: 'typescript',
     py: 'python',
+    python3: 'python',
     sh: 'bash',
     shell: 'bash',
     zsh: 'bash',
@@ -39,9 +96,30 @@ export function normalizeLanguage(rawLang?: string | null): string {
     gql: 'graphql',
     dockerfile: 'docker',
     md: 'markdown',
+    rs: 'rust',
     golang: 'go',
+    'c++': 'cpp',
+    cc: 'cpp',
+    cxx: 'cpp',
+    hpp: 'cpp',
+    h: 'c',
+    cs: 'csharp',
+    'c#': 'csharp',
+    dotnet: 'csharp',
+    kt: 'kotlin',
+    kts: 'kotlin',
     rb: 'ruby',
-    csharp: 'cs',
+    ps1: 'powershell',
+    pwsh: 'powershell',
+    posh: 'powershell',
+    pgsql: 'sql',
+    postgres: 'sql',
+    postgresql: 'sql',
+    mysql: 'sql',
+    sqlite: 'sql',
+    tsql: 'sql',
+    plsql: 'sql',
+    patch: 'diff',
   };
 
   return map[l] || l;
@@ -210,6 +288,90 @@ export function getLanguageMetadata(rawLang: string): LanguageMetadata {
       dotColor: 'bg-teal-400',
       badgeClasses: 'bg-teal-500/15 text-teal-300 border border-teal-500/30',
     },
+    rust: {
+      id: 'rust',
+      label: 'Rust',
+      dotColor: 'bg-orange-500',
+      badgeClasses: 'bg-orange-500/15 text-orange-300 border border-orange-500/30',
+    },
+    go: {
+      id: 'go',
+      label: 'Go',
+      dotColor: 'bg-cyan-400',
+      badgeClasses: 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30',
+    },
+    c: {
+      id: 'c',
+      label: 'C',
+      dotColor: 'bg-sky-400',
+      badgeClasses: 'bg-sky-500/15 text-sky-300 border border-sky-500/30',
+    },
+    cpp: {
+      id: 'cpp',
+      label: 'C++',
+      dotColor: 'bg-blue-400',
+      badgeClasses: 'bg-blue-500/15 text-blue-300 border border-blue-500/30',
+    },
+    csharp: {
+      id: 'csharp',
+      label: 'C#',
+      dotColor: 'bg-purple-400',
+      badgeClasses: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
+    },
+    java: {
+      id: 'java',
+      label: 'Java',
+      dotColor: 'bg-red-400',
+      badgeClasses: 'bg-red-500/15 text-red-300 border border-red-500/30',
+    },
+    kotlin: {
+      id: 'kotlin',
+      label: 'Kotlin',
+      dotColor: 'bg-fuchsia-400',
+      badgeClasses: 'bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30',
+    },
+    swift: {
+      id: 'swift',
+      label: 'Swift',
+      dotColor: 'bg-orange-400',
+      badgeClasses: 'bg-orange-500/15 text-orange-300 border border-orange-500/30',
+    },
+    php: {
+      id: 'php',
+      label: 'PHP',
+      dotColor: 'bg-indigo-400',
+      badgeClasses: 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30',
+    },
+    ruby: {
+      id: 'ruby',
+      label: 'Ruby',
+      dotColor: 'bg-rose-500',
+      badgeClasses: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
+    },
+    toml: {
+      id: 'toml',
+      label: 'TOML',
+      dotColor: 'bg-stone-400',
+      badgeClasses: 'bg-stone-500/15 text-stone-300 border border-stone-500/30',
+    },
+    diff: {
+      id: 'diff',
+      label: 'Diff / Patch',
+      dotColor: 'bg-lime-400',
+      badgeClasses: 'bg-lime-500/15 text-lime-300 border border-lime-500/30',
+    },
+    lua: {
+      id: 'lua',
+      label: 'Lua',
+      dotColor: 'bg-blue-500',
+      badgeClasses: 'bg-blue-500/15 text-blue-300 border border-blue-500/30',
+    },
+    powershell: {
+      id: 'powershell',
+      label: 'PowerShell',
+      dotColor: 'bg-sky-500',
+      badgeClasses: 'bg-sky-500/15 text-sky-300 border border-sky-500/30',
+    },
     code: {
       id: 'code',
       label: 'Code',
@@ -242,10 +404,42 @@ export function highlightSnippet(code: string, language: string): string {
 }
 
 /**
+ * Extracts CSS class names from an element safely across browser DOM and lightweight test mocks.
+ */
+function getElementClasses(el: Element): string[] {
+  if (typeof el.className === 'string' && el.className.trim()) {
+    return el.className.trim().split(/\s+/);
+  }
+  return Array.from(el.classList || []);
+}
+
+/**
+ * Normalizes any `language-<alias>` class on a `<pre>` or `<code>` element
+ * to its canonical Prism.js grammar class (e.g. `language-rs` -> `language-rust`,
+ * `language-golang` -> `language-go`, `language-pgsql` -> `language-sql`)
+ * so Prism.highlightAllUnder tokenizes aliases accurately.
+ */
+function normalizeElementLanguageClass(el: Element): void {
+  const classes = getElementClasses(el);
+  const langClass = classes.find(c => c.startsWith('language-'));
+  if (!langClass) return;
+
+  const raw = langClass.replace('language-', '').toLowerCase().trim();
+  if (!raw || raw === 'none') return;
+
+  const canonical = normalizeLanguage(raw);
+  if (canonical && canonical !== 'code' && canonical !== raw) {
+    el.classList.remove(langClass);
+    el.classList.add(`language-${canonical}`);
+  }
+}
+
+/**
  * Enhances all code blocks inside a root DOM container:
- * 1. Executes Prism.js tokenization on pre and code elements.
- * 2. Adds line numbers when appropriate for multi-line snippets.
- * 3. Wraps the <pre> block with a sleek, responsive container header with:
+ * 1. Normalizes language aliases on pre/code elements for Prism.js.
+ * 2. Executes Prism.js tokenization on pre and code elements.
+ * 3. Adds line numbers when appropriate for multi-line snippets.
+ * 4. Wraps the <pre> block with a sleek, responsive container header with:
  *    - Language badge with color indicator
  *    - Total line counter
  *    - One-click copy-to-clipboard button with visual feedback ('Copiar' -> 'Copiado!')
@@ -253,15 +447,25 @@ export function highlightSnippet(code: string, language: string): string {
 export function enhanceCodeBlocks(container: HTMLElement | null): void {
   if (!container || typeof document === 'undefined') return;
 
-  // 1. Run Prism syntax highlighting on all code elements
+  const preElements = container.querySelectorAll('pre');
+
+  // 1. Normalize language-* alias classes before Prism runs so aliases like language-rs / language-golang tokenize
+  preElements.forEach(pre => {
+    normalizeElementLanguageClass(pre);
+    const codeChild = pre.querySelector('code');
+    if (codeChild) {
+      normalizeElementLanguageClass(codeChild);
+    }
+  });
+
+  // 2. Run Prism syntax highlighting on all code elements
   try {
     Prism.highlightAllUnder(container);
   } catch (err) {
     console.warn('Prism syntax highlighting warning:', err);
   }
 
-  // 2. Enhance each pre block
-  const preElements = container.querySelectorAll('pre');
+  // 3. Enhance each pre block
   preElements.forEach(pre => {
     // Avoid double decoration if already enhanced
     if (pre.closest('.code-block-wrapper')) {
@@ -270,8 +474,8 @@ export function enhanceCodeBlocks(container: HTMLElement | null): void {
 
     const codeEl = pre.querySelector('code') || pre;
 
-    // Detect language from classes (e.g. language-typescript, language-python, etc.)
-    const combinedClasses = Array.from(pre.classList).concat(Array.from(codeEl.classList));
+    // Detect language from classes (e.g. language-rust, language-go, language-sql, etc.)
+    const combinedClasses = getElementClasses(pre).concat(getElementClasses(codeEl));
     const langClass = combinedClasses.find(c => c.startsWith('language-'));
     const detectedLang = langClass ? langClass.replace('language-', '').toLowerCase().trim() : '';
     const rawLang = detectedLang || 'code';
@@ -443,4 +647,5 @@ export default {
   normalizeLanguage,
   getLineNumbersPreference,
   setLineNumbersPreference,
+  SUPPORTED_PRISM_LANGUAGES,
 };

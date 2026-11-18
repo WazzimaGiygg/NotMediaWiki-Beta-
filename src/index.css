@@ -262,8 +262,22 @@
 }
 
 .wiki-content .token.function,
-.wiki-content .token.class-name {
+.wiki-content .token.class-name,
+.wiki-content .token.macro,
+.wiki-content .token.macro-name {
   color: #60a5fa;
+}
+
+.wiki-content .token.attribute,
+.wiki-content .token.directive,
+.wiki-content .token.lifetime-annotation,
+.wiki-content .token.namespace {
+  color: #2dd4bf;
+}
+
+.wiki-content .token.coord {
+  color: #38bdf8;
+  font-weight: 600;
 }
 
 .wiki-content .token.regex,
