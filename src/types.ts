@@ -699,6 +699,13 @@ export interface ArticleNotification {
   revisionId: string;
 }
 
+export interface FcmTopicDefinition {
+  id: string;
+  label: string;
+  description: string;
+  category: 'global' | 'topic';
+}
+
 export interface FcmTokenRegistration {
   id: string;
   userId: string;
@@ -706,4 +713,7 @@ export interface FcmTokenRegistration {
   platform: string;
   updatedAt: string;
   userAgent?: string;
+  subscribedTopics?: string[];
+  notifyNewArticles?: boolean;
+  vapidKeyConfigured?: boolean;
 }

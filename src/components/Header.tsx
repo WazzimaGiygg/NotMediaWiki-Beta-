@@ -45,6 +45,7 @@ import {
   getCurrentMonthString,
 } from '../firebase';
 import { mergeArticleNotifications, WebPushPermissionStatus } from '../services/notificationService';
+import { FcmTopicSubscriptions } from './FcmTopicSubscriptions';
 import { onAuthStateChanged } from 'firebase/auth';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { performVpnAudit } from '../utils/vpnDetector';
@@ -118,6 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [notifications, setNotifications] = useState<ArticleNotification[]>([]);
   const [watchedArticles, setWatchedArticles] = useState<WatchlistSubscription[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [notifTab, setNotifTab] = useState<'alerts' | 'topics'>('alerts');
   const [liveAlert, setLiveAlert] = useState<ArticleNotification | null>(null);
   const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
   const [webPushPermission, setWebPushPermission] = useState<WebPushPermissionStatus>(() => api.getWebPushPermissionState());
@@ -1143,8 +1145,41 @@ export const Header: React.FC<HeaderProps> = ({
                           </span>
                         </div>
                       </div>
+
+                      {/* Tabs: Alertas vs Tópicos FCM */}
+                      <div className="flex items-center gap-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                        <button
+                          type="button"
+                          onClick={() => setNotifTab('alerts')}
+                          className={`flex-1 py-1 px-2 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                            notifTab === 'alerts'
+                              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          Alertas ({notifications.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNotifTab('topics')}
+                          className={`flex-1 py-1 px-2 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                            notifTab === 'topics'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          Tópicos &amp; Novos Artigos (FCM)
+                        </button>
+                      </div>
                     </div>
 
+                    {notifTab === 'topics' ? (
+                      <FcmTopicSubscriptions
+                        userId={currentUser?.id}
+                        onPermissionChange={perm => setWebPushPermission(perm)}
+                      />
+                    ) : (
+                      <>
                     {watchedArticles.length > 0 && webPushPermission === 'default' && !pushFeedback && (
                       <div className="mx-3 mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between gap-2">
                         <div className="text-[11px] text-blue-800 dark:text-blue-200 leading-snug">
@@ -1225,6 +1260,8 @@ export const Header: React.FC<HeaderProps> = ({
                         ))
                       )}
                     </div>
+                      </>
+                    )}
 
                     <div className="pt-2 px-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
                       <button

@@ -12,12 +12,91 @@ import {
 } from 'firebase/firestore';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 import { app, db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { Article, WatchlistSubscription, ArticleNotification, FcmTokenRegistration } from '../types';
+import { Article, WatchlistSubscription, ArticleNotification, FcmTokenRegistration, FcmTopicDefinition } from '../types';
 
 const PATH_WATCHLIST = 'watchlist_subscriptions';
 const PATH_NOTIFICATIONS = 'article_notifications';
 const PATH_FCM_TOKENS = 'fcm_tokens';
 const PATH_ARTICLES = 'articles';
+
+export const NEW_ARTICLES_TOPIC_ID = 'novos_artigos';
+
+export const DEFAULT_FCM_TOPICS: FcmTopicDefinition[] = [
+  {
+    id: NEW_ARTICLES_TOPIC_ID,
+    label: 'Novos Artigos Publicados',
+    description: 'Receba alertas push sempre que um novo verbete for criado na enciclopédia.',
+    category: 'global',
+  },
+  {
+    id: 'tecnologia',
+    label: 'Tecnologia & Sistemas',
+    description: 'Computação, arquitetura de software, redes e engenharia.',
+    category: 'topic',
+  },
+  {
+    id: 'ciencia',
+    label: 'Ciência & Pesquisa',
+    description: 'Física, biologia, matemática e descobertas científicas.',
+    category: 'topic',
+  },
+  {
+    id: 'historia',
+    label: 'História & Sociedade',
+    description: 'Eventos históricos, biografias e geopolítica.',
+    category: 'topic',
+  },
+  {
+    id: 'software_livre',
+    label: 'Software Livre & Open Source',
+    description: 'Projetos abertos, licenças livres e cultura wiki.',
+    category: 'topic',
+  },
+  {
+    id: 'governanca',
+    label: 'Governança & Direitos Digitais',
+    description: 'LGPD, transparência, moderação ética e políticas públicas.',
+    category: 'topic',
+  },
+  {
+    id: 'seguranca',
+    label: 'Segurança & Privacidade',
+    description: 'Criptografia, proteção de dados e cibersegurança.',
+    category: 'topic',
+  },
+];
+
+/**
+ * Reads VITE_FIREBASE_VAPID_KEY from Vite environment variables.
+ */
+export function getFirebaseVapidKey(): string | undefined {
+  const raw =
+    typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY
+      ? String((import.meta as any).env.VITE_FIREBASE_VAPID_KEY).trim()
+      : '';
+  return raw.length > 0 ? raw : undefined;
+}
+
+/**
+ * Returns true if VITE_FIREBASE_VAPID_KEY is configured in the environment.
+ */
+export function isVapidKeyConfigured(): boolean {
+  return Boolean(getFirebaseVapidKey());
+}
+
+/**
+ * Normalizes a custom or preset topic name into a valid FCM topic key ([a-z0-9_-]+).
+ */
+export function normalizeTopicId(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+}
 
 export interface ArticleSnapshotBaseline {
   latestRevisionId?: string;
@@ -140,7 +219,59 @@ export interface WebPushSetupResult {
   fcmToken: string | null;
   serviceWorkerReady: boolean;
   fcmSupported: boolean;
+  vapidKeyConfigured: boolean;
+  subscribedTopics: string[];
+  notifyNewArticles: boolean;
   message: string;
+}
+
+export interface UserFcmPreferences {
+  fcmToken: string | null;
+  subscribedTopics: string[];
+  notifyNewArticles: boolean;
+  vapidKeyConfigured: boolean;
+}
+
+const LOCAL_FCM_PREFS_PREFIX = 'notmediawiki_fcm_prefs_';
+const memoryFcmPrefs = new Map<string, { subscribedTopics: string[]; notifyNewArticles: boolean }>();
+
+function readLocalFcmPrefs(userId: string): { subscribedTopics: string[]; notifyNewArticles: boolean } {
+  const defaultPrefs = { subscribedTopics: [NEW_ARTICLES_TOPIC_ID], notifyNewArticles: true };
+  if (!userId) return defaultPrefs;
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(`${LOCAL_FCM_PREFS_PREFIX}${userId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const topics = Array.isArray(parsed.subscribedTopics)
+          ? parsed.subscribedTopics.map((t: any) => normalizeTopicId(String(t))).filter(Boolean)
+          : [];
+        return {
+          subscribedTopics: Array.from(new Set(topics)),
+          notifyNewArticles: Boolean(parsed.notifyNewArticles ?? topics.includes(NEW_ARTICLES_TOPIC_ID)),
+        };
+      }
+    }
+  } catch {
+    // Fallback to memory cache below
+  }
+
+  return memoryFcmPrefs.get(userId) || defaultPrefs;
+}
+
+function writeLocalFcmPrefs(userId: string, subscribedTopics: string[], notifyNewArticles: boolean): void {
+  if (!userId) return;
+  memoryFcmPrefs.set(userId, { subscribedTopics, notifyNewArticles });
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(
+      `${LOCAL_FCM_PREFS_PREFIX}${userId}`,
+      JSON.stringify({ subscribedTopics, notifyNewArticles })
+    );
+  } catch {
+    // Ignore storage failures
+  }
 }
 
 let foregroundFcmListenerAttached = false;
@@ -264,16 +395,34 @@ export function playNotificationChime(): void {
 }
 
 /**
- * Requests Web Push API permission, registers the Service Worker, obtains the FCM token,
- * persists it in Firestore (`fcm_tokens`), and attaches the foreground FCM message listener.
+ * Requests Web Push API permission, registers the Service Worker, obtains the FCM token
+ * using VITE_FIREBASE_VAPID_KEY, persists token + topic subscriptions in Firestore (`fcm_tokens`),
+ * and attaches the foreground FCM message listener.
  */
-export async function requestWebPushPermissionAndRegister(userId: string): Promise<WebPushSetupResult> {
+export async function requestWebPushPermissionAndRegister(
+  userId: string,
+  options?: { subscribedTopics?: string[]; notifyNewArticles?: boolean }
+): Promise<WebPushSetupResult> {
+  const vapidKey = getFirebaseVapidKey();
+  const vapidKeyConfigured = Boolean(vapidKey);
+  const localPrefs = readLocalFcmPrefs(userId);
+  const subscribedTopics = options?.subscribedTopics
+    ? Array.from(new Set(options.subscribedTopics.map(normalizeTopicId).filter(Boolean))).slice(0, 25)
+    : localPrefs.subscribedTopics;
+  const notifyNewArticles =
+    options?.notifyNewArticles !== undefined
+      ? options.notifyNewArticles
+      : subscribedTopics.includes(NEW_ARTICLES_TOPIC_ID);
+
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return {
       permission: 'unsupported',
       fcmToken: null,
       serviceWorkerReady: false,
       fcmSupported: false,
+      vapidKeyConfigured,
+      subscribedTopics,
+      notifyNewArticles,
       message: 'Este navegador não suporta a Web Push API (Notification API).',
     };
   }
@@ -294,6 +443,9 @@ export async function requestWebPushPermissionAndRegister(userId: string): Promi
       fcmToken: null,
       serviceWorkerReady: false,
       fcmSupported: false,
+      vapidKeyConfigured,
+      subscribedTopics,
+      notifyNewArticles,
       message: 'Permissão bloqueada no navegador. Libere as notificações nas configurações do site.',
     };
   }
@@ -304,6 +456,9 @@ export async function requestWebPushPermissionAndRegister(userId: string): Promi
       fcmToken: null,
       serviceWorkerReady: false,
       fcmSupported: false,
+      vapidKeyConfigured,
+      subscribedTopics,
+      notifyNewArticles,
       message: 'Permissão de notificação não concedida.',
     };
   }
@@ -326,10 +481,6 @@ export async function requestWebPushPermissionAndRegister(userId: string): Promi
     fcmSupported = await isSupported();
     if (fcmSupported) {
       const messaging = getMessaging(app);
-      const vapidKey =
-        typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY
-          ? (import.meta as any).env.VITE_FIREBASE_VAPID_KEY
-          : undefined;
 
       try {
         token = await getToken(messaging, {
@@ -353,10 +504,13 @@ export async function requestWebPushPermissionAndRegister(userId: string): Promi
           platform: 'web',
           updatedAt: new Date().toISOString(),
           userAgent: navigator.userAgent.substring(0, 200),
+          subscribedTopics,
+          notifyNewArticles,
+          vapidKeyConfigured,
         };
 
         try {
-          await setDoc(doc(db, PATH_FCM_TOKENS, tokenId), tokenDoc);
+          await setDoc(doc(db, PATH_FCM_TOKENS, tokenId), tokenDoc, { merge: true });
         } catch (err) {
           console.warn('Notice: Could not persist FCM token in Firestore:', err);
         }
@@ -366,14 +520,14 @@ export async function requestWebPushPermissionAndRegister(userId: string): Promi
         foregroundFcmListenerAttached = true;
         onMessage(messaging, payload => {
           playNotificationChime();
-          const title = payload.notification?.title || payload.data?.title || 'NotMediaWiki - Artigo Alterado';
-          const body = payload.notification?.body || payload.data?.body || 'Um artigo seguido foi atualizado.';
+          const title = payload.notification?.title || payload.data?.title || 'NotMediaWiki - Novo Alerta';
+          const body = payload.notification?.body || payload.data?.body || 'Há novidades nos tópicos ou artigos que você acompanha.';
           const slug = payload.data?.articleSlug;
           showBrowserPushNotification({
             title,
             body,
             articleSlug: slug,
-            tag: slug ? `article-edit-${slug}` : undefined,
+            tag: slug ? `article-edit-${slug}` : payload.data?.topic ? `topic-${payload.data.topic}` : undefined,
           }).catch(() => {});
         });
       }
@@ -382,18 +536,163 @@ export async function requestWebPushPermissionAndRegister(userId: string): Promi
     console.warn('Erro ao configurar Firebase Cloud Messaging:', err);
   }
 
+  writeLocalFcmPrefs(userId, subscribedTopics, notifyNewArticles);
+
   const message = token
-    ? 'Notificações Web Push e token FCM ativados neste dispositivo!'
+    ? 'Notificações Push FCM ativadas com sucesso neste dispositivo!'
     : serviceWorkerReady
-      ? 'Web Push API ativada via Service Worker! Você receberá alertas de artigos seguidos no navegador.'
-      : 'Notificações do navegador ativadas para artigos seguidos.';
+      ? 'Web Push ativado via Service Worker! Suas inscrições em tópicos foram salvas.'
+      : 'Notificações do navegador ativadas para novos artigos e tópicos.';
 
   return {
     permission: 'granted',
     fcmToken: token,
     serviceWorkerReady,
     fcmSupported,
+    vapidKeyConfigured,
+    subscribedTopics,
+    notifyNewArticles,
     message,
+  };
+}
+
+/**
+ * Loads the user's persisted FCM topic subscriptions and token status from Firestore (with local fallback).
+ */
+export async function getUserFcmPreferences(userId: string): Promise<UserFcmPreferences> {
+  const local = readLocalFcmPrefs(userId);
+  const vapidKeyConfigured = isVapidKeyConfigured();
+
+  if (!userId || auth.currentUser?.uid !== userId) {
+    return {
+      fcmToken: null,
+      subscribedTopics: local.subscribedTopics,
+      notifyNewArticles: local.notifyNewArticles,
+      vapidKeyConfigured,
+    };
+  }
+
+  try {
+    const q = query(collection(db, PATH_FCM_TOKENS), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      return {
+        fcmToken: null,
+        subscribedTopics: local.subscribedTopics,
+        notifyNewArticles: local.notifyNewArticles,
+        vapidKeyConfigured,
+      };
+    }
+
+    let latestDoc: FcmTokenRegistration | null = null;
+    snap.forEach(docSnap => {
+      const data = docSnap.data() as FcmTokenRegistration;
+      if (!latestDoc || (data.updatedAt || '') > (latestDoc.updatedAt || '')) {
+        latestDoc = data;
+      }
+    });
+
+    const chosen = latestDoc as FcmTokenRegistration | null;
+    const topics = Array.isArray(chosen?.subscribedTopics)
+      ? chosen!.subscribedTopics.map(normalizeTopicId).filter(Boolean)
+      : local.subscribedTopics;
+    const notifyNewArticles =
+      chosen?.notifyNewArticles !== undefined
+        ? Boolean(chosen.notifyNewArticles)
+        : topics.includes(NEW_ARTICLES_TOPIC_ID);
+
+    writeLocalFcmPrefs(userId, topics, notifyNewArticles);
+
+    return {
+      fcmToken: chosen?.token && chosen.token !== 'preferences_only' ? chosen.token : null,
+      subscribedTopics: topics,
+      notifyNewArticles,
+      vapidKeyConfigured,
+    };
+  } catch (err) {
+    console.warn('Não foi possível carregar preferências FCM do Firestore:', err);
+    return {
+      fcmToken: null,
+      subscribedTopics: local.subscribedTopics,
+      notifyNewArticles: local.notifyNewArticles,
+      vapidKeyConfigured,
+    };
+  }
+}
+
+/**
+ * Persists the user's subscribed FCM topics and new-articles preference in localStorage and Firestore (`fcm_tokens`).
+ */
+export async function updateUserFcmTopics(
+  userId: string,
+  topics: string[],
+  notifyNewArticles?: boolean
+): Promise<UserFcmPreferences> {
+  const normalized = Array.from(new Set(topics.map(normalizeTopicId).filter(Boolean))).slice(0, 25);
+  const shouldNotifyNew =
+    notifyNewArticles !== undefined
+      ? notifyNewArticles
+      : normalized.includes(NEW_ARTICLES_TOPIC_ID);
+
+  const finalTopics = shouldNotifyNew
+    ? Array.from(new Set([NEW_ARTICLES_TOPIC_ID, ...normalized]))
+    : normalized.filter(t => t !== NEW_ARTICLES_TOPIC_ID);
+
+  writeLocalFcmPrefs(userId, finalTopics, shouldNotifyNew);
+  const vapidKeyConfigured = isVapidKeyConfigured();
+
+  let activeToken: string | null = null;
+
+  if (userId && auth.currentUser?.uid === userId) {
+    try {
+      const q = query(collection(db, PATH_FCM_TOKENS), where('userId', '==', userId));
+      const snap = await getDocs(q);
+      const nowIso = new Date().toISOString();
+
+      if (snap.empty) {
+        const prefDocId = `${userId}_prefs`;
+        const prefDoc: FcmTokenRegistration = {
+          id: prefDocId,
+          userId,
+          token: 'preferences_only',
+          platform: 'web',
+          updatedAt: nowIso,
+          subscribedTopics: finalTopics,
+          notifyNewArticles: shouldNotifyNew,
+          vapidKeyConfigured,
+        };
+        await setDoc(doc(db, PATH_FCM_TOKENS, prefDocId), prefDoc, { merge: true });
+      } else {
+        await Promise.all(
+          snap.docs.map(docSnap => {
+            const data = docSnap.data() as FcmTokenRegistration;
+            if (data.token && data.token !== 'preferences_only') {
+              activeToken = data.token;
+            }
+            return setDoc(
+              doc(db, PATH_FCM_TOKENS, docSnap.id),
+              {
+                userId,
+                subscribedTopics: finalTopics,
+                notifyNewArticles: shouldNotifyNew,
+                vapidKeyConfigured,
+                updatedAt: nowIso,
+              },
+              { merge: true }
+            );
+          })
+        );
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, PATH_FCM_TOKENS);
+    }
+  }
+
+  return {
+    fcmToken: activeToken,
+    subscribedTopics: finalTopics,
+    notifyNewArticles: shouldNotifyNew,
+    vapidKeyConfigured,
   };
 }
 
