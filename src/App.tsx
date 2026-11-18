@@ -14,6 +14,7 @@ import { ChatDrawer } from './components/ChatDrawer';
 import { DailyChecklistModal } from './components/DailyChecklistModal';
 import { SpecialPagesHub } from './components/SpecialPagesHub';
 import { GoogleOneTapPopup } from './components/GoogleOneTapPopup';
+import { PromoVideoStudio } from './components/PromoVideoStudio';
 import { MessageSquare } from 'lucide-react';
 import { UserSession } from './types';
 import { api } from './api';
@@ -254,6 +255,8 @@ export default function App() {
         setIsChatOpen(true);
       } else if (hash === '#/checklist' || hash === '#/pontos' || hash === '#/missoes') {
         setIsChecklistOpen(true);
+      } else if (hash === '#/video-comercial' || hash === '#/promo-video' || hash === '#/comercial') {
+        setCurrentView('promo_video');
       } else if (hash === '#/admin' || hash === '#/dev_admin') {
         setAdminSubTab('users');
         setCurrentView('dev_admin');
@@ -380,6 +383,8 @@ export default function App() {
             window.location.hash = '#/special/SpecialPages';
           } else if (view === 'directory') {
             window.location.hash = '#/usuarios';
+          } else if (view === 'promo_video') {
+            window.location.hash = '#/video-comercial';
           } else if (view === 'dev_admin') {
             window.location.hash = `#/admin`;
           }
@@ -542,6 +547,15 @@ export default function App() {
             initialQuery={searchQuery}
             onNavigateArticle={handleNavigateArticle}
             onRandomArticle={handleRandomArticle}
+          />
+        )}
+
+        {currentView === 'promo_video' && (
+          <PromoVideoStudio
+            onBack={() => {
+              setCurrentView('home');
+              window.location.hash = '#/home';
+            }}
           />
         )}
       </main>

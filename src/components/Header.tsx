@@ -621,6 +621,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'special', label: 'Páginas Especiais' },
     { id: 'directory', label: 'Diretório de Usuários' },
     { id: 'editor', label: 'Wikitext Editor' },
+    { id: 'promo_video', label: 'Vídeo Comercial' },
     ...(isAdminOrBureaucrat ? [{ id: 'dev_admin', label: 'Desenvolvedor e Administrador' }] : []),
   ];
 
