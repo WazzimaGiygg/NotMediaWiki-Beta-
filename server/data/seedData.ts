@@ -1,3 +1,5 @@
+import { LGPD_INVESTIGATION_ARTICLE } from '../../src/data/lgpdInvestigationArticle';
+
 export interface Article {
   id: string;
   slug: string;
@@ -361,7 +363,8 @@ Hello team! We have successfully migrated the monolithic PHP parser (\`Parser.ph
 == Benchmarks on Node.js Gateway ==
 We tested 10,000 req/sec against \`/api/v1/content/articles/MediaWiki\`. P99 latency stayed under 18ms thanks to the distributed in-memory cache layer. --[[User:ParsoidBot|ParsoidBot]]
 `
-  }
+  },
+  LGPD_INVESTIGATION_ARTICLE,
 ];
 
 export const INITIAL_REVISIONS: Revision[] = [
@@ -436,7 +439,19 @@ export const INITIAL_REVISIONS: Revision[] = [
     sha256: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2d',
     byteSize: INITIAL_ARTICLES[4].wikitext.length,
     isMinor: false,
-  }
+  },
+  {
+    id: 'rev-601',
+    articleSlug: LGPD_INVESTIGATION_ARTICLE.slug,
+    parentRevisionId: null,
+    wikitext: LGPD_INVESTIGATION_ARTICLE.wikitext,
+    comment: 'Publicação do dossiê Investigação LGPD e Marco Civil sobre a WMF e Wikipédia (WazzimaGiygg)',
+    author: { id: 'AZolFPgfELhRLcvoj7VhlYQV0G42', name: 'WazzimaGiygg', isBot: false },
+    timestamp: '2026-11-19T12:00:00Z',
+    sha256: 'e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5',
+    byteSize: LGPD_INVESTIGATION_ARTICLE.wikitext.length,
+    isMinor: false,
+  },
 ];
 
 export const INITIAL_EVENTS: WikiEvent[] = [

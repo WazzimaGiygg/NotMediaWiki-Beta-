@@ -44,6 +44,7 @@ import {
   playNotificationChime,
 } from './services/notificationService';
 import { clientParsoid } from './services/parsoid';
+import { LGPD_INVESTIGATION_ARTICLE } from './data/lgpdInvestigationArticle';
 import {
   fetchArticlesFromFirestore,
   fetchArticleFromFirestore,
@@ -124,13 +125,19 @@ export const api = {
   // 1. Content Service (Firebase Firestore is the Single Source of Truth)
   // ---------------------------------------------------------------------------
   async getArticles(namespace?: number): Promise<Article[]> {
-    // Only return data synchronized in the Firebase database
+    // Only return data synchronized in the Firebase database + canonical investigation dossier if not yet synced
     try {
-      const fbArticles = await fetchArticlesFromFirestore(namespace);
-      return fbArticles || [];
+      const fbArticles = (await fetchArticlesFromFirestore(namespace)) || [];
+      const hasInvestigation = fbArticles.some(
+        a => a.slug.toLowerCase() === LGPD_INVESTIGATION_ARTICLE.slug.toLowerCase()
+      );
+      if (!hasInvestigation && (namespace === undefined || namespace === LGPD_INVESTIGATION_ARTICLE.namespace)) {
+        return [LGPD_INVESTIGATION_ARTICLE, ...fbArticles];
+      }
+      return fbArticles;
     } catch (e) {
       console.warn('Could not read articles from Firestore:', e);
-      return [];
+      return namespace === undefined || namespace === 0 ? [LGPD_INVESTIGATION_ARTICLE] : [];
     }
   },
 
@@ -208,6 +215,14 @@ export const api = {
       }
     } catch {
       // ignore
+    }
+
+    // 3. Fallback to built-in canonical LGPD & Marco Civil investigation article
+    if (
+      cleanSlug.toLowerCase() === LGPD_INVESTIGATION_ARTICLE.slug.toLowerCase() ||
+      decodeURIComponent(cleanSlug).toLowerCase() === LGPD_INVESTIGATION_ARTICLE.slug.toLowerCase()
+    ) {
+      return { ...LGPD_INVESTIGATION_ARTICLE };
     }
 
     throw new Error(`Artigo "${slug}" não encontrado no banco de dados.`);

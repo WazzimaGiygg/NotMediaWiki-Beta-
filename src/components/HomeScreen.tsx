@@ -28,6 +28,10 @@ import { Article, UserSession, HomePageMetadata } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import {
+  LGPD_INVESTIGATION_SLUG,
+  LGPD_INVESTIGATION_PDF_URL,
+} from '../data/lgpdInvestigationArticle';
+import {
   fetchHomePageMetadata,
   saveHomePageMetadata,
   subscribeToHomePageMetadata,
@@ -418,6 +422,53 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-sans"
             dangerouslySetInnerHTML={{ __html: homeMeta.htmlContent }}
           />
+        </div>
+      </section>
+
+      {/* DOSSIÊ ESPECIAL: Investigação LGPD e Marco Civil sobre a Wikipédia e WMF */}
+      <section className="bg-gradient-to-br from-rose-950 via-slate-900 to-slate-950 text-white border border-rose-900/60 rounded-xl p-6 sm:p-7 shadow-md">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-rose-500/20 border border-rose-400/40 text-rose-200 text-[11px] font-bold uppercase tracking-wider">
+                <Shield className="w-3.5 h-3.5 text-rose-300" />
+                Dossiê Investigativo • Contra-Propaganda
+              </span>
+              <span className="text-[11px] font-mono text-slate-400">
+                LGPD (Lei 13.709/18) &amp; Marco Civil (Lei 12.965/14)
+              </span>
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-white tracking-tight">
+              Investigação LGPD e Marco Civil: WMF e Wikipédia
+            </h2>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Conheça o levantamento documental do ecossistema <strong className="text-white">WazzimaGiygg</strong> sobre falhas de privacidade, exposição de metadados, barreiras ao Art. 18 da LGPD e violações ao Marco Civil da Internet na Wikipédia e na Wikimedia Foundation — e entenda por que o <strong className="text-emerald-300">NotMediaWiki</strong> foi projetado com conformidade legal nativa no Brasil.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap sm:flex-nowrap lg:flex-col gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigateArticle(LGPD_INVESTIGATION_SLUG)}
+              className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Ler Dossiê Completo no Wiki</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <a
+              href={LGPD_INVESTIGATION_PDF_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-white/10 hover:bg-white/15 text-slate-100 border border-white/20 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5 text-rose-300" />
+              <span>Abrir PDF Original (WazzimaGiygg)</span>
+              <ExternalLink className="w-3 h-3 text-slate-400" />
+            </a>
+          </div>
         </div>
       </section>
 
