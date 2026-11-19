@@ -115,7 +115,7 @@ export const LgpdMarcoCivilRules: React.FC<LgpdProps> = ({ currentUser }) => {
             id: 'active_audit',
             status: 'Conforme (100%)',
             controller: 'Projetos WazzimaGiygg',
-            dpoEmail: 'dpo@wazzimagiygg.com',
+            dpoEmail: 'pedrohenriquecardonaperes@gmail.com',
             checklist: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true },
             ripdGenerated: false,
             updatedAt: new Date().toISOString(),
@@ -399,7 +399,7 @@ export const LgpdMarcoCivilRules: React.FC<LgpdProps> = ({ currentUser }) => {
               <div>
                 <span className="font-bold text-slate-800">Encarregado pelo Tratamento de Dados Pessoais (DPO):</span>
                 <div className="text-[11px] text-slate-600 mt-0.5">
-                  Projetos WazzimaGiygg • Contato direto: <span className="font-mono font-medium text-blue-600">dpo@wazzimagiygg.com</span>
+                  Projetos WazzimaGiygg • Contato direto: <span className="font-mono font-medium text-blue-600">pedrohenriquecardonaperes@gmail.com</span>
                 </div>
               </div>
               <span className="px-2.5 py-1 rounded bg-white border border-slate-300 font-mono text-[11px] text-slate-700">
@@ -494,7 +494,7 @@ export const LgpdMarcoCivilRules: React.FC<LgpdProps> = ({ currentUser }) => {
               </div>
               <div className="text-slate-700 space-y-1">
                 <div>CONTROLADOR: Projetos WazzimaGiygg (wazzimagiygg.com)</div>
-                <div>ENCARREGADO (DPO): dpo@wazzimagiygg.com</div>
+                <div>ENCARREGADO (DPO): pedrohenriquecardonaperes@gmail.com</div>
                 <div>RESPONSÁVEL PELA AUDITORIA: {ripdSigner || currentUser?.username || 'Burocrata Oficial'}</div>
                 <div>NATUREZA DA APLICAÇÃO: Base colaborativa de conhecimento com arquitetura de microsserviços Node.js</div>
                 <div>BANCO DE DADOS: Google Cloud Firestore (Coleção compliance_records)</div>

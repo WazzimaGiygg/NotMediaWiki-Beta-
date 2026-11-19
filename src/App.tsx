@@ -23,8 +23,10 @@ import { wrapExternalUrl } from './utils/urlHelper';
 import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
 import { applyDefaultSiteSeo, applyDynamicSeoMeta, PRIMARY_CANONICAL_ORIGIN, SITE_BRAND_NAME } from './utils/seoManager';
 import { LgpdRequestsProvider } from './context/LgpdRequestsContext';
+import { enforceFrameBusting } from './utils/frameGuard';
 
 export default function App() {
+  const [isIframeBlocked] = useState<boolean>(() => enforceFrameBusting());
   const [currentView, setCurrentView] = useState<string>('home');
   const [activeArticleSlug, setActiveArticleSlug] = useState<string>('MediaWiki');
   const [specialPageName, setSpecialPageName] = useState<string>('SpecialPages');
@@ -375,6 +377,32 @@ export default function App() {
     setCurrentView('search');
     window.location.hash = `#/search?q=${encodeURIComponent(query)}`;
   };
+
+  if (isIframeBlocked) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-slate-900 border border-rose-800/60 rounded-xl p-6 text-center space-y-4 shadow-xl">
+          <div className="text-xs font-mono uppercase tracking-wider text-rose-400">
+            Proteção Anti-Clickjacking (X-Frame-Options: DENY)
+          </div>
+          <h1 className="text-xl font-serif font-bold text-white">
+            Exibição em iframe não permitida
+          </h1>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Por motivos de segurança, o <strong>NotMediaWiki</strong> não permite ser incorporado ou exibido dentro de iframes de terceiros.
+          </p>
+          <a
+            href={typeof window !== 'undefined' ? window.location.href : PRIMARY_CANONICAL_ORIGIN}
+            target="_top"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            Abrir NotMediaWiki diretamente
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <LgpdRequestsProvider currentUser={currentUser}>

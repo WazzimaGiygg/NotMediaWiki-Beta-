@@ -58,7 +58,7 @@ A tabela abaixo resume as diferenças estruturais defendidas pelo projeto '''Not
 {| class="wikitable"
 ! Critério de Governança !! Wikipédia / WMF (Apontado no Dossiê) !! NotMediaWiki (WazzimaGiygg)
 |-
-| '''Conformidade LGPD (Art. 18)''' || Fluxos complexos em inglês; supressão restrita e opaca || Central dedicada de Solicitações LGPD / Oversight e DPO ativo (<code>dpo@wazzimagiygg.com</code>)
+| '''Conformidade LGPD (Art. 18)''' || Fluxos complexos em inglês; supressão restrita e opaca || Central dedicada de Solicitações LGPD / Oversight e DPO ativo (<code>pedrohenriquecardonaperes@gmail.com</code>)
 |-
 | '''Proteção de Dados e IPs (Marco Civil Art. 15)''' || Histórico público expõe IPs e metadados de forma ampla || Sigilo de logs em ambiente controlado com auditoria restrita e bot preventivo '''LgpdBot'''
 |-

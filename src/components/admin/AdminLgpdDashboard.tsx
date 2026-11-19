@@ -372,8 +372,8 @@ export const AdminLgpdDashboard: React.FC<AdminLgpdDashboardProps> = ({
           </div>
           <div className="bg-slate-50 p-2.5 rounded border border-slate-200">
             <div className="text-[10px] font-semibold text-slate-500 uppercase">Encarregado DPO</div>
-            <div className="text-sm sm:text-base font-bold font-mono text-slate-800 mt-1 truncate">
-              dpo@wazzimagiygg.com
+            <div className="text-sm sm:text-base font-bold font-mono text-slate-800 mt-1 truncate" title="pedrohenriquecardonaperes@gmail.com">
+              pedrohenriquecardonaperes@gmail.com
             </div>
           </div>
         </div>

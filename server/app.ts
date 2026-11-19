@@ -32,13 +32,20 @@ export function createExpressApp() {
     next();
   });
 
-  // 2. Security Headers via Helmet
+  // 2. Security Headers via Helmet + Strict Anti-Iframe (Clickjacking Protection)
   app.use(
     helmet({
       contentSecurityPolicy: false, // Let Vite handle script tags in development/SPA
       crossOriginEmbedderPolicy: false,
+      frameguard: { action: 'deny' },
     })
   );
+
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+    next();
+  });
 
   // 3. CORS restricted to APP_URL and local dev
   const allowedOrigins = [
