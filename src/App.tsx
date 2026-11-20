@@ -24,6 +24,8 @@ import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
 import { applyDefaultSiteSeo, applyDynamicSeoMeta, PRIMARY_CANONICAL_ORIGIN, SITE_BRAND_NAME } from './utils/seoManager';
 import { LgpdRequestsProvider } from './context/LgpdRequestsContext';
 import { enforceFrameBusting } from './utils/frameGuard';
+import { WikiFooter } from './components/WikiFooter';
+import { LGPD_INVESTIGATION_SLUG } from './data/lgpdInvestigationArticle';
 
 export default function App() {
   const [isIframeBlocked] = useState<boolean>(() => enforceFrameBusting());
@@ -605,43 +607,16 @@ export default function App() {
         )}
       </main>
 
-      {/* Global NotMediaWiki Status Bar & Attribution */}
+      {/* Global WikiZero / NotMediaWiki Footer with 88x31 Buttons & Display Mode Controls */}
       {!(isZenMode && currentView === 'reader') && (
-        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 px-4 sm:px-6 text-xs text-slate-500 dark:text-slate-400 transition-colors">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-bold text-slate-800 dark:text-slate-200">NotMediaWiki</span>
-              <span aria-hidden="true">·</span>
-              <span>
-                Faz parte do desenvolvimento de projetos <strong className="text-slate-700 dark:text-slate-300">WazzimaGiygg</strong>, do site{' '}
-                <a
-                  href={wrapExternalUrl("https://wazzimagiygg.com")}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                >
-                  wazzimagiygg.com
-                </a>
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400 dark:text-slate-500">
-              <span>Parsoid AST</span>
-              <span>·</span>
-              <span>Firebase Cloud</span>
-              <span>·</span>
-              <a
-                href={wrapExternalUrl("https://wazzimagiygg.com")}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 underline"
-              >
-                wazzimagiygg.com
-              </a>
-            </div>
-          </div>
-        </footer>
+        <WikiFooter
+          onNavigateHome={() => {
+            setCurrentView('home');
+            window.location.hash = '#/home';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onNavigateLgpd={() => handleNavigateArticle(LGPD_INVESTIGATION_SLUG)}
+        />
       )}
 
       {/* Modal to add new article */}
@@ -675,16 +650,18 @@ export default function App() {
       />
 
       {/* Google One Tap / Quick Sign-in popup at top-right */}
-      <GoogleOneTapPopup
-        currentUser={currentUser}
-        onUserChanged={setCurrentUser}
-      />
+      {!(isZenMode && currentView === 'reader') && (
+        <GoogleOneTapPopup
+          currentUser={currentUser}
+          onUserChanged={setCurrentUser}
+        />
+      )}
 
       {/* Offline connectivity indicator */}
       <OfflineIndicator />
 
       {/* Floating Chat Trigger Button */}
-      {!isChatOpen && (
+      {!isChatOpen && !(isZenMode && currentView === 'reader') && (
         <button
           onClick={() => setIsChatOpen(true)}
           className="fixed bottom-5 right-5 z-40 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-105"

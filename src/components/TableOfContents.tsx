@@ -30,6 +30,7 @@ export interface TableOfContentsProps {
   defaultAutoCollapse?: boolean;
   variant?: 'sidebar' | 'inline';
   defaultOpen?: boolean;
+  title?: string;
 }
 
 function buildInitialHeadings(html?: string, initialToc?: TocItem[]): DynamicHeading[] {
@@ -70,6 +71,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
   defaultAutoCollapse = false,
   variant = 'sidebar',
   defaultOpen,
+  title = 'Índice Automático',
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(
     defaultOpen !== undefined ? defaultOpen : variant === 'sidebar'
@@ -391,7 +393,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
 
   return (
     <nav
-      aria-label="Tabela de Conteúdos"
+      aria-label={title}
       data-testid={`wiki-toc-${variant}`}
       className={`border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/80 dark:bg-slate-900/80 text-xs transition-all ${
         variant === 'sidebar' ? 'lg:sticky lg:top-20' : ''
@@ -403,7 +405,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
           <List className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <h2 className="font-semibold text-slate-900 dark:text-slate-100 text-xs tracking-tight flex items-center gap-1.5">
-              <span>Tabela de Conteúdos</span>
+              <span>{title}</span>
               <span className="text-[11px] font-mono tabular-nums text-slate-400 dark:text-slate-500 font-normal">
                 · {headings.length}
               </span>

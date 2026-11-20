@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X, Focus } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -140,23 +140,35 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     }
   };
 
-  // Focus / Reader Mode & Zen Mode state (Distraction-Free)
+  // Focus Mode, Reader Mode & Zen Mode state (Distraction-Free)
+  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
   const [internalZenMode, setInternalZenMode] = useState<boolean>(false);
-  const isZenActive = controlledZenMode !== undefined ? controlledZenMode : internalZenMode;
+  const isZenActive = !isFocusMode && (controlledZenMode !== undefined ? controlledZenMode : internalZenMode);
+
+  const setFocusMode = (enabled: boolean) => {
+    setIsFocusMode(enabled);
+    if (enabled) {
+      setIsReaderMode(false);
+      setInternalZenMode(false);
+    }
+    onZenModeChange?.(enabled);
+  };
+
   const setZenMode = (enabled: boolean) => {
     setInternalZenMode(enabled);
     if (enabled) {
+      setIsFocusMode(false);
       setIsReaderMode(false);
     }
     onZenModeChange?.(enabled);
   };
-  const isDistractionFree = isReaderMode || isZenActive;
+  const isDistractionFree = isFocusMode || isReaderMode || isZenActive;
 
   const [readerFontSize, setReaderFontSize] = useState<'base' | 'lg' | 'xl'>('lg');
   const [readerFontFamily, setReaderFontFamily] = useState<'serif' | 'sans'>('serif');
 
-  // Ensure Zen Mode resets on unmount so global Header/Footer are restored
+  // Ensure Focus / Zen Mode resets on unmount so global Header/Footer are restored
   useEffect(() => {
     return () => {
       onZenModeChange?.(false);
@@ -183,11 +195,13 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     }
   };
 
-  // Keyboard shortcut: Esc to exit Zen Mode or Reader Mode
+  // Keyboard shortcut: Esc to exit Focus Mode, Zen Mode, or Reader Mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (isZenActive) {
+        if (isFocusMode) {
+          setFocusMode(false);
+        } else if (isZenActive) {
           setZenMode(false);
         } else if (isReaderMode) {
           setIsReaderMode(false);
@@ -196,7 +210,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isReaderMode, isZenActive]);
+  }, [isFocusMode, isReaderMode, isZenActive]);
 
   // Real-time Firestore onSnapshot subscription state
   const loadedRevIdRef = useRef<string | null>(null);
@@ -521,8 +535,27 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   return (
     <div className="relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      {/* Ultra-minimal floating exit control for Modo Foco */}
+      {isFocusMode && (
+        <div className="no-print fixed top-4 right-4 z-50">
+          <button
+            type="button"
+            onClick={() => setFocusMode(false)}
+            data-testid="exit-focus-mode-btn"
+            className="px-3.5 py-2 text-xs font-semibold bg-slate-900/85 hover:bg-slate-900 dark:bg-slate-100/90 dark:hover:bg-slate-100 text-white dark:text-slate-900 backdrop-blur-md rounded-lg shadow-md border border-slate-700/50 dark:border-slate-300 flex items-center gap-1.5 transition-all cursor-pointer opacity-75 hover:opacity-100"
+            title="Sair do Modo Foco e restaurar cabeçalho, barras laterais e rodapé (Esc)"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>Sair do Modo Foco</span>
+            <kbd className="ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-white/15 dark:bg-slate-900/15 rounded">
+              Esc
+            </kbd>
+          </button>
+        </div>
+      )}
+
       {/* Minimal Floating Bar for Zen Mode or Reader Mode */}
-      {isDistractionFree && (
+      {isDistractionFree && !isFocusMode && (
         <div
           data-testid={isZenActive ? 'zen-mode-bar' : 'reader-mode-bar'}
           className={`sticky top-3 z-30 mb-8 px-4 py-2.5 rounded-xl backdrop-blur-md border flex flex-wrap items-center justify-between gap-3 transition-all ${
@@ -706,6 +739,16 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={() => setFocusMode(true)}
+              data-testid="focus-mode-btn"
+              className="px-3 py-1.5 text-xs font-semibold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded border border-slate-900 dark:border-slate-100 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Ativar Modo Foco (remove temporariamente cabeçalho, barras laterais e rodapé, mantendo apenas o conteúdo do artigo)"
+            >
+              <Focus className="w-3.5 h-3.5" />
+              <span>Modo Foco</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setZenMode(true)}
               data-testid="zen-mode-btn"
               className="px-3 py-1.5 text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
@@ -805,7 +848,9 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
       <div
         className={
-          isZenActive
+          isFocusMode
+            ? 'max-w-[70ch] mx-auto py-8 sm:py-12'
+            : isZenActive
             ? 'max-w-[68ch] mx-auto py-4 sm:py-8'
             : isReaderMode
             ? 'max-w-3xl mx-auto py-2'
@@ -814,15 +859,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
       >
         {/* Left Column: Article Directory / Quick Switcher (Hidden in Zen/Reader Mode) */}
         {!isDistractionFree && (
-          <div className="hidden lg:block lg:col-span-3 space-y-6">
-          {/* Dynamic Sticky Table of Contents Sidebar Component */}
-          <TableOfContents
-            contentRef={contentRef}
-            html={renderedHtml || html}
-            initialToc={toc}
-            variant="sidebar"
-          />
-
+          <div className="no-print hidden xl:block xl:col-span-2 space-y-6">
           {/* Quick Wiki Article Directory */}
           <div className="border border-slate-200 dark:border-slate-800 rounded p-4 bg-white dark:bg-slate-900 text-xs">
             <div className="font-semibold text-slate-800 dark:text-slate-200 mb-2.5 pb-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
@@ -913,12 +950,12 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           </div>
         )}
 
-        {/* Right / Main Column: Article Content */}
-        <main className={isDistractionFree ? "w-full" : "lg:col-span-9"}>
+        {/* Center / Main Column: Article Content */}
+        <main className={isDistractionFree ? "w-full" : "lg:col-span-9 xl:col-span-7 min-w-0"}>
           {/* Article Title */}
-          <div className={`border-b border-slate-200 dark:border-slate-800 pb-3 ${isZenActive ? 'mb-8' : 'mb-4'}`}>
+          <div className={`border-b border-slate-200 dark:border-slate-800 pb-3 ${isZenActive || isFocusMode ? 'mb-8' : 'mb-4'}`}>
             {/* Subpage Breadcrumbs Hierarchy */}
-            {!isZenActive && breadcrumbs.length > 0 && (
+            {!(isZenActive || isFocusMode) && breadcrumbs.length > 0 && (
               <nav aria-label="Subpáginas" className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5 flex-wrap font-sans">
                 <span className="text-slate-400 dark:text-slate-500 font-medium">&lt;</span>
                 {breadcrumbs.map((crumb, idx) => (
@@ -948,19 +985,19 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
             <h1
               className={`${
-                isZenActive ? 'text-4xl sm:text-[2.6rem] leading-tight' : 'text-3xl'
+                isZenActive || isFocusMode ? 'text-4xl sm:text-[2.6rem] leading-tight' : 'text-3xl'
               } font-serif font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center justify-between`}
             >
               <span>{article.title}</span>
-              {!isZenActive && article.isProtected && (
+              {!(isZenActive || isFocusMode) && article.isProtected && (
                 <span className="text-xs font-sans font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 flex items-center gap-1">
                   <Shield className="w-3 h-3 text-amber-600 dark:text-amber-400" /> Protected
                 </span>
               )}
             </h1>
 
-            {/* Zero-Pill Unboxed Metadata (Hidden in Zen Mode for pure focus) */}
-            {!isZenActive && (
+            {/* Zero-Pill Unboxed Metadata (Hidden in Zen/Focus Mode for pure focus) */}
+            {!(isZenActive || isFocusMode) && (
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-2 font-sans">
                 <span>Wikipedia, the free encyclopedia</span>
                 <span aria-hidden="true">·</span>
@@ -1021,8 +1058,8 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             )}
           </div>
 
-          {/* Collapsible Inline TOC for mobile/tablet viewports and Reader Mode (Hidden in Zen Mode) */}
-          {!isZenActive && (
+          {/* Collapsible Inline TOC for mobile/tablet viewports and Reader Mode (Hidden in Zen/Focus Mode) */}
+          {!(isZenActive || isFocusMode) && (
             <TableOfContents
               contentRef={contentRef}
               html={renderedHtml || html}
@@ -1038,7 +1075,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             id="wiki-article-container"
             ref={contentRef}
             className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 ${
-              isZenActive ? 'zen-mode-article' : ''
+              isZenActive || isFocusMode ? 'zen-mode-article' : ''
             } ${
               readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
             } ${
@@ -1071,7 +1108,9 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               </p>
               <button
                 onClick={() => {
-                  if (isZenActive) {
+                  if (isFocusMode) {
+                    setFocusMode(false);
+                  } else if (isZenActive) {
                     setZenMode(false);
                   } else {
                     setIsReaderMode(false);
@@ -1082,7 +1121,9 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               >
                 <Minimize2 className="w-3.5 h-3.5" />
                 <span>
-                  {isZenActive
+                  {isFocusMode
+                    ? 'Sair do Modo Foco e voltar à visão padrão'
+                    : isZenActive
                     ? 'Sair do Modo Zen e voltar à visão padrão'
                     : 'Sair do Modo de Leitura e voltar à visão padrão'}
                 </span>
@@ -1194,6 +1235,23 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             Documento gerado via API de impressão do navegador · {SITE_BRAND_NAME} · {wordCount.toLocaleString()} palavras · Revisão {article.latestRevisionId}
           </div>
         </main>
+
+        {/* Right Sidebar: Automatic Table of Contents (Índice Automático - H2 & H3) */}
+        {!isDistractionFree && (
+          <aside
+            aria-label="Índice Automático"
+            data-testid="wiki-right-toc-sidebar"
+            className="no-print toc-container hidden lg:block lg:col-span-3"
+          >
+            <TableOfContents
+              contentRef={contentRef}
+              html={renderedHtml || html}
+              initialToc={toc}
+              variant="sidebar"
+              title="Índice Automático"
+            />
+          </aside>
+        )}
       </div>
     </div>
 
