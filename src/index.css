@@ -905,6 +905,35 @@ html[data-wiki-theme="windows-31"] .wiki-content .wikitable td {
   border-color: #c0c0c0;
 }
 
+/* ==========================================================================
+   App Platform Mode (Mobile App vs Computer Desktop Mode vs Smart TV)
+   ========================================================================== */
+html[data-device-mode="mobile"] footer[data-testid="wiki-global-footer"] {
+  padding-bottom: 5rem !important;
+}
+
+html[data-device-mode="mobile"] main .max-w-7xl {
+  max-width: 760px;
+}
+
+html[data-device-mode="mobile"] main .lg\:grid-cols-12,
+html[data-device-mode="mobile"] main .lg\:grid-cols-3,
+html[data-device-mode="mobile"] main .md\:grid-cols-2 {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html[data-device-mode="mobile"] main .lg\:col-span-9,
+html[data-device-mode="mobile"] main .lg\:col-span-3,
+html[data-device-mode="mobile"] main .lg\:col-span-8,
+html[data-device-mode="mobile"] main .lg\:col-span-4 {
+  grid-column: span 1 / span 1 !important;
+}
+
+html[data-device-mode="tv"] {
+  font-size: 18px;
+}
+
+
 
 
 

@@ -34,6 +34,9 @@ import { WikiFooter } from './components/WikiFooter';
 import { LGPD_INVESTIGATION_SLUG } from './data/lgpdInvestigationArticle';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { WikidiotaParodyBanner } from './components/WikidiotaParodyBanner';
+import { AppInstallModal } from './components/AppInstallModal';
+import { MobileAppNavBar } from './components/MobileAppNavBar';
+import { useAppPlatformMode } from './hooks/usePWAInstall';
 
 interface WikiAppShellProps {
   currentUser: UserSession | null;
@@ -79,6 +82,14 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
+  const [isAppModalOpen, setIsAppModalOpen] = useState(false);
+  const { deviceMode, setDeviceMode } = useAppPlatformMode();
+
+  useEffect(() => {
+    const handleOpenModalEvent = () => setIsAppModalOpen(true);
+    window.addEventListener('notmediawiki:open-app-modal', handleOpenModalEvent);
+    return () => window.removeEventListener('notmediawiki:open-app-modal', handleOpenModalEvent);
+  }, []);
 
   const {
     extensions,
@@ -611,6 +622,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           }}
           onOpenChecklist={() => setIsChecklistOpen(true)}
           onRandomArticle={handleRandomArticle}
+          onOpenAppOptions={() => setIsAppModalOpen(true)}
         />
       )}
 
@@ -820,6 +832,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onNavigateLgpd={() => handleNavigateArticle(LGPD_INVESTIGATION_SLUG)}
+          deviceMode={deviceMode}
+          onChangeDeviceMode={setDeviceMode}
+          onOpenAppOptions={() => setIsAppModalOpen(true)}
         />
       )}
 
@@ -867,11 +882,40 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       {/* Theme Appearance Extension Modal */}
       <ThemeSelectorModal />
 
+      {/* Mobile & Desktop App Install & Mode Options Modal */}
+      <AppInstallModal
+        isOpen={isAppModalOpen}
+        onClose={() => setIsAppModalOpen(false)}
+        deviceMode={deviceMode}
+        onChangeDeviceMode={setDeviceMode}
+      />
+
+      {/* Mobile Bottom Tab Bar */}
+      {!(isZenMode && currentView === 'reader') && (
+        <MobileAppNavBar
+          currentView={currentView}
+          deviceMode={deviceMode}
+          onSelectHome={() => {
+            setCurrentView('home');
+            window.location.hash = '#/home';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onSelectReader={() => {
+            setCurrentView('reader');
+            window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+          }}
+          onRandomArticle={handleRandomArticle}
+          onOpenAppOptions={() => setIsAppModalOpen(true)}
+        />
+      )}
+
       {/* Floating Chat Trigger Button */}
       {!isChatOpen && !(isZenMode && currentView === 'reader') && (
         <button
           onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-5 right-5 z-40 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-105"
+          className={`fixed ${
+            deviceMode === 'mobile' ? 'bottom-20' : 'bottom-20 md:bottom-5'
+          } right-5 z-40 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-105`}
           title="Abrir Chat em Tempo Real"
         >
           <MessageSquare className="w-4 h-4" />

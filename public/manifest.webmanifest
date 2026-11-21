@@ -6,9 +6,12 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
   "background_color": "#f8fafc",
   "theme_color": "#2563eb",
   "lang": "pt-BR",
+  "categories": ["education", "reference", "books"],
   "icons": [
     {
       "src": "/assets/aistudio/image_370f9ede.png",
@@ -21,6 +24,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Página Inicial",
+      "short_name": "Início",
+      "description": "Abrir a página inicial da enciclopédia",
+      "url": "/#/home"
+    },
+    {
+      "name": "Página Aleatória",
+      "short_name": "Aleatória",
+      "description": "Sortear um artigo aleatório para leitura",
+      "url": "/#/random"
     }
   ]
 }

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Smartphone, Monitor, Tv, Palette, Heart, ExternalLink } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Smartphone, Monitor, Tv, Palette, Heart, ExternalLink, Download } from 'lucide-react';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { useExtensions } from '../context/ExtensionsContext';
+import { useAppPlatformMode } from '../hooks/usePWAInstall';
 
 export type FooterDeviceMode = 'auto' | 'mobile' | 'desktop' | 'tv';
 
@@ -10,6 +11,7 @@ export interface WikiFooterProps {
   onNavigateLgpd: () => void;
   deviceMode?: FooterDeviceMode;
   onChangeDeviceMode?: (mode: FooterDeviceMode) => void;
+  onOpenAppOptions?: () => void;
 }
 
 export const WikiFooter: React.FC<WikiFooterProps> = ({
@@ -17,16 +19,9 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
   onNavigateLgpd,
   deviceMode: controlledDeviceMode,
   onChangeDeviceMode,
+  onOpenAppOptions,
 }) => {
-  const [internalDeviceMode, setInternalDeviceMode] = useState<FooterDeviceMode>(() => {
-    try {
-      const saved = localStorage.getItem('notmediawiki_device_mode') as FooterDeviceMode | null;
-      if (saved && ['auto', 'mobile', 'desktop', 'tv'].includes(saved)) return saved;
-    } catch {
-      // Ignore storage errors
-    }
-    return 'desktop';
-  });
+  const { deviceMode: sharedDeviceMode, setDeviceMode: setSharedDeviceMode } = useAppPlatformMode();
 
   const {
     supportTicketsConfig,
@@ -37,18 +32,10 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
     openThemeSelector,
   } = useExtensions();
   const isDark = activeTheme.colorScheme === 'dark';
-  const deviceMode = controlledDeviceMode ?? internalDeviceMode;
+  const deviceMode = controlledDeviceMode ?? sharedDeviceMode;
 
   const handleSelectDeviceMode = (mode: FooterDeviceMode) => {
-    setInternalDeviceMode(mode);
-    try {
-      localStorage.setItem('notmediawiki_device_mode', mode);
-    } catch {
-      // Ignore storage errors
-    }
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-device-mode', mode);
-    }
+    setSharedDeviceMode(mode);
     onChangeDeviceMode?.(mode);
   };
 
@@ -155,6 +142,23 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
                     : 'Claro'}
                 )
               </span>
+            </button>
+
+            <button
+              id="btn-footer-install-app"
+              type="button"
+              onClick={() => {
+                if (onOpenAppOptions) {
+                  onOpenAppOptions();
+                } else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
+                }
+              }}
+              className="px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-blue-600 hover:bg-blue-700 text-white shadow-2xs cursor-pointer"
+              title="Instalar aplicativo no celular (Mobile) ou computador (Windows, macOS e Linux)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>App Mobile / Computador</span>
             </button>
           </div>
         </div>
