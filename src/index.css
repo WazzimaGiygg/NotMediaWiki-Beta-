@@ -816,6 +816,96 @@ html[data-wiki-theme="wikidiota"] .wiki-content .wikitable td {
   border-color: #e2dbce;
 }
 
+/* 5. Windows 3.1 (Program Manager 16-bit Retro) */
+html[data-wiki-theme="windows-31"] body {
+  background-color: #008080;
+  color: #000000;
+}
+
+html[data-wiki-theme="windows-31"] .min-h-screen {
+  background-color: #008080 !important;
+  color: #000000 !important;
+}
+
+html[data-wiki-theme="windows-31"] header {
+  background-color: #c0c0c0 !important;
+  border-top: 2px solid #ffffff !important;
+  border-bottom: 2px solid #808080 !important;
+  border-radius: 0 !important;
+}
+
+html[data-wiki-theme="windows-31"] footer[data-testid="wiki-global-footer"] {
+  background-color: #c0c0c0 !important;
+  border-top: 2px solid #ffffff !important;
+  color: #000000 !important;
+  border-radius: 0 !important;
+}
+
+html[data-wiki-theme="windows-31"] main .bg-white,
+html[data-wiki-theme="windows-31"] main article,
+html[data-wiki-theme="windows-31"] main aside > div {
+  background-color: #ffffff;
+  border-radius: 0 !important;
+  border: 2px solid #000000;
+  box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #808080, 3px 3px 0 rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-wiki-theme="windows-31"] header button,
+html[data-wiki-theme="windows-31"] footer[data-testid="wiki-global-footer"] button,
+html[data-wiki-theme="windows-31"] main button {
+  border-radius: 0 !important;
+}
+
+html[data-wiki-theme="windows-31"] header input {
+  border-radius: 0 !important;
+  background-color: #ffffff !important;
+  border: 1px solid #808080 !important;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content {
+  color: #000000;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content h1,
+html[data-wiki-theme="windows-31"] .wiki-content h2 {
+  font-family: 'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
+  color: #000080;
+  border-bottom: 2px solid #808080;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content h3,
+html[data-wiki-theme="windows-31"] .wiki-content h4 {
+  font-family: 'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
+  color: #000000;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content a {
+  color: #0000ee;
+  text-decoration: underline;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content a:visited {
+  color: #551a8b;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content .wikitable {
+  border: 2px solid #808080;
+  border-radius: 0;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content .wikitable th {
+  background-color: #000080;
+  color: #ffffff;
+  border-color: #808080;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content .wikitable td {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #c0c0c0;
+}
+
+
 
 
 

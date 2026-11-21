@@ -166,6 +166,23 @@ export const WIKI_THEMES_REGISTRY: WikiThemeDefinition[] = [
       ],
     },
   },
+  {
+    id: 'windows-31',
+    name: 'Windows 3.1 (Program Manager)',
+    shortLabel: 'Windows 3.1',
+    description:
+      'Interface clássica 16-bit inspirada no Gerenciador de Programas do Windows 3.1, com área de trabalho verde-petróleo, barras de título azul-marinho e janelas cinza biseladas 3D.',
+    colorScheme: 'light',
+    addedInVersion: '1.5.0',
+    author: 'Retro Computing UI WazzimaGiygg',
+    preview: {
+      canvas: '#008080',
+      surface: '#c0c0c0',
+      text: '#000000',
+      accent: '#000080',
+      border: '#808080',
+    },
+  },
 ];
 
 export const USER_THEME_STORAGE_KEY = 'notmediawiki_wiki_theme';

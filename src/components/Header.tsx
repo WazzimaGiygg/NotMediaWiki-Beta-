@@ -699,6 +699,26 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
+      {/* Windows 3.1 Program Manager Classic Navy Titlebar (only active in windows-31 theme) */}
+      {activeTheme.id === 'windows-31' && (
+        <div
+          data-testid="win31-program-manager-bar"
+          className="bg-[#000080] text-white px-3 py-1 flex items-center justify-between gap-2 text-xs font-sans border-b border-black"
+        >
+          <span className="font-bold tracking-tight truncate">
+            Program Manager — {siteTitleConfig.siteTitle} (Windows 3.1)
+          </span>
+          <button
+            type="button"
+            onClick={openThemeSelector}
+            className="px-2 py-0.5 bg-[#c0c0c0] text-black border border-t-white border-l-white border-r-[#808080] border-b-[#808080] hover:bg-[#d4d0c8] text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+            title="Abrir seletor de Aparência & Temas"
+          >
+            Trocar Tema
+          </button>
+        </div>
+      )}
+
       {/* Top Identity & Global Controls */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-4">
         {/* Brand */}
