@@ -68,8 +68,10 @@ import {
   deleteExtensionFromFirestore,
 } from '../src/firebase';
 import { DEFAULT_EXTENSIONS } from '../src/data/defaultExtensions';
+import { getSiteTitleConfig } from '../src/extensions/siteTitleExtension';
 import { WikiExtension, UserSession } from '../src/types';
 import { BureaucratPage } from '../src/components/BureaucratPage';
+import { ExtensionsLoadFailureScreen } from '../src/components/ExtensionsLoadFailureScreen';
 
 describe('Bureaucrat Extension Management & Firebase Sync', () => {
   const bureaucratSession: UserSession = {
@@ -255,5 +257,73 @@ describe('Bureaucrat Extension Management & Firebase Sync', () => {
     expect(rules).toContain('match /extensions/{extensionId}');
     expect(rules).toContain('allow create, update: if isAdmin() && isValidWikiExtension(request.resource.data, extensionId);');
     expect(blueprint.entities.WikiExtension.properties.category.enum).toContain('engagement');
+  });
+
+  it('provides SiteTitle extension ($wgSitename) to rename the Wiki-site title from NotMediaWiki', () => {
+    const siteTitleExt = DEFAULT_EXTENSIONS.find(e => e.id === 'ext-site-title');
+    expect(siteTitleExt).toBeDefined();
+    expect(getSiteTitleConfig(DEFAULT_EXTENSIONS).siteTitle).toBe('NotMediaWiki');
+
+    const renamedCloudExt: WikiExtension = {
+      ...siteTitleExt!,
+      config: siteTitleExt!.config.map(param =>
+        param.key === '$wgSitename'
+          ? { ...param, value: 'WikiZero Brasil' }
+          : param.key === '$wgSiteSubtitle'
+            ? { ...param, value: 'Enciclopédia Livre Independente' }
+            : param
+      ),
+    };
+
+    const merged = mergeExtensionsWithDefaults([renamedCloudExt], DEFAULT_EXTENSIONS);
+    const resolved = getSiteTitleConfig(merged);
+    expect(resolved.siteTitle).toBe('WikiZero Brasil');
+    expect(resolved.siteSubtitle).toBe('Enciclopédia Livre Independente');
+    expect(resolved.fullBrandName).toBe('WikiZero Brasil | Enciclopédia Livre Independente');
+
+    const disabledMerged = mergeExtensionsWithDefaults(
+      [{ ...renamedCloudExt, enabled: false }],
+      DEFAULT_EXTENSIONS
+    );
+    expect(getSiteTitleConfig(disabledMerged).siteTitle).toBe('NotMediaWiki');
+  });
+
+  it('rejects strict startup extension loading when Firebase fails instead of silently ignoring errors', async () => {
+    mockGetDocs.mockRejectedValueOnce(new Error('permission-denied or network unavailable'));
+
+    await expect(initOrSyncExtensionsOnWikiAccess(null)).rejects.toThrow(
+      /permission-denied or network unavailable/i
+    );
+  });
+
+  it('renders startup extension failure blocker allowing only retry or bureaucrat Google login', () => {
+    const blockedHtml = renderToStaticMarkup(
+      <ExtensionsLoadFailureScreen
+        mode="failed"
+        errorMessage="Firestore unavailable during startup"
+        googleUserEmail={null}
+        isNonBureaucratSignedIn={false}
+        onRetryLoad={async () => {}}
+      />
+    );
+
+    expect(blockedHtml).toContain('O Wiki-site não pode funcionar sem as extensões carregadas');
+    expect(blockedHtml).toContain('Firestore unavailable during startup');
+    expect(blockedHtml).toContain('Tentar carregar extensões novamente');
+    expect(blockedHtml).toContain('Entrar com Google (Burocrata)');
+
+    const nonBureaucratHtml = renderToStaticMarkup(
+      <ExtensionsLoadFailureScreen
+        mode="failed"
+        errorMessage="Firestore unavailable during startup"
+        googleUserEmail="editor@example.com"
+        isNonBureaucratSignedIn={true}
+        onRetryLoad={async () => {}}
+      />
+    );
+
+    expect(nonBureaucratHtml).toContain('Acesso não autorizado para esta conta');
+    expect(nonBureaucratHtml).toContain('editor@example.com');
+    expect(nonBureaucratHtml).toContain('Trocar de Conta Google');
   });
 });

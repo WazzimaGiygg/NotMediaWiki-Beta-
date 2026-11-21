@@ -40,6 +40,7 @@ import {
   subscribeToFirestoreArticles,
   syncArticlesAndEditorsToFirebase,
 } from '../firebase';
+import { useExtensions } from '../context/ExtensionsContext';
 
 interface HomeScreenProps {
   currentUser: UserSession | null;
@@ -58,6 +59,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSwitchUser,
   onRandomArticle,
 }) => {
+  const { siteTitleConfig } = useExtensions();
   const [homeMeta, setHomeMeta] = useState<HomePageMetadata>({
     id: 'home_page',
     htmlContent: DEFAULT_HOMEPAGE_HTML,
@@ -301,21 +303,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <div className="flex items-start gap-4">
           <img
             src="/assets/aistudio/image_370f9ede.png"
-            alt="NotMediaWiki Logo Oficial"
+            alt={`${siteTitleConfig.siteTitle} Logo Oficial`}
             className="w-16 h-16 sm:w-20 sm:h-20 object-contain rounded-lg p-1.5 bg-slate-50 border border-slate-200 shadow-xs shrink-0 hover:scale-105 transition-transform"
           />
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-mono">
-                NotMediaWiki • Desenvolvimento de Projetos
+                {siteTitleConfig.siteTitle} · Desenvolvimento de Projetos
               </span>
-              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[11px] font-medium">
-                WazzimaGiygg
-              </span>
+              {siteTitleConfig.projectBadge && (
+                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[11px] font-medium">
+                  {siteTitleConfig.projectBadge}
+                </span>
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-serif font-black text-slate-900 tracking-tight">
-              NotMediaWiki — Enciclopédia Colaborativa
+              {siteTitleConfig.siteTitle} — Enciclopédia Colaborativa
             </h1>
             <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
               Este site faz parte do desenvolvimento de projetos <strong className="text-slate-800">WazzimaGiygg</strong>, do site{' '}

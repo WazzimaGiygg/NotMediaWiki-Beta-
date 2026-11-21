@@ -15,6 +15,7 @@ export interface DynamicSeoOptions {
   ogType?: 'website' | 'article';
   keywords?: string[];
   jsonLd?: Record<string, any> | null;
+  siteName?: string;
 }
 
 /**
@@ -137,7 +138,8 @@ export function buildBreadcrumbTrail(
 export function buildArticleJsonLd(
   article: Article,
   extraCategories?: string[],
-  subpageCrumbs?: Array<{ label: string; slug: string }>
+  subpageCrumbs?: Array<{ label: string; slug: string }>,
+  siteTitle = 'NotMediaWiki'
 ): Record<string, any> {
   const canonicalUrl = buildCanonicalUrl(article.slug);
   const description = buildArticleMetaDescription(article);
@@ -191,7 +193,7 @@ export function buildArticleJsonLd(
         },
         isPartOf: {
           '@type': 'WebSite',
-          name: SITE_BRAND_NAME,
+          name: siteTitle ? `${siteTitle} | Projetos WazzimaGiygg` : SITE_BRAND_NAME,
           url: `${PRIMARY_CANONICAL_ORIGIN}/`,
         },
       },
@@ -200,7 +202,7 @@ export function buildArticleJsonLd(
         itemListElement: trail.map(item => ({
           '@type': 'ListItem',
           position: item.position,
-          name: item.kind === 'home' ? 'NotMediaWiki (core.wazzimagiygg.com)' : item.label,
+          name: item.kind === 'home' ? `${siteTitle || 'NotMediaWiki'} (core.wazzimagiygg.com)` : item.label,
           item: item.href,
         })),
       },
@@ -246,11 +248,12 @@ export function applyDynamicSeoMeta(options: DynamicSeoOptions): void {
   upsertCanonicalLink(options.canonicalUrl);
 
   // OpenGraph
+  const effectiveSiteName = options.siteName || SITE_BRAND_NAME;
   upsertMetaTag('meta[property="og:type"]', { property: 'og:type' }, options.ogType || 'website');
   upsertMetaTag('meta[property="og:title"]', { property: 'og:title' }, options.title);
   upsertMetaTag('meta[property="og:description"]', { property: 'og:description' }, options.description);
   upsertMetaTag('meta[property="og:url"]', { property: 'og:url' }, options.canonicalUrl);
-  upsertMetaTag('meta[property="og:site_name"]', { property: 'og:site_name' }, SITE_BRAND_NAME);
+  upsertMetaTag('meta[property="og:site_name"]', { property: 'og:site_name' }, effectiveSiteName);
 
   // Twitter / X
   upsertMetaTag('meta[name="twitter:title"]', { name: 'twitter:title' }, options.title);
@@ -274,14 +277,25 @@ export function applyDynamicSeoMeta(options: DynamicSeoOptions): void {
 /**
  * Restores default homepage SEO metadata for core.wazzimagiygg.com.
  */
-export function applyDefaultSiteSeo(): void {
+export function applyDefaultSiteSeo(siteTitle?: string, siteSubtitle?: string): void {
+  const cleanTitle = (siteTitle || '').trim() || 'NotMediaWiki';
+  const cleanSubtitle = siteSubtitle !== undefined ? siteSubtitle.trim() : 'Projetos WazzimaGiygg';
+  const fullTitle = cleanSubtitle ? `${cleanTitle} | ${cleanSubtitle}` : cleanTitle;
+  const dynamicDescription = `${cleanTitle} (core.wazzimagiygg.com) — Enciclopédia colaborativa oficial dos Projetos WazzimaGiygg com artigos verificados em tempo real.`;
+
+  if (typeof document !== 'undefined') {
+    upsertMetaTag('meta[name="application-name"]', { name: 'application-name' }, cleanTitle);
+    upsertMetaTag('meta[name="apple-mobile-web-app-title"]', { name: 'apple-mobile-web-app-title' }, cleanTitle);
+  }
+
   applyDynamicSeoMeta({
-    title: SITE_BRAND_NAME,
-    description: DEFAULT_SITE_DESCRIPTION,
+    title: fullTitle,
+    siteName: fullTitle,
+    description: dynamicDescription,
     canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/`,
     ogType: 'website',
     keywords: [
-      'NotMediaWiki',
+      cleanTitle,
       'WazzimaGiygg',
       'core.wazzimagiygg.com',
       'Projetos WazzimaGiygg',

@@ -392,12 +392,29 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-1">
-              Registro mestre de módulos, compiladores AST, interceptadores de hooks e extensões ativas no motor NotMediaWiki.
+              Registro mestre de módulos, compiladores AST, interceptadores de hooks e extensões ativas no motor <strong>{extensions.find(e => e.id === 'ext-site-title')?.config?.find(c => c.key === '$wgSitename')?.value || 'NotMediaWiki'}</strong>.
             </p>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            {(() => {
+              const siteTitleExt = extensions.find(e => e.id === 'ext-site-title');
+              if (!siteTitleExt) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setConfigModalExt(siteTitleExt)}
+                  disabled={!canManageExtensions}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  title="Renomear o título principal do Wiki-site ($wgSitename)"
+                >
+                  <Settings className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Renomear Título do Wiki</span>
+                </button>
+              );
+            })()}
+
             <button
               onClick={() => setIsReportModalOpen(true)}
               className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"

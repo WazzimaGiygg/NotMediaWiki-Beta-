@@ -58,7 +58,9 @@ export const BureaucratPage: React.FC<BureaucratPageProps> = ({
     extensions,
     isLoadingExtensions,
     hasLoadedFromFirebase,
+    extensionsLoadError,
     lastSyncAt,
+    siteTitleConfig,
     maintenanceConfig,
   } = useExtensions();
 
@@ -151,7 +153,7 @@ export const BureaucratPage: React.FC<BureaucratPageProps> = ({
                 )}
               </div>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-sans mt-1 max-w-3xl leading-relaxed">
-                Centro oficial de governança burocrática do NotMediaWiki. Todas as configurações e estados das extensões determinados aqui são salvos no Firebase Firestore e carregados automaticamente na abertura do Wiki-site.
+                Centro oficial de governança burocrática do <strong>{siteTitleConfig.siteTitle}</strong>. Todas as configurações e estados das extensões (incluindo o título do Wiki-site) determinados aqui são salvos no Firebase Firestore e carregados obrigatoriamente na abertura do Wiki-site.
               </p>
             </div>
           </div>
@@ -194,12 +196,22 @@ export const BureaucratPage: React.FC<BureaucratPageProps> = ({
           <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
             <div>
               <div className="text-[10px] font-mono uppercase text-slate-400">Carga na Abertura</div>
-              <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              <div
+                className={`text-sm font-semibold ${
+                  extensionsLoadError
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : hasLoadedFromFirebase
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-amber-600 dark:text-amber-400'
+                }`}
+              >
                 {isLoadingExtensions
                   ? 'Carregando...'
-                  : hasLoadedFromFirebase
-                    ? 'Sincronizado do Firestore'
-                    : 'Cache Local'}
+                  : extensionsLoadError
+                    ? 'Falha (Acesso via Burocrata)'
+                    : hasLoadedFromFirebase
+                      ? 'Sincronizado do Firestore'
+                      : 'Aguardando Firebase'}
               </div>
             </div>
             <Cloud className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />

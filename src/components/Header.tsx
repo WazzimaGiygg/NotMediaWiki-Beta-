@@ -115,7 +115,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [monthlyPoints, setMonthlyPoints] = useState<number>(0);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { isExtensionEnabled, supportTicketsConfig } = useExtensions();
+  const { isExtensionEnabled, supportTicketsConfig, siteTitleConfig } = useExtensions();
   const isChecklistExtEnabled = isExtensionEnabled('DailyChecklist', true);
 
   // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners + Web Push API)
@@ -148,7 +148,7 @@ export const Header: React.FC<HeaderProps> = ({
     api.playNotificationChime();
     api
       .showBrowserPushNotification({
-        title: `NotMediaWiki: ${newest.articleTitle} foi editado`,
+        title: `${siteTitleConfig.siteTitle}: ${newest.articleTitle} foi editado`,
         body: `${newest.editorName}: ${newest.changeSummary}`,
         articleSlug: newest.articleSlug,
         tag: `article-${newest.articleSlug}-${newest.id}`,
@@ -720,19 +720,25 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <img
                 src="/assets/aistudio/image_370f9ede.png"
-                alt="NotMediaWiki Logo Oficial"
+                alt={`${siteTitleConfig.siteTitle} Logo Oficial`}
                 className="w-8.5 h-8.5 object-contain rounded group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
               />
               <div>
                 <div className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                  NotMediaWiki
-                  <span className="text-[10px] font-mono font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800">
-                    WazzimaGiygg
-                  </span>
+                  <span data-testid="header-site-title" className="whitespace-nowrap">{siteTitleConfig.siteTitle}</span>
+                  {siteTitleConfig.projectBadge && (
+                    <span className="text-[10px] font-mono font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                      {siteTitleConfig.projectBadge}
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 font-sans hidden sm:flex items-center gap-1">
-                  <span>Projetos WazzimaGiygg</span>
-                  <span>•</span>
+                  {siteTitleConfig.siteSubtitle && (
+                    <>
+                      <span>{siteTitleConfig.siteSubtitle}</span>
+                      <span>•</span>
+                    </>
+                  )}
                   <a
                     href={wrapExternalUrl("https://wazzimagiygg.com")}
                     target="_blank"
@@ -764,7 +770,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               onFocus={() => setShowSuggestions(true)}
               onKeyDown={handleInputKeyDown}
-              placeholder="Pesquisar artigos no NotMediaWiki..."
+              placeholder={`Pesquisar artigos no ${siteTitleConfig.siteTitle}...`}
               className="w-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100/80 dark:hover:bg-slate-750 focus:bg-white dark:focus:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 pl-9 pr-14 py-1.5 rounded border border-slate-200 dark:border-slate-700 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 font-sans"
             />
             {isSearching ? (

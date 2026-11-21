@@ -1593,17 +1593,50 @@ function stripUndefined<T>(obj: T): T {
 }
 
 /**
- * Fetches all system extensions stored in Firestore /extensions
+ * Fetches all system extensions stored in Firestore /extensions (strict: throws on Firestore error)
  */
-export async function fetchExtensionsFromFirestore(): Promise<WikiExtension[]> {
+export async function fetchExtensionsFromFirestoreStrict(timeoutMs = 10000): Promise<WikiExtension[]> {
   const path = 'extensions';
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new Error('Navegador offline: não foi possível carregar as extensões do Firebase.');
+  }
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
-    const snap = await getDocs(collection(db, path));
+    const fetchPromise = getDocs(collection(db, path));
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(new Error('Tempo limite excedido ao carregar as extensões do Firebase Firestore.'));
+      }, timeoutMs);
+    });
+
+    const snap: any = await Promise.race([fetchPromise, timeoutPromise]);
+    if (!snap || typeof snap.forEach !== 'function') {
+      throw new Error('Resposta inválida do Firebase Firestore ao carregar as extensões.');
+    }
+
+    if (snap?.metadata?.fromCache && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error('Não foi possível confirmar as extensões diretamente no servidor Firebase.');
+    }
+
     const list: WikiExtension[] = [];
-    snap.forEach(d => {
+    snap.forEach((d: any) => {
       list.push(d.data() as WikiExtension);
     });
     return list;
+  } finally {
+    if (timeoutHandle !== undefined) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
+/**
+ * Fetches all system extensions stored in Firestore /extensions
+ */
+export async function fetchExtensionsFromFirestore(): Promise<WikiExtension[]> {
+  try {
+    return await fetchExtensionsFromFirestoreStrict();
   } catch (err) {
     console.warn('Notice: Error fetching extensions from Firestore:', err);
     return [];
@@ -1758,15 +1791,15 @@ export function subscribeToExtensionsFromFirestore(
 }
 
 /**
- * Initializes or synchronizes extensions when opening the Wiki-site.
- * Fetches bureaucrat-configured settings from Firestore; if empty, seeds DEFAULT_EXTENSIONS
- * only when accessed by an authenticated bureaucrat/admin.
+ * Initializes or synchronizes extensions strictly when opening the Wiki-site.
+ * Throws if Firestore cannot be reached/loaded, so non-bureaucrat access can be blocked.
+ * Seeds DEFAULT_EXTENSIONS only when the Firestore collection is empty AND accessed by an authenticated bureaucrat.
  */
 export async function initOrSyncExtensionsOnWikiAccess(
   user?: UserSession | null
 ): Promise<WikiExtension[]> {
   try {
-    const cloudExts = await fetchExtensionsFromFirestore();
+    const cloudExts = await fetchExtensionsFromFirestoreStrict();
     if (cloudExts && cloudExts.length > 0) {
       const merged = mergeExtensionsWithDefaults(cloudExts, DEFAULT_EXTENSIONS);
       try {
@@ -1779,25 +1812,22 @@ export async function initOrSyncExtensionsOnWikiAccess(
     const firebaseUser = auth.currentUser;
     if (firebaseUser && hasBureaucratPrivileges(user, firebaseUser.email)) {
       console.log('Inicializando coleção /extensions no Firestore ao acessar o Wiki como burocrata...');
-      await syncAllExtensionsToFirestore(DEFAULT_EXTENSIONS, user);
+      const syncRes = await syncAllExtensionsToFirestore(DEFAULT_EXTENSIONS, user);
+      if (syncRes.saved === 0) {
+        throw new Error('Falha ao inicializar as extensões no Firebase Firestore.');
+      }
     }
 
     try {
       localStorage.setItem('notmediawiki_extensions', JSON.stringify(DEFAULT_EXTENSIONS));
     } catch {}
     return DEFAULT_EXTENSIONS;
-  } catch (err) {
-    console.warn('Notice: Fallback to local extensions on Wiki access:', err);
-    try {
-      const raw = localStorage.getItem('notmediawiki_extensions');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return mergeExtensionsWithDefaults(parsed, DEFAULT_EXTENSIONS);
-        }
-      }
-    } catch {}
-    return DEFAULT_EXTENSIONS;
+  } catch (err: any) {
+    const msg =
+      err?.message ||
+      'Erro ao carregar configurações de extensões do Firebase Firestore na abertura do Wiki-site.';
+    console.error('Critical: Startup extension loading from Firebase failed:', err);
+    throw new Error(msg);
   }
 }
 

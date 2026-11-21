@@ -35,7 +35,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
   const [isDisabling, setIsDisabling] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const { maintenanceConfig } = useExtensions();
+  const { maintenanceConfig, siteTitleConfig } = useExtensions();
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -89,7 +89,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
                 </span>
               </span>
               <span className="text-[11px] text-slate-400 font-sans block">
-                NotMediaWiki • WazzimaGiygg Ecosystem
+                {siteTitleConfig.siteTitle} • WazzimaGiygg Ecosystem
               </span>
             </div>
           </div>
@@ -268,7 +268,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
       {/* Footer */}
       <footer className="border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-center text-xs text-slate-400">
         <p>
-          WikiWorlWeb • Sistema NotMediaWiki • Licença Creative Commons CC BY-SA 4.0
+          WikiWorlWeb • Sistema {siteTitleConfig.siteTitle} • Licença Creative Commons CC BY-SA 4.0
         </p>
       </footer>
     </div>

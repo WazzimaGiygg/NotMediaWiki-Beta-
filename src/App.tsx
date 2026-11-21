@@ -27,6 +27,7 @@ import { ExtensionsProvider, useExtensions } from './context/ExtensionsContext';
 import { BureaucratPage } from './components/BureaucratPage';
 import { PortalView } from './components/PortalView';
 import { MaintenanceScreen } from './components/MaintenanceScreen';
+import { ExtensionsLoadFailureScreen } from './components/ExtensionsLoadFailureScreen';
 import { hasBureaucratPrivileges } from './firebase';
 import { enforceFrameBusting } from './utils/frameGuard';
 import { WikiFooter } from './components/WikiFooter';
@@ -80,8 +81,13 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const {
     extensions,
     isLoadingExtensions,
+    hasAttemptedInitialLoad,
+    hasLoadedFromFirebase,
+    extensionsLoadError,
+    siteTitleConfig,
     maintenanceConfig,
     saveExtension,
+    retryLoadExtensions,
   } = useExtensions();
 
   // Reset Zen Mode whenever navigating away from the article reader
@@ -99,37 +105,43 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const [chatTargetUser, setChatTargetUser] = useState<UserSession | null>(null);
   const [selectedUserForPage, setSelectedUserForPage] = useState<UserSession | null>(null);
 
-  // Keep canonical & SEO metadata synchronized for non-article views
+  // Keep canonical & SEO metadata synchronized for non-article views using configured site title
   useEffect(() => {
     if (currentView === 'reader') return;
+    const siteTitle = siteTitleConfig.siteTitle;
+    const brandName = siteTitleConfig.fullBrandName || SITE_BRAND_NAME;
+
     if (currentView === 'search' && searchQuery.trim()) {
       applyDynamicSeoMeta({
-        title: `Busca: ${searchQuery.trim()} — ${SITE_BRAND_NAME}`,
-        description: `Resultados oficiais de busca para "${searchQuery.trim()}" na enciclopédia NotMediaWiki (core.wazzimagiygg.com).`,
+        title: `Busca: ${searchQuery.trim()} — ${brandName}`,
+        siteName: brandName,
+        description: `Resultados oficiais de busca para "${searchQuery.trim()}" na enciclopédia ${siteTitle} (core.wazzimagiygg.com).`,
         canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/`,
         ogType: 'website',
         jsonLd: null,
       });
     } else if (currentView === 'bureaucrats') {
       applyDynamicSeoMeta({
-        title: `Página dos Burocratas & Extensões — ${SITE_BRAND_NAME}`,
-        description: `Painel oficial dos burocratas e gerenciamento de extensões do NotMediaWiki sincronizado via Firebase.`,
+        title: `Página dos Burocratas & Extensões — ${brandName}`,
+        siteName: brandName,
+        description: `Painel oficial dos burocratas e gerenciamento de extensões do ${siteTitle} sincronizado via Firebase.`,
         canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/#/burocratas`,
         ogType: 'website',
         jsonLd: null,
       });
     } else if (currentView === 'special') {
       applyDynamicSeoMeta({
-        title: `Especial:${specialPageName} — ${SITE_BRAND_NAME}`,
-        description: `Página especial ${specialPageName} do NotMediaWiki oficial (core.wazzimagiygg.com) — Projetos WazzimaGiygg.`,
+        title: `Especial:${specialPageName} — ${brandName}`,
+        siteName: brandName,
+        description: `Página especial ${specialPageName} do ${siteTitle} oficial (core.wazzimagiygg.com) — Projetos WazzimaGiygg.`,
         canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/#/special/${encodeURIComponent(specialPageName)}`,
         ogType: 'website',
         jsonLd: null,
       });
     } else {
-      applyDefaultSiteSeo();
+      applyDefaultSiteSeo(siteTitleConfig.siteTitle, siteTitleConfig.siteSubtitle);
     }
-  }, [currentView, searchQuery, specialPageName]);
+  }, [currentView, searchQuery, specialPageName, siteTitleConfig]);
 
   useEffect(() => {
     // Sincronização de domínios permitidos com o Firebase Firestore ao iniciar
@@ -433,7 +445,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             Exibição em iframe não permitida
           </h1>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Por motivos de segurança, o <strong>NotMediaWiki</strong> não permite ser incorporado ou exibido dentro de iframes de terceiros.
+            Por motivos de segurança, o <strong>{siteTitleConfig.siteTitle}</strong> não permite ser incorporado ou exibido dentro de iframes de terceiros.
           </p>
           <a
             href={typeof window !== 'undefined' ? window.location.href : PRIMARY_CANONICAL_ORIGIN}
@@ -441,7 +453,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
           >
-            Abrir NotMediaWiki diretamente
+            Abrir {siteTitleConfig.siteTitle} diretamente
           </a>
         </div>
       </div>
@@ -451,6 +463,27 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const isBureaucratUser =
     hasBureaucratPrivileges(currentUser, auth.currentUser?.email) &&
     Boolean(auth.currentUser || currentUser?.role === 'bureaucrat' || currentUser?.role === 'sysop');
+
+  const signedInEmail = auth.currentUser?.email || currentUser?.email || null;
+  const isExtensionsStartupBlocked =
+    !isBureaucratUser && (!hasLoadedFromFirebase || Boolean(extensionsLoadError));
+
+  if (isExtensionsStartupBlocked) {
+    const gateMode: 'loading' | 'failed' =
+      isLoadingExtensions && !hasAttemptedInitialLoad && !extensionsLoadError ? 'loading' : 'failed';
+    return (
+      <ExtensionsLoadFailureScreen
+        mode={gateMode}
+        errorMessage={extensionsLoadError}
+        googleUserEmail={signedInEmail}
+        isNonBureaucratSignedIn={Boolean(signedInEmail && !isBureaucratUser)}
+        siteTitle={siteTitleConfig.siteTitle}
+        onRetryLoad={async () => {
+          await retryLoadExtensions();
+        }}
+      />
+    );
+  }
 
   const handleDisableMaintenance = async () => {
     const ext = extensions.find(e => e.id === 'ext-maintenance-mode');
@@ -467,7 +500,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     return (
       <MaintenanceScreen
         currentUser={currentUser}
-        googleUserEmail={auth.currentUser?.email || currentUser?.email || null}
+        googleUserEmail={signedInEmail}
         isBureaucrat={isBureaucratUser}
         onBypassToAdmin={() => {
           setCurrentView('bureaucrats');
@@ -480,6 +513,39 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
+      {/* Bureaucrat override banner when startup extension loading from Firebase failed */}
+      {extensionsLoadError && isBureaucratUser && (
+        <div
+          data-testid="bureaucrat-extensions-error-banner"
+          className="bg-rose-700 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2"
+        >
+          <span>
+            <strong>Falha ao carregar extensões na abertura do Wiki:</strong> {extensionsLoadError} — Acesso liberado exclusivamente pelo login de Burocrata.
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                retryLoadExtensions();
+              }}
+              className="px-2.5 py-1 bg-rose-900 hover:bg-rose-950 text-white rounded font-semibold transition-colors cursor-pointer"
+            >
+              Tentar Recarregar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+              className="px-2.5 py-1 bg-white text-rose-800 rounded font-semibold hover:bg-rose-50 transition-colors cursor-pointer"
+            >
+              Página dos Burocratas
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bureaucrat indicator when maintenance mode is active */}
       {maintenanceConfig.isMaintenanceActive && isBureaucratUser && (
         <div className="bg-amber-600 text-white px-4 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2">

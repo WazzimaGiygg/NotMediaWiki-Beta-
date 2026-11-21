@@ -33,7 +33,7 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
     return document.documentElement.classList.contains('dark');
   });
 
-  const { supportTicketsConfig } = useExtensions();
+  const { supportTicketsConfig, siteTitleConfig } = useExtensions();
   const deviceMode = controlledDeviceMode ?? internalDeviceMode;
 
   const handleSelectDeviceMode = (mode: FooterDeviceMode) => {
@@ -218,7 +218,7 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
               .
             </p>
             <p className="text-slate-500 dark:text-slate-400">
-              NotMediaWiki · WikiWorldWeb Enciclopédia Aberta © 2026. Infraestrutura e Banco de Dados alimentados por{' '}
+              {siteTitleConfig.siteTitle} · WikiWorldWeb Enciclopédia Aberta © 2026. Infraestrutura e Banco de Dados alimentados por{' '}
               <a
                 href={wrapExternalUrl('https://firebase.google.com/products/firestore')}
                 target="_blank"

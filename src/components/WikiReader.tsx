@@ -74,7 +74,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   const [isWatched, setIsWatched] = useState<boolean>(false);
   const [watchLoading, setWatchLoading] = useState<boolean>(false);
   const [isPrintingPdf, setIsPrintingPdf] = useState<boolean>(false);
-  const { isExtensionEnabled, getExtensionParam } = useExtensions();
+  const { isExtensionEnabled, getExtensionParam, siteTitleConfig } = useExtensions();
   const isTocExtEnabled = isExtensionEnabled('TableOfContents', true);
   const isRelatedExtEnabled = isExtensionEnabled('RelatedArticles', true);
   const isCiteExtEnabled = isExtensionEnabled('Cite', true);
@@ -88,7 +88,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
       await exportArticleToPdfViaPrint({
         title: data.article.title,
         slug: data.article.slug,
-        siteName: SITE_BRAND_NAME,
+        siteName: siteTitleConfig.fullBrandName || SITE_BRAND_NAME,
       });
     } finally {
       setIsPrintingPdf(false);
@@ -268,15 +268,17 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
     const article = data.article;
     const effectiveCategories = data.categories && data.categories.length > 0 ? data.categories : article.categories || [];
     const subpageCrumbs = getSubpageBreadcrumbs(parseTitle(article.slug || article.title));
+    const brandName = siteTitleConfig.fullBrandName || SITE_BRAND_NAME;
     applyDynamicSeoMeta({
-      title: `${article.title} — ${SITE_BRAND_NAME}`,
+      title: `${article.title} — ${brandName}`,
+      siteName: brandName,
       description: buildArticleMetaDescription(article),
       canonicalUrl: buildCanonicalUrl(article.slug),
       ogType: 'article',
-      keywords: [article.title, ...effectiveCategories, 'NotMediaWiki', 'core.wazzimagiygg.com', 'WazzimaGiygg'],
-      jsonLd: buildArticleJsonLd(article, effectiveCategories, subpageCrumbs),
+      keywords: [article.title, ...effectiveCategories, siteTitleConfig.siteTitle, 'core.wazzimagiygg.com', 'WazzimaGiygg'],
+      jsonLd: buildArticleJsonLd(article, effectiveCategories, subpageCrumbs, siteTitleConfig.siteTitle),
     });
-  }, [data?.article, data?.categories]);
+  }, [data?.article, data?.categories, siteTitleConfig]);
 
   // Real-time Firestore onSnapshot subscription for the currently viewed article
   useEffect(() => {
@@ -516,7 +518,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         <div className="p-6 bg-rose-50 border border-rose-200 rounded">
           <h2 className="text-lg font-semibold text-rose-900 mb-2">Artigo Não Encontrado</h2>
           <p className="text-sm text-rose-700 mb-4">
-            O artigo &ldquo;{slug}&rdquo; não existe no repositório do NotMediaWiki (Projetos WazzimaGiygg).
+            O artigo &ldquo;{slug}&rdquo; não existe no repositório do {siteTitleConfig.siteTitle} ({siteTitleConfig.siteSubtitle || 'Projetos WazzimaGiygg'}).
           </p>
           <div className="flex gap-3">
             <button
@@ -985,7 +987,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             {/* Print-only institutional header shown via @media print */}
             <div className="print-only mb-4 pb-2 border-b border-slate-300 text-[10pt] text-slate-600 font-sans">
               <div className="flex items-center justify-between">
-                <strong className="text-slate-900">{SITE_BRAND_NAME}</strong>
+                <strong className="text-slate-900">{siteTitleConfig.fullBrandName}</strong>
                 <span>Exportado em {new Date().toLocaleDateString('pt-BR')}</span>
               </div>
               <div className="text-[8.5pt] text-slate-500 mt-0.5 break-all">
@@ -1236,14 +1238,14 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               </div>
 
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                NotMediaWiki · Projeto <a href={wrapExternalUrl("https://wazzimagiygg.com")} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">WazzimaGiygg</a> (wazzimagiygg.com)
+                {siteTitleConfig.siteTitle} · Projeto <a href={wrapExternalUrl("https://wazzimagiygg.com")} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">WazzimaGiygg</a> (wazzimagiygg.com)
               </div>
             </div>
           )}
 
           {/* Print-only document footer stamp */}
           <div className="print-only mt-8 pt-3 border-t border-slate-300 text-[8.5pt] text-slate-600 font-sans">
-            Documento gerado via API de impressão do navegador · {SITE_BRAND_NAME} · {wordCount.toLocaleString()} palavras · Revisão {article.latestRevisionId}
+            Documento gerado via API de impressão do navegador · {siteTitleConfig.fullBrandName} · {wordCount.toLocaleString()} palavras · Revisão {article.latestRevisionId}
           </div>
         </main>
 

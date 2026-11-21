@@ -15,6 +15,7 @@ import {
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
 } from '../extensions/portalsExtension';
+import { siteTitleExtension } from '../extensions/siteTitleExtension';
 
 export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   {
@@ -524,6 +525,7 @@ export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   wikiLivrosExtension,
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
+  siteTitleExtension,
 ];
 
 /**
