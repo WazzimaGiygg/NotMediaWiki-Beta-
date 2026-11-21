@@ -32,6 +32,8 @@ import { hasBureaucratPrivileges } from './firebase';
 import { enforceFrameBusting } from './utils/frameGuard';
 import { WikiFooter } from './components/WikiFooter';
 import { LGPD_INVESTIGATION_SLUG } from './data/lgpdInvestigationArticle';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal';
+import { WikidiotaParodyBanner } from './components/WikidiotaParodyBanner';
 
 interface WikiAppShellProps {
   currentUser: UserSession | null;
@@ -620,6 +622,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         />
       )}
 
+      {/* Wikidiota Parody Theme Satirical Chronicle Banner */}
+      {!(isZenMode && currentView === 'reader') && <WikidiotaParodyBanner />}
+
       {/* Main View Container */}
       <main className="flex-1">
         {currentView === 'home' && (
@@ -858,6 +863,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
 
       {/* Offline connectivity indicator */}
       <OfflineIndicator />
+
+      {/* Theme Appearance Extension Modal */}
+      <ThemeSelectorModal />
 
       {/* Floating Chat Trigger Button */}
       {!isChatOpen && !(isZenMode && currentView === 'reader') && (

@@ -620,6 +620,202 @@ html.dark .wiki-content .infobox {
     padding-top: 1rem !important;
     font-size: 9pt !important;
   }
+
+  html[data-wiki-theme],
+  html[data-wiki-theme] body,
+  html[data-wiki-theme] .min-h-screen {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
 }
+
+/* ==========================================================================
+   Extensão ThemeAppearance — Temas Incrementais do Wiki-site
+   ========================================================================== */
+
+/* 1. Pergaminho Editorial (Sépia) */
+html[data-wiki-theme="archival-sepia"] body {
+  background-color: #f6efe0;
+  color: #292524;
+}
+
+html[data-wiki-theme="archival-sepia"] .min-h-screen {
+  background-color: #f6efe0 !important;
+  color: #292524 !important;
+}
+
+html[data-wiki-theme="archival-sepia"] header {
+  background-color: #efe5d1 !important;
+  border-color: #dcd0b8 !important;
+}
+
+html[data-wiki-theme="archival-sepia"] footer[data-testid="wiki-global-footer"] {
+  background-color: #efe5d1 !important;
+  border-color: #dcd0b8 !important;
+  color: #57534e !important;
+}
+
+html[data-wiki-theme="archival-sepia"] .bg-white,
+html[data-wiki-theme="archival-sepia"] .bg-slate-50 {
+  background-color: #fbf7ee !important;
+}
+
+html[data-wiki-theme="archival-sepia"] .wiki-content {
+  color: #292524;
+}
+
+html[data-wiki-theme="archival-sepia"] .wiki-content h2,
+html[data-wiki-theme="archival-sepia"] .wiki-content h3,
+html[data-wiki-theme="archival-sepia"] .wiki-content h4 {
+  color: #431407;
+  border-bottom-color: #ddd2bc;
+}
+
+html[data-wiki-theme="archival-sepia"] .wiki-content a {
+  color: #9a3412;
+}
+
+html[data-wiki-theme="archival-sepia"] .wiki-content .wikitable th {
+  background-color: #ede2cc;
+  border-color: #d6c8ad;
+}
+
+html[data-wiki-theme="archival-sepia"] .wiki-content .wikitable td {
+  background-color: #fbf7ee;
+  border-color: #e5dcc8;
+}
+
+/* 2. Monobook Clássico */
+html[data-wiki-theme="monobook-classic"] body {
+  background-color: #eef2f6;
+  color: #111827;
+}
+
+html[data-wiki-theme="monobook-classic"] .min-h-screen {
+  background-color: #eef2f6 !important;
+}
+
+html[data-wiki-theme="monobook-classic"] header {
+  background-color: #f8fafc !important;
+  border-bottom: 2px solid #94a3b8 !important;
+}
+
+html[data-wiki-theme="monobook-classic"] .wiki-content h1,
+html[data-wiki-theme="monobook-classic"] .wiki-content h2 {
+  font-family: 'Linux Libertine', 'Newsreader', Georgia, serif;
+  border-bottom: 1px solid #94a3b8;
+}
+
+html[data-wiki-theme="monobook-classic"] .wiki-content .infobox,
+html[data-wiki-theme="monobook-classic"] .wiki-content .wikitable {
+  border-radius: 0 !important;
+  border-color: #94a3b8;
+}
+
+html[data-wiki-theme="monobook-classic"] .wiki-content a {
+  color: #0645ad;
+}
+
+html[data-wiki-theme="monobook-classic"] .wiki-content a:visited {
+  color: #0b0080;
+}
+
+/* 3. Alto Contraste (OLED) */
+html[data-wiki-theme="high-contrast-dark"] body {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+html[data-wiki-theme="high-contrast-dark"] .min-h-screen {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+html[data-wiki-theme="high-contrast-dark"] header,
+html[data-wiki-theme="high-contrast-dark"] footer[data-testid="wiki-global-footer"] {
+  background-color: #05070a !important;
+  border-color: #334155 !important;
+}
+
+html[data-wiki-theme="high-contrast-dark"] .wiki-content {
+  color: #ffffff;
+}
+
+html[data-wiki-theme="high-contrast-dark"] .wiki-content h2,
+html[data-wiki-theme="high-contrast-dark"] .wiki-content h3,
+html[data-wiki-theme="high-contrast-dark"] .wiki-content h4 {
+  color: #ffffff;
+  border-bottom-color: #475569;
+}
+
+html[data-wiki-theme="high-contrast-dark"] .wiki-content a {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+
+/* 4. Wikidiota (Edição Paródia — Wikiomite Foundation) */
+html[data-wiki-theme="wikidiota"] body {
+  background-color: #f4f1ea;
+  color: #1f1c18;
+}
+
+html[data-wiki-theme="wikidiota"] .min-h-screen {
+  background-color: #f4f1ea !important;
+  color: #1f1c18 !important;
+}
+
+html[data-wiki-theme="wikidiota"] header {
+  background-color: #fdfbf7 !important;
+  border-bottom: 2px solid #b91c1c !important;
+}
+
+html[data-wiki-theme="wikidiota"] footer[data-testid="wiki-global-footer"] {
+  background-color: #ebe5d8 !important;
+  border-color: #d6cfc2 !important;
+  color: #44403c !important;
+}
+
+html[data-wiki-theme="wikidiota"] .bg-white,
+html[data-wiki-theme="wikidiota"] .bg-slate-50 {
+  background-color: #fdfbf7 !important;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content {
+  color: #1f1c18;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content h1,
+html[data-wiki-theme="wikidiota"] .wiki-content h2 {
+  font-family: 'Linux Libertine', 'Newsreader', Georgia, serif;
+  color: #7f1d1d;
+  border-bottom: 1px solid #d6cfc2;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content h3,
+html[data-wiki-theme="wikidiota"] .wiki-content h4 {
+  color: #450a0a;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content a {
+  color: #b91c1c;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content a:hover {
+  color: #7f1d1d;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content .wikitable th {
+  background-color: #efe9dc;
+  border-color: #d6cfc2;
+  color: #1f1c18;
+}
+
+html[data-wiki-theme="wikidiota"] .wiki-content .wikitable td {
+  background-color: #fdfbf7;
+  border-color: #e2dbce;
+}
+
+
 
 

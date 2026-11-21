@@ -14,6 +14,18 @@ import { getExternalRedirectConfig } from '../extensions/externalRedirectExtensi
 import { getSupportTicketsConfig } from '../extensions/supportTicketsExtension';
 import { getPortalsConfig } from '../extensions/portalsExtension';
 import { getSiteTitleConfig, SiteTitleConfig } from '../extensions/siteTitleExtension';
+import {
+  getThemeAppearanceConfig,
+  ThemeAppearanceConfig,
+} from '../extensions/themeAppearanceExtension';
+import {
+  applyWikiThemeToDocument,
+  readStoredUserWikiTheme,
+  resolveWikiTheme,
+  USER_THEME_STORAGE_KEY,
+  WikiThemeDefinition,
+  writeStoredUserWikiTheme,
+} from '../themes/themeRegistry';
 
 const STORAGE_KEY = 'notmediawiki_extensions';
 
@@ -55,6 +67,13 @@ export interface ExtensionsContextValue {
   isExtensionEnabled: (idOrName: string, fallback?: boolean) => boolean;
   getExtensionParam: <T = any>(idOrName: string, paramKey: string, fallback: T) => T;
   siteTitleConfig: SiteTitleConfig;
+  themeAppearanceConfig: ThemeAppearanceConfig;
+  activeTheme: WikiThemeDefinition;
+  setUserTheme: (themeId: string) => boolean;
+  resetToDefaultTheme: () => void;
+  isThemeSelectorOpen: boolean;
+  openThemeSelector: () => void;
+  closeThemeSelector: () => void;
   maintenanceConfig: ReturnType<typeof getMaintenanceModeConfig>;
   externalRedirectConfig: ReturnType<typeof getExternalRedirectConfig>;
   supportTicketsConfig: ReturnType<typeof getSupportTicketsConfig>;
@@ -66,6 +85,8 @@ export interface ExtensionsContextValue {
   retryLoadExtensions: () => Promise<WikiExtension[]>;
   setLocalExtensions: React.Dispatch<React.SetStateAction<WikiExtension[]>>;
 }
+
+const initialDefaultThemeAppearance = getThemeAppearanceConfig(DEFAULT_EXTENSIONS);
 
 const defaultContextValue: ExtensionsContextValue = {
   extensions: DEFAULT_EXTENSIONS,
@@ -86,6 +107,13 @@ const defaultContextValue: ExtensionsContextValue = {
     return param && param.value !== undefined ? (param.value as T) : fallback;
   },
   siteTitleConfig: getSiteTitleConfig(DEFAULT_EXTENSIONS),
+  themeAppearanceConfig: initialDefaultThemeAppearance,
+  activeTheme: initialDefaultThemeAppearance.defaultTheme,
+  setUserTheme: () => true,
+  resetToDefaultTheme: () => {},
+  isThemeSelectorOpen: false,
+  openThemeSelector: () => {},
+  closeThemeSelector: () => {},
   maintenanceConfig: getMaintenanceModeConfig(DEFAULT_EXTENSIONS),
   externalRedirectConfig: getExternalRedirectConfig(DEFAULT_EXTENSIONS),
   supportTicketsConfig: getSupportTicketsConfig(DEFAULT_EXTENSIONS),
@@ -115,6 +143,10 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
   const [hasLoadedFromFirebase, setHasLoadedFromFirebase] = useState<boolean>(false);
   const [extensionsLoadError, setExtensionsLoadError] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [userSelectedThemeId, setUserSelectedThemeId] = useState<string | null>(() =>
+    readStoredUserWikiTheme()
+  );
+  const [isThemeSelectorOpen, setIsThemeSelectorOpen] = useState<boolean>(false);
 
   const performStartupLoad = useCallback(
     async (user: UserSession | null): Promise<WikiExtension[]> => {
@@ -280,6 +312,77 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
   }, [retryLoadExtensions]);
 
   const siteTitleConfig = useMemo(() => getSiteTitleConfig(extensions), [extensions]);
+  const themeAppearanceConfig = useMemo(
+    () => getThemeAppearanceConfig(extensions),
+    [extensions]
+  );
+
+  const activeTheme = useMemo<WikiThemeDefinition>(() => {
+    if (!themeAppearanceConfig.extensionEnabled) {
+      const wantsDark =
+        userSelectedThemeId === 'vector-dark' ||
+        userSelectedThemeId === 'high-contrast-dark';
+      return resolveWikiTheme(
+        wantsDark ? 'vector-dark' : 'vector-light',
+        themeAppearanceConfig.availableThemes
+      );
+    }
+
+    if (!themeAppearanceConfig.allowUserThemeSwitch) {
+      return themeAppearanceConfig.defaultTheme;
+    }
+
+    if (userSelectedThemeId) {
+      const match = themeAppearanceConfig.availableThemes.find(
+        t => t.id === userSelectedThemeId
+      );
+      if (match) return match;
+    }
+
+    return themeAppearanceConfig.defaultTheme;
+  }, [themeAppearanceConfig, userSelectedThemeId]);
+
+  useEffect(() => {
+    applyWikiThemeToDocument(activeTheme);
+  }, [activeTheme]);
+
+  const setUserTheme = useCallback(
+    (themeId: string): boolean => {
+      if (
+        themeAppearanceConfig.extensionEnabled &&
+        !themeAppearanceConfig.allowUserThemeSwitch
+      ) {
+        return false;
+      }
+      const resolved = resolveWikiTheme(themeId, themeAppearanceConfig.availableThemes);
+      setUserSelectedThemeId(resolved.id);
+      writeStoredUserWikiTheme(resolved);
+      applyWikiThemeToDocument(resolved);
+      return true;
+    },
+    [themeAppearanceConfig]
+  );
+
+  const resetToDefaultTheme = useCallback(() => {
+    setUserSelectedThemeId(null);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(USER_THEME_STORAGE_KEY);
+        window.localStorage.setItem('theme', themeAppearanceConfig.defaultTheme.colorScheme);
+        window.localStorage.setItem(
+          'notmediawiki_theme',
+          themeAppearanceConfig.defaultTheme.colorScheme
+        );
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    applyWikiThemeToDocument(themeAppearanceConfig.defaultTheme);
+  }, [themeAppearanceConfig.defaultTheme]);
+
+  const openThemeSelector = useCallback(() => setIsThemeSelectorOpen(true), []);
+  const closeThemeSelector = useCallback(() => setIsThemeSelectorOpen(false), []);
+
   const maintenanceConfig = useMemo(() => getMaintenanceModeConfig(extensions), [extensions]);
   const externalRedirectConfig = useMemo(() => getExternalRedirectConfig(extensions), [extensions]);
   const supportTicketsConfig = useMemo(() => getSupportTicketsConfig(extensions), [extensions]);
@@ -297,6 +400,13 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
       isExtensionEnabled,
       getExtensionParam,
       siteTitleConfig,
+      themeAppearanceConfig,
+      activeTheme,
+      setUserTheme,
+      resetToDefaultTheme,
+      isThemeSelectorOpen,
+      openThemeSelector,
+      closeThemeSelector,
       maintenanceConfig,
       externalRedirectConfig,
       supportTicketsConfig,
@@ -319,6 +429,13 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
       isExtensionEnabled,
       getExtensionParam,
       siteTitleConfig,
+      themeAppearanceConfig,
+      activeTheme,
+      setUserTheme,
+      resetToDefaultTheme,
+      isThemeSelectorOpen,
+      openThemeSelector,
+      closeThemeSelector,
       maintenanceConfig,
       externalRedirectConfig,
       supportTicketsConfig,

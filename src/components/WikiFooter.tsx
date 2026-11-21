@@ -28,12 +28,15 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
     return 'desktop';
   });
 
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof document === 'undefined') return false;
-    return document.documentElement.classList.contains('dark');
-  });
-
-  const { supportTicketsConfig, siteTitleConfig } = useExtensions();
+  const {
+    supportTicketsConfig,
+    siteTitleConfig,
+    themeAppearanceConfig,
+    activeTheme,
+    setUserTheme,
+    openThemeSelector,
+  } = useExtensions();
+  const isDark = activeTheme.colorScheme === 'dark';
   const deviceMode = controlledDeviceMode ?? internalDeviceMode;
 
   const handleSelectDeviceMode = (mode: FooterDeviceMode) => {
@@ -56,20 +59,11 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
   }, [deviceMode]);
 
   const handleToggleAppearance = () => {
-    if (typeof document === 'undefined') return;
-    const nextDark = !document.documentElement.classList.contains('dark');
-    if (nextDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    if (themeAppearanceConfig.extensionEnabled) {
+      openThemeSelector();
+      return;
     }
-    setIsDark(nextDark);
-    try {
-      localStorage.setItem('theme', nextDark ? 'dark' : 'light');
-      localStorage.setItem('notmediawiki_theme', nextDark ? 'dark' : 'light');
-    } catch {
-      // Ignore storage errors
-    }
+    setUserTheme(isDark ? 'vector-light' : 'vector-dark');
   };
 
   return (
@@ -149,10 +143,18 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
               type="button"
               onClick={handleToggleAppearance}
               className="px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs cursor-pointer"
-              title="Alternar tema claro/escuro e aparência da enciclopédia"
+              title="Abrir seletor de temas e aparência da enciclopédia"
             >
               <Palette className="w-3.5 h-3.5 text-amber-500" />
-              <span>Aparência &amp; Temas ({isDark ? 'Escuro' : 'Claro'})</span>
+              <span>
+                Aparência &amp; Temas (
+                {themeAppearanceConfig.extensionEnabled
+                  ? activeTheme.shortLabel
+                  : isDark
+                    ? 'Escuro'
+                    : 'Claro'}
+                )
+              </span>
             </button>
           </div>
         </div>
@@ -239,6 +241,12 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
               • Em conformidade com a <strong>LGPD (Lei nº 13.709/2018)</strong> e o{' '}
               <strong>Marco Civil (Lei nº 12.965/2014)</strong>. DPO: pedrohenriquecardonaperes@gmail.com
             </p>
+            {activeTheme.id === 'wikidiota' && (
+              <p className="text-rose-800 font-sans text-[11px] pt-1">
+                <strong>Wikidiota (Edição Paródia)</strong> · Sátira institucional atribuída à{' '}
+                <strong>Wikiomite Foundation</strong> — Crônicas do Feudo de LittleSunshine, Ditadura de Conde Edmond Dantès, Corrupção de Johannnes89 e Reinado do Chronus.
+              </p>
+            )}
           </div>
 
           {/* 88x31 Classic Footer Buttons (from wikizero.wazzimagiygg.com) */}

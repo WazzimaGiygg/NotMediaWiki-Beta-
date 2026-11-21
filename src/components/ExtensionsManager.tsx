@@ -42,6 +42,7 @@ import {
   PlusCircle,
   Lock,
   ShieldAlert,
+  Palette,
 } from 'lucide-react';
 import { WikiExtension, ExtensionCategory, ExtensionConfigParam, UserSession } from '../types';
 import { DEFAULT_EXTENSIONS, AVAILABLE_CATALOG_EXTENSIONS } from '../data/defaultExtensions';
@@ -51,6 +52,7 @@ import { buildExtensionsReportData } from '../utils/reportGenerator';
 import { FIRESTORE_DATABASE_ID } from '../firebaseConfig';
 import { useExtensions } from '../context/ExtensionsContext';
 import { auth, hasBureaucratPrivileges } from '../firebase';
+import { getAvailableWikiThemes } from '../themes/themeRegistry';
 
 const STORAGE_KEY = 'notmediawiki_extensions';
 
@@ -411,6 +413,23 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                 >
                   <Settings className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   <span>Renomear Título do Wiki</span>
+                </button>
+              );
+            })()}
+
+            {(() => {
+              const themeExt = extensions.find(e => e.id === 'ext-theme-appearance');
+              if (!themeExt) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setConfigModalExt(themeExt)}
+                  disabled={!canManageExtensions}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  title="Configurar tema padrão e seleção de aparência do Wiki-site ($wgDefaultTheme)"
+                >
+                  <Palette className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Temas &amp; Aparência</span>
                 </button>
               );
             })()}
@@ -1331,6 +1350,73 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                           }}
                           className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 outline-none"
                         />
+                      ) : param.key === '$wgDefaultTheme' ? (
+                        (() => {
+                          const extraParam = configModalExt.config.find(
+                            c => c.key === '$wgExtraThemesJson'
+                          );
+                          const availableThemes = getAvailableWikiThemes(
+                            typeof extraParam?.value === 'string' ? extraParam.value : undefined
+                          );
+                          const selectedThemeObj =
+                            availableThemes.find(t => t.id === param.value) || availableThemes[0];
+
+                          return (
+                            <div className="space-y-2">
+                              <select
+                                value={String(param.value)}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setExtensions(prev =>
+                                    prev.map(ext => {
+                                      if (ext.id === configModalExt.id) {
+                                        const nextCfg = ext.config.map(c =>
+                                          c.key === param.key ? { ...c, value: val } : c
+                                        );
+                                        return { ...ext, config: nextCfg };
+                                      }
+                                      return ext;
+                                    })
+                                  );
+                                  setConfigModalExt(prev =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          config: prev.config.map(c =>
+                                            c.key === param.key ? { ...c, value: val } : c
+                                          ),
+                                        }
+                                      : null
+                                  );
+                                }}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                              >
+                                {availableThemes.map(themeOption => (
+                                  <option key={themeOption.id} value={themeOption.id}>
+                                    {themeOption.name} ({themeOption.colorScheme === 'dark' ? 'Escuro' : 'Claro'}) — v{themeOption.addedInVersion}
+                                  </option>
+                                ))}
+                              </select>
+                              {selectedThemeObj && (
+                                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-600 dark:text-slate-300">
+                                  <span className="truncate">{selectedThemeObj.description}</span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <span
+                                      className="w-3 h-3 rounded-xs border border-slate-300 dark:border-slate-600"
+                                      style={{ backgroundColor: selectedThemeObj.preview.canvas }}
+                                      title="Fundo"
+                                    />
+                                    <span
+                                      className="w-3 h-3 rounded-xs border border-slate-300 dark:border-slate-600"
+                                      style={{ backgroundColor: selectedThemeObj.preview.accent }}
+                                      title="Destaque"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()
                       ) : (
                         <input
                           type="text"

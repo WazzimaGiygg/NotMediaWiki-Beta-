@@ -16,6 +16,7 @@ import {
   jornalWazzimaGiyggExtension,
 } from '../extensions/portalsExtension';
 import { siteTitleExtension } from '../extensions/siteTitleExtension';
+import { themeAppearanceExtension } from '../extensions/themeAppearanceExtension';
 
 export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   {
@@ -526,6 +527,7 @@ export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
   siteTitleExtension,
+  themeAppearanceExtension,
 ];
 
 /**

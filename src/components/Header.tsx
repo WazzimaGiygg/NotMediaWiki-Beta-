@@ -32,6 +32,7 @@ import {
   CheckCheck,
   Trash2,
   Star,
+  Palette,
 } from 'lucide-react';
 import { UserSession, VpnDetectionLog, ArticleNotification, WatchlistSubscription } from '../types';
 import { api } from '../api';
@@ -115,7 +116,15 @@ export const Header: React.FC<HeaderProps> = ({
   const [monthlyPoints, setMonthlyPoints] = useState<number>(0);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { isExtensionEnabled, supportTicketsConfig, siteTitleConfig } = useExtensions();
+  const {
+    isExtensionEnabled,
+    supportTicketsConfig,
+    siteTitleConfig,
+    themeAppearanceConfig,
+    activeTheme,
+    setUserTheme,
+    openThemeSelector,
+  } = useExtensions();
   const isChecklistExtEnabled = isExtensionEnabled('DailyChecklist', true);
 
   // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners + Web Push API)
@@ -275,29 +284,11 @@ export const Header: React.FC<HeaderProps> = ({
     return () => unsub();
   }, [currentUser]);
 
-  // Persistent Dark Mode state using localStorage and system preference
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const saved = localStorage.getItem('theme') || localStorage.getItem('notmediawiki_theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-      localStorage.setItem('notmediawiki_theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-      localStorage.setItem('notmediawiki_theme', 'light');
-    }
-  }, [isDarkMode]);
+  // Sync Light/Dark quick toggle with ThemeAppearance extension & activeTheme
+  const isDarkMode = activeTheme.colorScheme === 'dark';
 
   const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
+    setUserTheme(isDarkMode ? 'vector-light' : 'vector-dark');
   };
 
   useEffect(() => {
@@ -725,19 +716,34 @@ export const Header: React.FC<HeaderProps> = ({
               />
               <div>
                 <div className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                  <span data-testid="header-site-title" className="whitespace-nowrap">{siteTitleConfig.siteTitle}</span>
-                  {siteTitleConfig.projectBadge && (
-                    <span className="text-[10px] font-mono font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap">
-                      {siteTitleConfig.projectBadge}
+                  <span data-testid="header-site-title" className="whitespace-nowrap">
+                    {activeTheme.id === 'wikidiota' ? 'Wikidiota' : siteTitleConfig.siteTitle}
+                  </span>
+                  {activeTheme.id === 'wikidiota' ? (
+                    <span className="text-[11px] font-mono text-rose-700 whitespace-nowrap">
+                      · Wikiomite Foundation (Paródia)
                     </span>
+                  ) : (
+                    siteTitleConfig.projectBadge && (
+                      <span className="text-[10px] font-mono font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                        {siteTitleConfig.projectBadge}
+                      </span>
+                    )
                   )}
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 font-sans hidden sm:flex items-center gap-1">
-                  {siteTitleConfig.siteSubtitle && (
+                  {activeTheme.id === 'wikidiota' ? (
                     <>
-                      <span>{siteTitleConfig.siteSubtitle}</span>
+                      <span>{siteTitleConfig.siteTitle} • Sátira Institucional</span>
                       <span>•</span>
                     </>
+                  ) : (
+                    siteTitleConfig.siteSubtitle && (
+                      <>
+                        <span>{siteTitleConfig.siteSubtitle}</span>
+                        <span>•</span>
+                      </>
+                    )
                   )}
                   <a
                     href={wrapExternalUrl("https://wazzimagiygg.com")}
@@ -988,11 +994,38 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Nova Página</span>
           </button>
 
-          {/* Global Dark Mode Toggle */}
+          {/* Theme Appearance Picker Button (ThemeAppearance extension) */}
+          {themeAppearanceConfig.extensionEnabled &&
+            themeAppearanceConfig.showThemePickerInHeader && (
+              <button
+                id="btn-header-appearance"
+                type="button"
+                onClick={openThemeSelector}
+                className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                title={`Aparência atual: ${activeTheme.name}. Clique para escolher um tema do Wiki-site.`}
+                aria-label="Selecionar tema de aparência"
+              >
+                <Palette className="w-3.5 h-3.5 text-amber-500" />
+                <span className="hidden xl:inline">{activeTheme.shortLabel}</span>
+              </button>
+            )}
+
+          {/* Global Light / Dark Quick Toggle */}
           <button
             onClick={toggleDarkMode}
-            className="p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs"
-            title={isDarkMode ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+            disabled={
+              themeAppearanceConfig.extensionEnabled &&
+              !themeAppearanceConfig.allowUserThemeSwitch
+            }
+            className="p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+            title={
+              themeAppearanceConfig.extensionEnabled &&
+              !themeAppearanceConfig.allowUserThemeSwitch
+                ? `Tema fixado pelo burocrata: ${activeTheme.name}`
+                : isDarkMode
+                  ? 'Mudar para Modo Claro'
+                  : 'Mudar para Modo Escuro'
+            }
             aria-label={isDarkMode ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
           >
             {isDarkMode ? (
@@ -1416,6 +1449,19 @@ export const Header: React.FC<HeaderProps> = ({
                         >
                           <Award className="w-3.5 h-3.5 text-amber-500" />
                           <span>Checklist Diário & Pontos (3.05.8.b)</span>
+                        </button>
+                      )}
+
+                      {themeAppearanceConfig.extensionEnabled && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            openThemeSelector();
+                          }}
+                          className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <Palette className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Aparência &amp; Temas ({activeTheme.shortLabel})</span>
                         </button>
                       )}
 
