@@ -34,6 +34,7 @@ import {
   buildCanonicalUrl,
   SITE_BRAND_NAME,
 } from '../utils/seoManager';
+import { useExtensions } from '../context/ExtensionsContext';
 
 interface WikiReaderProps {
   slug: string;
@@ -73,6 +74,12 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   const [isWatched, setIsWatched] = useState<boolean>(false);
   const [watchLoading, setWatchLoading] = useState<boolean>(false);
   const [isPrintingPdf, setIsPrintingPdf] = useState<boolean>(false);
+  const { isExtensionEnabled, getExtensionParam } = useExtensions();
+  const isTocExtEnabled = isExtensionEnabled('TableOfContents', true);
+  const isRelatedExtEnabled = isExtensionEnabled('RelatedArticles', true);
+  const isCiteExtEnabled = isExtensionEnabled('Cite', true);
+  const isChecklistExtEnabled = isExtensionEnabled('DailyChecklist', true);
+  const relatedMaxItems = Number(getExtensionParam('RelatedArticles', '$wgRelatedArticlesMaxItems', 4)) || 4;
 
   const handlePrintExportPdf = async () => {
     if (!data?.article) return;
@@ -895,13 +902,16 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           </div>
 
           {/* Related Articles Sidebar Component */}
-          <RelatedArticles
-            currentSlug={slug}
-            currentArticle={article}
-            categories={categories && categories.length > 0 ? categories : (article.categories || [])}
-            allArticles={allArticles}
-            onNavigate={onNavigate}
-          />
+          {isRelatedExtEnabled && (
+            <RelatedArticles
+              currentSlug={slug}
+              currentArticle={article}
+              categories={categories && categories.length > 0 ? categories : (article.categories || [])}
+              allArticles={allArticles}
+              onNavigate={onNavigate}
+              maxItems={relatedMaxItems}
+            />
+          )}
 
           {/* Recent Edits / Histórico Recente Widget */}
           <div className="border border-slate-200 dark:border-slate-800 rounded p-4 bg-white dark:bg-slate-900 text-xs">
@@ -1059,7 +1069,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           </div>
 
           {/* Collapsible Inline TOC for mobile/tablet viewports and Reader Mode (Hidden in Zen/Focus Mode) */}
-          {!(isZenActive || isFocusMode) && (
+          {!(isZenActive || isFocusMode) && isTocExtEnabled && (
             <TableOfContents
               contentRef={contentRef}
               html={renderedHtml || html}
@@ -1090,7 +1100,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           />
 
           {/* Numbered Citations & Footnotes Component parsed from Parsoid AST (Hidden in Zen Mode) */}
-          {!isZenActive && (
+          {!isZenActive && isCiteExtEnabled && (
             <ArticleFootnotes
               ast={data?.ast}
               references={data?.references}
@@ -1146,7 +1156,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* 3.05.8.b.c - Article Evaluation Widget (Daily Checklist Mission +1.00 pt) (Standard mode only) */}
-          {!isDistractionFree && (
+          {!isDistractionFree && isChecklistExtEnabled && (
             <div className="no-print">
               <ArticleRatingWidget
                 articleSlug={slug}
@@ -1195,13 +1205,14 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           )}
 
           {/* Related Articles Component (Visible on mobile/tablet viewports where sidebar is hidden) (Standard mode only) */}
-          {!isDistractionFree && (
+          {!isDistractionFree && isRelatedExtEnabled && (
             <RelatedArticles
               currentSlug={slug}
               currentArticle={article}
               categories={categories && categories.length > 0 ? categories : (article.categories || [])}
               allArticles={allArticles}
               onNavigate={onNavigate}
+              maxItems={relatedMaxItems}
               className="mt-6 lg:hidden"
               initialCollapsed={false}
             />
@@ -1237,7 +1248,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         </main>
 
         {/* Right Sidebar: Automatic Table of Contents (Índice Automático - H2 & H3) */}
-        {!isDistractionFree && (
+        {!isDistractionFree && isTocExtEnabled && (
           <aside
             aria-label="Índice Automático"
             data-testid="wiki-right-toc-sidebar"

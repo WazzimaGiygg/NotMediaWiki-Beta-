@@ -10,6 +10,7 @@ export interface RelatedArticlesProps {
   onNavigate: (slug: string) => void;
   className?: string;
   initialCollapsed?: boolean;
+  maxItems?: number;
 }
 
 interface ScoredArticle {
@@ -26,6 +27,7 @@ export const RelatedArticles: React.FC<RelatedArticlesProps> = ({
   onNavigate,
   className = '',
   initialCollapsed = false,
+  maxItems,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
@@ -91,13 +93,15 @@ export const RelatedArticles: React.FC<RelatedArticlesProps> = ({
 
   // Filtered list based on user selecting a specific category chip
   const displayedArticles = useMemo(() => {
-    if (!selectedCategoryFilter) return relatedArticles;
-    return relatedArticles.filter(item =>
-      item.overlappingCategories.some(
-        c => c.toLowerCase() === selectedCategoryFilter.toLowerCase()
-      )
-    );
-  }, [relatedArticles, selectedCategoryFilter]);
+    const filtered = !selectedCategoryFilter
+      ? relatedArticles
+      : relatedArticles.filter(item =>
+          item.overlappingCategories.some(
+            c => c.toLowerCase() === selectedCategoryFilter.toLowerCase()
+          )
+        );
+    return maxItems && maxItems > 0 ? filtered.slice(0, maxItems) : filtered;
+  }, [relatedArticles, selectedCategoryFilter, maxItems]);
 
   return (
     <aside

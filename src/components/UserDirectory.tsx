@@ -132,7 +132,19 @@ export const UserDirectory: React.FC<UserDirectoryProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.hash = '#/burocratas';
+              }}
+              className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Acessar a Página dos Burocratas e o Gerenciamento de Extensões"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Página dos Burocratas &amp; Extensões</span>
+            </button>
+
             <span className="text-xs font-mono px-3 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-700 dark:text-slate-300">
               {users.length} usuário(s) autenticado(s)
             </span>

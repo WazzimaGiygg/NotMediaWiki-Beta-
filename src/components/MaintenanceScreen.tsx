@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { UserSession } from '../types';
 import { loginWithGoogle, logoutGoogle } from '../firebase';
-import { getMaintenanceModeConfig } from '../extensions/maintenanceModeExtension';
+import { useExtensions } from '../context/ExtensionsContext';
 import { api } from '../api';
 
 interface MaintenanceScreenProps {
@@ -35,7 +35,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
   const [isDisabling, setIsDisabling] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const maintenanceConfig = getMaintenanceModeConfig();
+  const { maintenanceConfig } = useExtensions();
 
   const handleLogin = async () => {
     setIsLoggingIn(true);

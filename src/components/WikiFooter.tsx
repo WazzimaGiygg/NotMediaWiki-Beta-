@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Smartphone, Monitor, Tv, Palette, Heart, ExternalLink } from 'lucide-react';
 import { wrapExternalUrl } from '../utils/urlHelper';
+import { useExtensions } from '../context/ExtensionsContext';
 
 export type FooterDeviceMode = 'auto' | 'mobile' | 'desktop' | 'tv';
 
@@ -32,6 +33,7 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
     return document.documentElement.classList.contains('dark');
   });
 
+  const { supportTicketsConfig } = useExtensions();
   const deviceMode = controlledDeviceMode ?? internalDeviceMode;
 
   const handleSelectDeviceMode = (mode: FooterDeviceMode) => {
@@ -263,28 +265,30 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
               </div>
             </button>
 
-            {/* 2. SUPORTE Tickets 24h */}
-            <a
-              href={wrapExternalUrl('https://wazzimagiygg.com')}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Central de Suporte, Tickets e Atendimento dos Serviços WazzimaGiygg"
-              className="inline-flex items-center justify-between w-[88px] h-[31px] bg-gradient-to-br from-[#1e1b4b] via-[#0f172a] to-[#020617] border border-indigo-500/70 hover:border-indigo-400 rounded transition p-1 shadow-xs group"
-            >
-              <div className="w-5 h-5 rounded flex items-center justify-center bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shrink-0">
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current text-indigo-300">
-                  <path d="M12 2C6.48 2 2 6.48 2 12v6c0 1.1.9 2 2 2h3v-8H4v-2c0-4.41 3.59-8 8-8s8 3.59 8 8v2h-3v8h3c1.1 0 2-.9 2-2v-6c0-5.52-4.48-10-10-10zm-6 12H4v-2h2v2zm14 0h-2v-2h2v2z" />
-                </svg>
-              </div>
-              <div className="flex flex-col text-right leading-none pr-0.5">
-                <span className="text-[5.2px] font-mono tracking-tighter text-indigo-400 font-bold uppercase">
-                  SUPORTE
-                </span>
-                <span className="text-[7.5px] font-sans font-bold text-indigo-100 group-hover:text-white tracking-tight">
-                  Tickets 24h
-                </span>
-              </div>
-            </a>
+            {/* 2. SUPORTE Tickets 24h (Configured via Firebase SupportAndTickets extension) */}
+            {supportTicketsConfig.enabled && (
+              <a
+                href={wrapExternalUrl(supportTicketsConfig.url)}
+                target={supportTicketsConfig.openInNewTab ? '_blank' : '_self'}
+                rel="noopener noreferrer"
+                title="Central de Suporte, Tickets e Atendimento dos Serviços WazzimaGiygg"
+                className="inline-flex items-center justify-between w-[88px] h-[31px] bg-gradient-to-br from-[#1e1b4b] via-[#0f172a] to-[#020617] border border-indigo-500/70 hover:border-indigo-400 rounded transition p-1 shadow-xs group"
+              >
+                <div className="w-5 h-5 rounded flex items-center justify-center bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current text-indigo-300">
+                    <path d="M12 2C6.48 2 2 6.48 2 12v6c0 1.1.9 2 2 2h3v-8H4v-2c0-4.41 3.59-8 8-8s8 3.59 8 8v2h-3v8h3c1.1 0 2-.9 2-2v-6c0-5.52-4.48-10-10-10zm-6 12H4v-2h2v2zm14 0h-2v-2h2v2z" />
+                  </svg>
+                </div>
+                <div className="flex flex-col text-right leading-none pr-0.5">
+                  <span className="text-[5.2px] font-mono tracking-tighter text-indigo-400 font-bold uppercase">
+                    SUPORTE
+                  </span>
+                  <span className="text-[7.5px] font-sans font-bold text-indigo-100 group-hover:text-white tracking-tight">
+                    Tickets 24h
+                  </span>
+                </div>
+              </a>
+            )}
 
             {/* 3. CONFORME LGPD & MCI */}
             <button

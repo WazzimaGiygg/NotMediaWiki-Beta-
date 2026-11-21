@@ -390,6 +390,17 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
                   </button>
                   <p className="text-[11px] text-slate-400">Ingestão de páginas e revisões de arquivos XML da Wikipédia.</p>
                 </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      window.location.hash = '#/burocratas';
+                    }}
+                    className="text-purple-700 dark:text-purple-400 hover:underline cursor-pointer font-semibold"
+                  >
+                    Especial:Burocratas (Gerenciador de Extensões)
+                  </button>
+                  <p className="text-[11px] text-slate-400">Página oficial dos burocratas com configuração de extensões no Firebase.</p>
+                </li>
               </ul>
             </div>
           </div>

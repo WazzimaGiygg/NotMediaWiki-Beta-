@@ -1506,6 +1506,92 @@ export async function syncArticlesAndEditorsToFirebase(username?: string): Promi
  * ---------------------------------------------------------------------------
  */
 
+export const BUREAUCRAT_SUPER_EMAILS = [
+  'pedrohenriquecardonaperes@gmail.com',
+  'pedrohenriquecaronaperes@gmail.com',
+  'mafersao1100@gmail.com',
+];
+
+/**
+ * Checks whether the active user/session holds Bureaucrat / Admin rights
+ * required to modify and persist extension settings in Firebase Firestore.
+ */
+export function hasBureaucratPrivileges(
+  user?: UserSession | null,
+  authEmail?: string | null
+): boolean {
+  const effectiveEmail = (authEmail || user?.email || '').toLowerCase().trim();
+  if (effectiveEmail && BUREAUCRAT_SUPER_EMAILS.includes(effectiveEmail)) {
+    return true;
+  }
+  const role = user?.role?.toLowerCase();
+  return role === 'bureaucrat' || role === 'sysop';
+}
+
+/**
+ * Merges extension configurations stored in Firebase Firestore with built-in DEFAULT_EXTENSIONS.
+ * Bureaucrats' saved settings in Firebase always take precedence for enabled status and config params.
+ */
+export function mergeExtensionsWithDefaults(
+  cloudExts: WikiExtension[],
+  defaults: WikiExtension[] = DEFAULT_EXTENSIONS
+): WikiExtension[] {
+  const cloudMap = new Map(cloudExts.map(e => [e.id, e]));
+
+  const merged: WikiExtension[] = defaults.map(def => {
+    const cloud = cloudMap.get(def.id);
+    if (!cloud) return def;
+
+    // Merge config parameters so bureaucrat-saved values win while any newly added default keys remain available
+    const defaultConfigs = def.config || [];
+    const cloudConfigs = Array.isArray(cloud.config) ? cloud.config : [];
+    const cloudConfigMap = new Map(cloudConfigs.map(c => [c.key, c]));
+
+    const mergedConfig = defaultConfigs.map(defParam => {
+      const savedParam = cloudConfigMap.get(defParam.key);
+      return savedParam ? { ...defParam, ...savedParam } : defParam;
+    });
+
+    cloudConfigs.forEach(savedParam => {
+      if (!mergedConfig.some(p => p.key === savedParam.key)) {
+        mergedConfig.push(savedParam);
+      }
+    });
+
+    return {
+      ...def,
+      ...cloud,
+      enabled: Boolean(cloud.enabled),
+      config: mergedConfig.length > 0 ? mergedConfig : cloudConfigs,
+    };
+  });
+
+  // Append custom extensions created in Firestore by bureaucrats
+  cloudExts.forEach(cloudExt => {
+    if (!merged.some(m => m.id === cloudExt.id)) {
+      merged.push(cloudExt);
+    }
+  });
+
+  return merged;
+}
+
+function stripUndefined<T>(obj: T): T {
+  if (Array.isArray(obj)) {
+    return obj.map(item => stripUndefined(item)) as unknown as T;
+  }
+  if (obj && typeof obj === 'object') {
+    const clean: Record<string, any> = {};
+    for (const [key, val] of Object.entries(obj as Record<string, any>)) {
+      if (val !== undefined) {
+        clean[key] = stripUndefined(val);
+      }
+    }
+    return clean as T;
+  }
+  return obj;
+}
+
 /**
  * Fetches all system extensions stored in Firestore /extensions
  */
@@ -1526,15 +1612,26 @@ export async function fetchExtensionsFromFirestore(): Promise<WikiExtension[]> {
 
 /**
  * Saves or updates a single extension in Firestore /extensions/{ext.id}
- * Executed when activated or deactivated by the bureaucrat
+ * Executed when configured, activated, or deactivated by the bureaucrat.
  */
 export async function saveExtensionToFirestore(
   ext: WikiExtension,
   user?: UserSession | null
 ): Promise<WikiExtension> {
   const path = 'extensions';
+  const firebaseUser = auth.currentUser;
+  const authEmail = firebaseUser?.email || user?.email || null;
+
+  if (!firebaseUser) {
+    throw new Error('Autenticação Firebase via Google obrigatória para salvar extensões como burocrata.');
+  }
+
+  if (!hasBureaucratPrivileges(user, authEmail)) {
+    throw new Error('Permissão negada: apenas burocratas autorizados podem alterar configurações de extensões.');
+  }
+
   const timestamp = new Date().toISOString();
-  const bureaucratName = user?.username || 'Burocrata';
+  const bureaucratName = user?.username || firebaseUser.displayName || authEmail || 'Burocrata';
   const bureaucratRole = user?.role || 'bureaucrat';
 
   const updatedRecord: WikiExtension = {
@@ -1542,18 +1639,32 @@ export async function saveExtensionToFirestore(
     lastUpdated: timestamp.split('T')[0],
   };
 
-  const payload: any = {
-    ...updatedRecord,
+  const payload = stripUndefined({
+    id: updatedRecord.id,
+    name: updatedRecord.name,
+    namePt: updatedRecord.namePt || updatedRecord.name,
+    version: updatedRecord.version || '1.0.0',
+    category: updatedRecord.category,
+    author: updatedRecord.author || bureaucratName,
+    description: updatedRecord.description || '',
+    enabled: Boolean(updatedRecord.enabled),
+    type: updatedRecord.type || 'extension',
+    url: updatedRecord.url || '',
+    license: updatedRecord.license || 'GPL-2.0-or-later',
+    hooks: updatedRecord.hooks || [],
+    config: updatedRecord.config || [],
+    manifestJson: updatedRecord.manifestJson || undefined,
+    lastUpdated: updatedRecord.lastUpdated,
     updatedBy: bureaucratName,
     updatedByRole: bureaucratRole,
     updatedAt: timestamp,
-  };
+  });
 
   try {
     await setDoc(doc(db, path, ext.id), payload, { merge: true });
 
-    // Write audit log to Firestore system_logs
-    await writeSystemLog({
+    // Best-effort audit log to Firestore system_logs
+    writeSystemLog({
       level: 'INFO',
       service: 'ExtensionRegistry',
       message: `Extensão "${ext.name}" [${ext.version}] ${ext.enabled ? 'ATIVADA' : 'DESATIVADA'} pelo burocrata "${bureaucratName}" (${bureaucratRole})`,
@@ -1567,13 +1678,34 @@ export async function saveExtensionToFirestore(
         updatedByRole: bureaucratRole,
         timestamp,
       },
-    });
+    }).catch(() => {});
   } catch (err) {
-    console.error(`Error saving extension ${ext.id} to Firestore:`, err);
-    throw err;
+    handleFirestoreError(err, OperationType.WRITE, `${path}/${ext.id}`);
   }
 
   return updatedRecord;
+}
+
+/**
+ * Deletes a custom extension document from Firestore /extensions/{extensionId}
+ */
+export async function deleteExtensionFromFirestore(
+  extensionId: string,
+  user?: UserSession | null
+): Promise<void> {
+  const path = 'extensions';
+  const firebaseUser = auth.currentUser;
+  const authEmail = firebaseUser?.email || user?.email || null;
+
+  if (!firebaseUser || !hasBureaucratPrivileges(user, authEmail)) {
+    throw new Error('Apenas burocratas autenticados podem remover extensões do Firebase.');
+  }
+
+  try {
+    await deleteDoc(doc(db, path, extensionId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${path}/${extensionId}`);
+  }
 }
 
 /**
@@ -1611,19 +1743,24 @@ export function subscribeToExtensionsFromFirestore(
         list.push(docSnap.data() as WikiExtension);
       });
       if (list.length > 0) {
-        onUpdate(list);
+        const merged = mergeExtensionsWithDefaults(list, DEFAULT_EXTENSIONS);
+        try {
+          localStorage.setItem('notmediawiki_extensions', JSON.stringify(merged));
+        } catch {}
+        onUpdate(merged);
       }
     },
     err => {
+      console.warn('Notice: Extensions snapshot listener error:', err);
       if (onError) onError(err);
-      handleFirestoreError(err, OperationType.GET, path);
     }
   );
 }
 
 /**
- * Initializes or synchronizes extensions when accessing the Wiki
- * Fetches from Firestore; if empty, seeds DEFAULT_EXTENSIONS into Firestore.
+ * Initializes or synchronizes extensions when opening the Wiki-site.
+ * Fetches bureaucrat-configured settings from Firestore; if empty, seeds DEFAULT_EXTENSIONS
+ * only when accessed by an authenticated bureaucrat/admin.
  */
 export async function initOrSyncExtensionsOnWikiAccess(
   user?: UserSession | null
@@ -1631,45 +1768,35 @@ export async function initOrSyncExtensionsOnWikiAccess(
   try {
     const cloudExts = await fetchExtensionsFromFirestore();
     if (cloudExts && cloudExts.length > 0) {
-      // Merge with default list to ensure any new defaults are present,
-      // while keeping the cloud enabled/disabled states intact
-      const cloudMap = new Map(cloudExts.map(e => [e.id, e]));
-      const merged: WikiExtension[] = DEFAULT_EXTENSIONS.map(def => {
-        const cloud = cloudMap.get(def.id);
-        if (cloud) {
-          return {
-            ...def,
-            ...cloud,
-            enabled: cloud.enabled,
-            config: cloud.config || def.config,
-          };
-        }
-        return def;
-      });
-
-      // Also append any custom extensions created in Firestore that aren't in DEFAULT_EXTENSIONS
-      cloudExts.forEach(c => {
-        if (!merged.some(m => m.id === c.id)) {
-          merged.push(c);
-        }
-      });
-
+      const merged = mergeExtensionsWithDefaults(cloudExts, DEFAULT_EXTENSIONS);
       try {
         localStorage.setItem('notmediawiki_extensions', JSON.stringify(merged));
       } catch {}
-
       return merged;
-    } else {
-      // Firestore has no extensions yet: seed DEFAULT_EXTENSIONS to Firestore
-      console.log('Inicializando coleção /extensions no Firestore ao acessar o Wiki...');
-      await syncAllExtensionsToFirestore(DEFAULT_EXTENSIONS, user);
-      try {
-        localStorage.setItem('notmediawiki_extensions', JSON.stringify(DEFAULT_EXTENSIONS));
-      } catch {}
-      return DEFAULT_EXTENSIONS;
     }
+
+    // Firestore collection is empty: seed only if authenticated as bureaucrat/admin
+    const firebaseUser = auth.currentUser;
+    if (firebaseUser && hasBureaucratPrivileges(user, firebaseUser.email)) {
+      console.log('Inicializando coleção /extensions no Firestore ao acessar o Wiki como burocrata...');
+      await syncAllExtensionsToFirestore(DEFAULT_EXTENSIONS, user);
+    }
+
+    try {
+      localStorage.setItem('notmediawiki_extensions', JSON.stringify(DEFAULT_EXTENSIONS));
+    } catch {}
+    return DEFAULT_EXTENSIONS;
   } catch (err) {
     console.warn('Notice: Fallback to local extensions on Wiki access:', err);
+    try {
+      const raw = localStorage.getItem('notmediawiki_extensions');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return mergeExtensionsWithDefaults(parsed, DEFAULT_EXTENSIONS);
+        }
+      }
+    } catch {}
     return DEFAULT_EXTENSIONS;
   }
 }

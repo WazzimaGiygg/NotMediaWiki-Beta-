@@ -71,7 +71,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
   defaultAutoCollapse = false,
   variant = 'sidebar',
   defaultOpen,
-  title = 'Índice Automático',
+  title = 'Tabela de Conteúdos',
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(
     defaultOpen !== undefined ? defaultOpen : variant === 'sidebar'

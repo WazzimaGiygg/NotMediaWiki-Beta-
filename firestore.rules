@@ -238,9 +238,37 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    function isValidWikiExtension(data, extensionId) {
+      return data.keys().hasOnly([
+          'id', 'name', 'namePt', 'version', 'category', 'author', 'description',
+          'enabled', 'type', 'url', 'license', 'hooks', 'config', 'manifestJson',
+          'lastUpdated', 'updatedBy', 'updatedByRole', 'updatedAt'
+        ])
+        && data.keys().hasAll(['id', 'name', 'enabled', 'category'])
+        && data.id is string && data.id == extensionId && data.id.size() > 0 && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 128
+        && data.enabled is bool
+        && data.category in ['parser', 'ui', 'search', 'security', 'infra', 'media', 'engagement']
+        && (!('namePt' in data) || (data.namePt is string && data.namePt.size() <= 255))
+        && (!('version' in data) || (data.version is string && data.version.size() <= 64))
+        && (!('author' in data) || (data.author is string && data.author.size() <= 255))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 2000))
+        && (!('type' in data) || data.type in ['extension', 'skin', 'service'])
+        && (!('url' in data) || (data.url is string && data.url.size() <= 500))
+        && (!('license' in data) || (data.license is string && data.license.size() <= 64))
+        && (!('hooks' in data) || data.hooks is list)
+        && (!('config' in data) || data.config is list)
+        && (!('manifestJson' in data) || data.manifestJson is map)
+        && (!('lastUpdated' in data) || (data.lastUpdated is string && data.lastUpdated.size() <= 64))
+        && (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 128))
+        && (!('updatedByRole' in data) || (data.updatedByRole is string && data.updatedByRole.size() <= 64))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
     match /extensions/{extensionId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && isValidWikiExtension(request.resource.data, extensionId);
+      allow delete: if isAdmin();
     }
 
     // Telemetria: só sistema/admin

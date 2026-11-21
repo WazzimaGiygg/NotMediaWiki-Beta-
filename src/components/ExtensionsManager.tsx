@@ -40,14 +40,17 @@ import {
   Trash2,
   Library,
   PlusCircle,
+  Lock,
+  ShieldAlert,
 } from 'lucide-react';
 import { WikiExtension, ExtensionCategory, ExtensionConfigParam, UserSession } from '../types';
 import { DEFAULT_EXTENSIONS, AVAILABLE_CATALOG_EXTENSIONS } from '../data/defaultExtensions';
 import { wrapExternalUrl } from '../utils/urlHelper';
-import { api } from '../api';
 import { WikiReportModal } from './WikiReportModal';
 import { buildExtensionsReportData } from '../utils/reportGenerator';
 import { FIRESTORE_DATABASE_ID } from '../firebaseConfig';
+import { useExtensions } from '../context/ExtensionsContext';
+import { auth, hasBureaucratPrivileges } from '../firebase';
 
 const STORAGE_KEY = 'notmediawiki_extensions';
 
@@ -56,21 +59,18 @@ interface ExtensionsManagerProps {
 }
 
 export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUser }) => {
-  // Load extensions with persistence in localStorage
-  const [extensions, setExtensions] = useState<WikiExtension[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('Could not parse stored extensions:', e);
-    }
-    return DEFAULT_EXTENSIONS;
-  });
+  const {
+    extensions,
+    setLocalExtensions: setExtensions,
+    hasLoadedFromFirebase,
+    lastSyncAt,
+    saveExtension: saveExtensionToCloud,
+    syncAllExtensions: syncAllToCloud,
+    deleteExtension: deleteExtensionFromCloud,
+    refreshExtensions,
+  } = useExtensions();
+
+  const canManageExtensions = hasBureaucratPrivileges(currentUser, auth.currentUser?.email) && Boolean(auth.currentUser);
 
   // UI state
   const [activeSubView, setActiveSubView] = useState<'list' | 'hooks' | 'export'>('list');
@@ -87,44 +87,23 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false);
 
   // Cloud Sync Status
   const [isSyncingWithCloud, setIsSyncingWithCloud] = useState(false);
-  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(null);
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(() =>
+    lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString('pt-BR') : null
+  );
 
   // Notifications
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'warning' } | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Sincronização ao acessar o Wiki e assinatura em tempo real no Firebase Firestore
   useEffect(() => {
-    // 1. Ao acessar o Wiki / painel de extensões: sincronizar com o Firebase
-    api.initExtensionsOnWikiAccess(currentUser).then(cloudExts => {
-      if (cloudExts && cloudExts.length > 0) {
-        setExtensions(cloudExts);
-        setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
-      }
-    }).catch(console.warn);
-
-    // 2. Ouvinte em tempo real para mudanças nas extensões feitas por burocratas
-    const unsub = api.subscribeExtensions(cloudExts => {
-      if (cloudExts && cloudExts.length > 0) {
-        setExtensions(cloudExts);
-        setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
-      }
-    });
-
-    return () => unsub();
-  }, [currentUser]);
-
-  // Save to localStorage when extensions change
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(extensions));
-    } catch (e) {
-      console.error('Failed to save extensions to localStorage:', e);
+    if (lastSyncAt) {
+      setLastCloudSyncTime(new Date(lastSyncAt).toLocaleTimeString('pt-BR'));
     }
-  }, [extensions]);
+  }, [lastSyncAt]);
 
   const showToast = (text: string, type: 'success' | 'info' | 'warning' = 'success') => {
     setToastMessage({ text, type });
@@ -135,6 +114,11 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
 
   // Toggle extension status - sincronizado no Firebase pelo burocrata
   const handleToggleExtension = async (id: string) => {
+    if (!canManageExtensions) {
+      showToast('Apenas burocratas autenticados via Google podem alterar extensões no Firebase.', 'warning');
+      return;
+    }
+
     const ext = extensions.find(e => e.id === id);
     if (!ext) return;
 
@@ -153,7 +137,7 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
 
     // Sincronização com o Firebase Firestore
     try {
-      await api.saveExtension(updatedExt, currentUser);
+      await saveExtensionToCloud(updatedExt);
       showToast(
         `Extensão "${ext.name}" ${nextState ? 'ativada' : 'desativada'} pelo burocrata "${bureaucratName}" (${bureaucratRole}) e salva no Firebase!`,
         nextState ? 'success' : 'info'
@@ -166,9 +150,13 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
   };
 
   const handleSyncAllToCloud = async () => {
+    if (!canManageExtensions) {
+      showToast('Login de burocrata obrigatório para sincronizar no Firebase.', 'warning');
+      return;
+    }
     setIsSyncingWithCloud(true);
     try {
-      const res = await api.syncAllExtensions(extensions, currentUser);
+      const res = await syncAllToCloud(extensions);
       showToast(`${res.saved} extensões sincronizadas com sucesso no Firebase Firestore!`, 'success');
       setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
     } catch (err: any) {
@@ -181,11 +169,9 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
   const handlePullFromCloud = async () => {
     setIsSyncingWithCloud(true);
     try {
-      const cloudExts = await api.getExtensions();
+      const cloudExts = await refreshExtensions();
       if (cloudExts && cloudExts.length > 0) {
-        setExtensions(cloudExts);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudExts));
-        showToast(`${cloudExts.length} extensões obtidas do Firebase Firestore!`, 'success');
+        showToast(`${cloudExts.length} extensões carregadas do Firebase Firestore!`, 'success');
         setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
       } else {
         showToast('Nenhuma extensão encontrada no Firestore.', 'info');
@@ -197,14 +183,40 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
     }
   };
 
-  // Reset to default extensions
-  const handleResetDefaults = () => {
-    if (window.confirm('Deseja restaurar as extensões para a configuração de fábrica do NotMediaWiki?')) {
-      setExtensions(DEFAULT_EXTENSIONS);
+  const handleDeleteCustomExtension = async (ext: WikiExtension) => {
+    if (!canManageExtensions) {
+      showToast('Apenas burocratas podem remover extensões personalizadas.', 'warning');
+      return;
+    }
+    try {
+      await deleteExtensionFromCloud(ext.id);
+      showToast(`Extensão personalizada "${ext.name}" removida do Firebase.`, 'info');
+    } catch (err: any) {
+      showToast(`Erro ao remover do Firebase: ${err.message}`, 'warning');
+    }
+  };
+
+  // Reset to default extensions (modal-confirmed, synced to Firebase if bureaucrat)
+  const handleConfirmResetDefaults = async () => {
+    setIsConfirmResetOpen(false);
+    setExtensions(DEFAULT_EXTENSIONS);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_EXTENSIONS));
+    } catch {}
+
+    if (canManageExtensions) {
+      setIsSyncingWithCloud(true);
       try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {}
-      showToast('Configurações de extensões restauradas com sucesso!', 'info');
+        const res = await syncAllToCloud(DEFAULT_EXTENSIONS);
+        showToast(`Configurações restauradas e ${res.saved} padrões salvos no Firebase!`, 'success');
+        setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
+      } catch (err: any) {
+        showToast(`Restaurado localmente (Firebase aviso: ${err.message})`, 'warning');
+      } finally {
+        setIsSyncingWithCloud(false);
+      }
+    } else {
+      showToast('Configurações de extensões restauradas localmente.', 'info');
     }
   };
 
@@ -397,12 +409,22 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
 
             <button
               onClick={handleSyncAllToCloud}
-              disabled={isSyncingWithCloud}
+              disabled={isSyncingWithCloud || !canManageExtensions}
               className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               title="Sincronizar todas as extensões no Firestore como burocrata"
             >
               <Cloud className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ${isSyncingWithCloud ? 'animate-bounce' : ''}`} />
               <span>{isSyncingWithCloud ? 'Sincronizando...' : 'Sincronizar Firebase'}</span>
+            </button>
+
+            <button
+              onClick={handlePullFromCloud}
+              disabled={isSyncingWithCloud}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              title="Recarregar configurações de extensões diretamente do Firebase Firestore"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingWithCloud ? 'animate-spin' : ''}`} />
+              <span>Recarregar Cloud</span>
             </button>
 
             <button
@@ -418,7 +440,8 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
 
             <button
               onClick={() => setIsCatalogModalOpen(true)}
-              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              disabled={!canManageExtensions}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               title="3.05.3.a: Adicionar extensões já existentes do ecossistema MediaWiki"
             >
               <Library className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -427,7 +450,8 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
 
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              disabled={!canManageExtensions}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
               title="Cadastrar extensão personalizada"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -435,8 +459,9 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
             </button>
 
             <button
-              onClick={handleResetDefaults}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              onClick={() => setIsConfirmResetOpen(true)}
+              disabled={!canManageExtensions}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               title="Restaurar extensões padrão"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -445,13 +470,27 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
           </div>
         </div>
 
+        {/* Bureaucrat Access Guard Notice when non-bureaucrat views */}
+        {!canManageExtensions && (
+          <div className="mt-3 p-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              <strong>Modo Somente Leitura:</strong> As configurações carregadas do Firebase estão visíveis, mas apenas usuários autenticados via Google com perfil <strong>Burocrata</strong> podem ativar, desativar ou alterar parâmetros de extensões.
+            </span>
+          </div>
+        )}
+
         {/* Firebase Cloud Synchronization Status Banner */}
         <div className="mt-3.5 p-2.5 rounded-md bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
               <Cloud className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Sincronização Cloud Firebase Firestore Ativa:</span>
+              <span>
+                {hasLoadedFromFirebase
+                  ? 'Configurações carregadas do Firebase Firestore na abertura:'
+                  : 'Sincronização Cloud Firebase Firestore Ativa:'}
+              </span>
             </span>
             <code className="text-[11px] font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/50 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 truncate max-w-xs">
               {FIRESTORE_DATABASE_ID}
@@ -462,7 +501,7 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
             <span>
               Autoridade ativa:{' '}
               <strong className="underline">
-                {currentUser?.username || 'Burocrata'} [{currentUser?.role || 'bureaucrat'}]
+                {currentUser?.username || 'Visitante'} [{currentUser?.role || 'leitor'}]
               </strong>
             </span>
             {lastCloudSyncTime && (
@@ -756,10 +795,11 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
 
                     {/* Card Action Footer */}
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <button
-                          onClick={() => setEditModalExt(ext)}
-                          className="px-2 py-1 text-[11px] font-medium text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/60 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                          onClick={() => canManageExtensions ? setEditModalExt(ext) : showToast('Acesso restrito a burocratas.', 'warning')}
+                          disabled={!canManageExtensions}
+                          className="px-2 py-1 text-[11px] font-medium text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/60 rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-40"
                           title="3.05.3.a: Modificar parâmetros e dados da extensão"
                         >
                           <Edit3 className="w-3 h-3" />
@@ -767,8 +807,9 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                         </button>
 
                         <button
-                          onClick={() => setConfigModalExt(ext)}
-                          className="px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                          onClick={() => canManageExtensions ? setConfigModalExt(ext) : showToast('Acesso restrito a burocratas.', 'warning')}
+                          disabled={!canManageExtensions}
+                          className="px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-40"
                           title="Ajustar parâmetros de configuração"
                         >
                           <Settings className="w-3 h-3" />
@@ -783,6 +824,16 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                           <FileJson className="w-3 h-3" />
                           <span>Manifesto</span>
                         </button>
+
+                        {!DEFAULT_EXTENSIONS.some(d => d.id === ext.id) && canManageExtensions && (
+                          <button
+                            onClick={() => handleDeleteCustomExtension(ext)}
+                            className="px-2 py-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Remover extensão personalizada do Firebase"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
 
                       <button
@@ -864,29 +915,40 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                         <td className="py-2.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
-                              onClick={() => setEditModalExt(ext)}
-                              className="px-2 py-1 text-[11px] bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 text-purple-700 dark:text-purple-300 rounded transition-colors"
+                              onClick={() => canManageExtensions ? setEditModalExt(ext) : showToast('Acesso restrito a burocratas.', 'warning')}
+                              disabled={!canManageExtensions}
+                              className="px-2 py-1 text-[11px] bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 text-purple-700 dark:text-purple-300 rounded transition-colors cursor-pointer disabled:opacity-40"
                               title="3.05.3.a: Modificar extensão"
                             >
                               <Edit3 className="w-3 h-3" />
                             </button>
                             <button
-                              onClick={() => setConfigModalExt(ext)}
-                              className="px-2 py-1 text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-300 transition-colors"
+                              onClick={() => canManageExtensions ? setConfigModalExt(ext) : showToast('Acesso restrito a burocratas.', 'warning')}
+                              disabled={!canManageExtensions}
+                              className="px-2 py-1 text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-300 transition-colors cursor-pointer disabled:opacity-40"
                               title="Configurar"
                             >
                               <Settings className="w-3 h-3" />
                             </button>
                             <button
                               onClick={() => setManifestModalExt(ext)}
-                              className="px-2 py-1 text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-300 transition-colors"
+                              className="px-2 py-1 text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                               title="Manifesto JSON"
                             >
                               <FileJson className="w-3 h-3" />
                             </button>
+                            {!DEFAULT_EXTENSIONS.some(d => d.id === ext.id) && canManageExtensions && (
+                              <button
+                                onClick={() => handleDeleteCustomExtension(ext)}
+                                className="px-2 py-1 text-[11px] bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 dark:text-rose-400 rounded transition-colors cursor-pointer"
+                                title="Remover extensão personalizada do Firebase"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
                             <button
                               onClick={() => setTestModalExt(ext)}
-                              className="px-2 py-1 text-[11px] bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-600 dark:text-blue-400 rounded transition-colors"
+                              className="px-2 py-1 text-[11px] bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-600 dark:text-blue-400 rounded transition-colors cursor-pointer"
                               title="Testar"
                             >
                               <Play className="w-3 h-3" />
@@ -1297,8 +1359,13 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
               <button
                 onClick={async () => {
                   if (configModalExt) {
+                    if (!canManageExtensions) {
+                      showToast('Apenas burocratas podem salvar configurações no Firebase.', 'warning');
+                      setConfigModalExt(null);
+                      return;
+                    }
                     try {
-                      await api.saveExtension(configModalExt, currentUser);
+                      await saveExtensionToCloud(configModalExt);
                       showToast(`Configurações de "${configModalExt.name}" salvas e sincronizadas no Firebase!`, 'success');
                       setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
                     } catch (err: any) {
@@ -1367,14 +1434,14 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
         <InstallExtensionModal
           onClose={() => setIsAddModalOpen(false)}
           onAdd={async newExt => {
-            setExtensions(prev => [newExt, ...prev]);
             setIsAddModalOpen(false);
             try {
-              await api.saveExtension(newExt, currentUser);
+              await saveExtensionToCloud(newExt);
               showToast(`Nova extensão "${newExt.name}" registrada e salva no Firebase!`, 'success');
               setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
             } catch (err: any) {
-              showToast(`Nova extensão salva localmente (Firebase: ${err.message})`, 'info');
+              setExtensions(prev => [newExt, ...prev]);
+              showToast(`Nova extensão salva localmente (Firebase: ${err.message})`, 'warning');
             }
           }}
         />
@@ -1397,14 +1464,14 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
           extension={editModalExt}
           onClose={() => setEditModalExt(null)}
           onSave={async updated => {
-            setExtensions(prev => prev.map(e => (e.id === updated.id ? updated : e)));
             setEditModalExt(null);
             try {
-              await api.saveExtension(updated, currentUser);
+              await saveExtensionToCloud(updated);
               showToast(`Extensão "${updated.name}" atualizada e sincronizada no Firebase!`, 'success');
               setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
             } catch (err: any) {
-              showToast(`Extensão atualizada localmente (Firebase: ${err.message})`, 'info');
+              setExtensions(prev => prev.map(e => (e.id === updated.id ? updated : e)));
+              showToast(`Extensão atualizada localmente (Firebase: ${err.message})`, 'warning');
             }
           }}
         />
@@ -1418,16 +1485,49 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
           onInstall={async catalogExt => {
             const exists = extensions.some(e => e.id === catalogExt.id);
             if (exists) return;
-            setExtensions(prev => [catalogExt, ...prev]);
             try {
-              await api.saveExtension(catalogExt, currentUser);
-              showToast(`Extensão do catálogo "${catalogExt.name}" instalada com sucesso!`, 'success');
+              await saveExtensionToCloud(catalogExt);
+              showToast(`Extensão do catálogo "${catalogExt.name}" instalada e salva no Firebase!`, 'success');
               setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
             } catch (err: any) {
-              showToast(`Extensão instalada localmente (Firebase: ${err.message})`, 'info');
+              setExtensions(prev => [catalogExt, ...prev]);
+              showToast(`Extensão instalada localmente (Firebase: ${err.message})`, 'warning');
             }
           }}
         />
+      )}
+
+      {/* MODAL 8: INLINE RESET CONFIRMATION */}
+      {isConfirmResetOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2.5 text-amber-600 dark:text-amber-400">
+              <ShieldAlert className="w-5 h-5 shrink-0" />
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                Restaurar Extensões Padrão
+              </h3>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Deseja restaurar todas as extensões do sistema para a configuração padrão de fábrica e sincronizar com o Firebase Firestore?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsConfirmResetOpen(false)}
+                className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded text-xs font-medium cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetDefaults}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold cursor-pointer"
+              >
+                Confirmar Restauração
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

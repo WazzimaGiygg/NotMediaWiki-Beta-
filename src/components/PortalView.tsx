@@ -19,7 +19,7 @@ import {
   User,
   Tag,
 } from 'lucide-react';
-import { getPortalsConfig } from '../extensions/portalsExtension';
+import { useExtensions } from '../context/ExtensionsContext';
 import { UserSession } from '../types';
 
 interface PortalViewProps {
@@ -39,7 +39,7 @@ export const PortalView: React.FC<PortalViewProps> = ({
 }) => {
   const [searchFilter, setSearchFilter] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const portalsConfig = getPortalsConfig();
+  const { portalsConfig } = useExtensions();
 
   const currentConfig = portalsConfig[portalType];
   const isBureaucrat = currentUser?.role === 'bureaucrat' || currentUser?.role === 'sysop';

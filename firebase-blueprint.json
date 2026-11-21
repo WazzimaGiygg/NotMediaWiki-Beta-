@@ -132,18 +132,20 @@
         "name": { "type": "string", "maxLength": 128 },
         "namePt": { "type": "string", "maxLength": 255 },
         "version": { "type": "string", "maxLength": 64 },
-        "category": { "type": "string", "enum": ["parser", "ui", "search", "security", "infra", "media"] },
+        "category": { "type": "string", "enum": ["parser", "ui", "search", "security", "infra", "media", "engagement"] },
         "author": { "type": "string", "maxLength": 255 },
         "description": { "type": "string", "maxLength": 2000 },
         "enabled": { "type": "boolean" },
-        "type": { "type": "string" },
+        "type": { "type": "string", "enum": ["extension", "skin", "service"] },
         "url": { "type": "string", "maxLength": 500 },
         "license": { "type": "string", "maxLength": 64 },
         "hooks": { "type": "array" },
         "config": { "type": "array" },
+        "manifestJson": { "type": "object" },
+        "lastUpdated": { "type": "string", "maxLength": 64 },
         "updatedBy": { "type": "string", "maxLength": 128 },
         "updatedByRole": { "type": "string", "maxLength": 64 },
-        "updatedAt": { "type": "string" }
+        "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "name", "enabled", "category"]
     },

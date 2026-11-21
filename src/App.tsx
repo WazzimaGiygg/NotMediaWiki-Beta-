@@ -23,34 +23,22 @@ import { wrapExternalUrl } from './utils/urlHelper';
 import { fetchUsersFromFirestore, auth, onAuthStateChanged } from './firebase';
 import { applyDefaultSiteSeo, applyDynamicSeoMeta, PRIMARY_CANONICAL_ORIGIN, SITE_BRAND_NAME } from './utils/seoManager';
 import { LgpdRequestsProvider } from './context/LgpdRequestsContext';
+import { ExtensionsProvider, useExtensions } from './context/ExtensionsContext';
+import { BureaucratPage } from './components/BureaucratPage';
+import { PortalView } from './components/PortalView';
+import { MaintenanceScreen } from './components/MaintenanceScreen';
+import { hasBureaucratPrivileges } from './firebase';
 import { enforceFrameBusting } from './utils/frameGuard';
 import { WikiFooter } from './components/WikiFooter';
 import { LGPD_INVESTIGATION_SLUG } from './data/lgpdInvestigationArticle';
 
+interface WikiAppShellProps {
+  currentUser: UserSession | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<UserSession | null>>;
+}
+
 export default function App() {
-  const [isIframeBlocked] = useState<boolean>(() => enforceFrameBusting());
-  const [currentView, setCurrentView] = useState<string>('home');
-  const [activeArticleSlug, setActiveArticleSlug] = useState<string>('MediaWiki');
-  const [specialPageName, setSpecialPageName] = useState<string>('SpecialPages');
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
-  const [isZenMode, setIsZenMode] = useState(false);
-
-  // Reset Zen Mode whenever navigating away from the article reader
-  useEffect(() => {
-    if (currentView !== 'reader' && isZenMode) {
-      setIsZenMode(false);
-    }
-  }, [currentView, isZenMode]);
-  const [adminSubTab, setAdminSubTab] = useState<string>('users');
-  const [readingProgress, setReadingProgress] = useState<number>(0);
-
-  // Real-time Chat & User Pages & Daily Checklist State
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isChecklistOpen, setIsChecklistOpen] = useState(false);
-  const [chatTargetUser, setChatTargetUser] = useState<UserSession | null>(null);
-  const [selectedUserForPage, setSelectedUserForPage] = useState<UserSession | null>(null);
 
   // Listen to Google Firebase Authentication state
   useEffect(() => {
@@ -70,6 +58,47 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
+  return (
+    <LgpdRequestsProvider currentUser={currentUser}>
+      <ExtensionsProvider currentUser={currentUser}>
+        <WikiAppShell currentUser={currentUser} setCurrentUser={setCurrentUser} />
+      </ExtensionsProvider>
+    </LgpdRequestsProvider>
+  );
+}
+
+const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser }) => {
+  const [isIframeBlocked] = useState<boolean>(() => enforceFrameBusting());
+  const [currentView, setCurrentView] = useState<string>('home');
+  const [activeArticleSlug, setActiveArticleSlug] = useState<string>('MediaWiki');
+  const [specialPageName, setSpecialPageName] = useState<string>('SpecialPages');
+  const [activePortal, setActivePortal] = useState<'livros' | 'universitario' | 'jornal'>('livros');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
+
+  const {
+    extensions,
+    isLoadingExtensions,
+    maintenanceConfig,
+    saveExtension,
+  } = useExtensions();
+
+  // Reset Zen Mode whenever navigating away from the article reader
+  useEffect(() => {
+    if (currentView !== 'reader' && isZenMode) {
+      setIsZenMode(false);
+    }
+  }, [currentView, isZenMode]);
+  const [adminSubTab, setAdminSubTab] = useState<string>('users');
+  const [readingProgress, setReadingProgress] = useState<number>(0);
+
+  // Real-time Chat & User Pages & Daily Checklist State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChecklistOpen, setIsChecklistOpen] = useState(false);
+  const [chatTargetUser, setChatTargetUser] = useState<UserSession | null>(null);
+  const [selectedUserForPage, setSelectedUserForPage] = useState<UserSession | null>(null);
+
   // Keep canonical & SEO metadata synchronized for non-article views
   useEffect(() => {
     if (currentView === 'reader') return;
@@ -78,6 +107,14 @@ export default function App() {
         title: `Busca: ${searchQuery.trim()} — ${SITE_BRAND_NAME}`,
         description: `Resultados oficiais de busca para "${searchQuery.trim()}" na enciclopédia NotMediaWiki (core.wazzimagiygg.com).`,
         canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/`,
+        ogType: 'website',
+        jsonLd: null,
+      });
+    } else if (currentView === 'bureaucrats') {
+      applyDynamicSeoMeta({
+        title: `Página dos Burocratas & Extensões — ${SITE_BRAND_NAME}`,
+        description: `Painel oficial dos burocratas e gerenciamento de extensões do NotMediaWiki sincronizado via Firebase.`,
+        canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/#/burocratas`,
         ogType: 'website',
         jsonLd: null,
       });
@@ -95,22 +132,6 @@ export default function App() {
   }, [currentView, searchQuery, specialPageName]);
 
   useEffect(() => {
-    // Sincronização de extensões com o Firebase Firestore ao acessar o Wiki
-    api.initExtensionsOnWikiAccess().then(exts => {
-      console.log(`[Firebase Cloud] ${exts.length} extensões sincronizadas no acesso ao Wiki.`);
-    }).catch(err => {
-      console.warn('Notice: Extensions Firestore initialization on Wiki access:', err);
-    });
-
-    // Assinatura em tempo real para atualizações de extensões feitas por burocratas
-    const unsubExtensions = api.subscribeExtensions(cloudExts => {
-      if (cloudExts && cloudExts.length > 0) {
-        try {
-          localStorage.setItem('notmediawiki_extensions', JSON.stringify(cloudExts));
-        } catch {}
-      }
-    });
-
     // Sincronização de domínios permitidos com o Firebase Firestore ao iniciar
     api.getAllowedDomains().then(doms => {
       console.log(`[Firebase Cloud] ${doms.length} domínios permitidos carregados do Firestore.`);
@@ -153,6 +174,8 @@ export default function App() {
         const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
           handleRandomArticle();
+        } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
+          setCurrentView('bureaucrats');
         } else {
           setSpecialPageName(spName);
           setCurrentView('special');
@@ -163,6 +186,8 @@ export default function App() {
         const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
           handleRandomArticle();
+        } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
+          setCurrentView('bureaucrats');
         } else {
           setSpecialPageName(spName);
           setCurrentView('special');
@@ -175,6 +200,8 @@ export default function App() {
           const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
             handleRandomArticle();
+          } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
+            setCurrentView('bureaucrats');
           } else {
             setSpecialPageName(spName);
             setCurrentView('special');
@@ -270,6 +297,17 @@ export default function App() {
         setIsChecklistOpen(true);
       } else if (hash === '#/video-comercial' || hash === '#/promo-video' || hash === '#/comercial') {
         setCurrentView('promo_video');
+      } else if (hash === '#/burocratas' || hash === '#/bureaucrats' || hash === '#/burocrata') {
+        setCurrentView('bureaucrats');
+      } else if (hash === '#/portal/livros') {
+        setActivePortal('livros');
+        setCurrentView('portal');
+      } else if (hash === '#/portal/universitario') {
+        setActivePortal('universitario');
+        setCurrentView('portal');
+      } else if (hash === '#/portal/jornal') {
+        setActivePortal('jornal');
+        setCurrentView('portal');
       } else if (hash === '#/admin' || hash === '#/dev_admin') {
         setAdminSubTab('users');
         setCurrentView('dev_admin');
@@ -318,7 +356,6 @@ export default function App() {
     }
 
     return () => {
-      unsubExtensions();
       unsubDomains();
       window.removeEventListener('hashchange', handleHash);
       document.removeEventListener('click', handleGlobalClick, true);
@@ -349,6 +386,11 @@ export default function App() {
       const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
         handleRandomArticle();
+        return;
+      }
+      if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
+        setCurrentView('bureaucrats');
+        window.location.hash = '#/burocratas';
         return;
       }
       setSpecialPageName(spName);
@@ -406,9 +448,57 @@ export default function App() {
     );
   }
 
+  const isBureaucratUser =
+    hasBureaucratPrivileges(currentUser, auth.currentUser?.email) &&
+    Boolean(auth.currentUser || currentUser?.role === 'bureaucrat' || currentUser?.role === 'sysop');
+
+  const handleDisableMaintenance = async () => {
+    const ext = extensions.find(e => e.id === 'ext-maintenance-mode');
+    if (!ext) return;
+    await saveExtension({
+      ...ext,
+      config: ext.config.map(c =>
+        c.key === '$wgMaintenanceModeActive' ? { ...c, value: false } : c
+      ),
+    });
+  };
+
+  if (maintenanceConfig.isMaintenanceActive && !isBureaucratUser) {
+    return (
+      <MaintenanceScreen
+        currentUser={currentUser}
+        googleUserEmail={auth.currentUser?.email || currentUser?.email || null}
+        isBureaucrat={isBureaucratUser}
+        onBypassToAdmin={() => {
+          setCurrentView('bureaucrats');
+          window.location.hash = '#/burocratas';
+        }}
+        onDisableMaintenance={handleDisableMaintenance}
+      />
+    );
+  }
+
   return (
-    <LgpdRequestsProvider currentUser={currentUser}>
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
+      {/* Bureaucrat indicator when maintenance mode is active */}
+      {maintenanceConfig.isMaintenanceActive && isBureaucratUser && (
+        <div className="bg-amber-600 text-white px-4 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2">
+          <span>
+            <strong>Modo de Manutenção Ativo:</strong> Visitantes gerais estão bloqueados conforme configuração do Firebase. Você possui acesso livre como Burocrata.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentView('bureaucrats');
+              window.location.hash = '#/burocratas';
+            }}
+            className="px-2.5 py-0.5 bg-white text-amber-800 rounded font-semibold hover:bg-amber-50 transition-colors cursor-pointer"
+          >
+            Gerenciar Extensão na Página dos Burocratas
+          </button>
+        </div>
+      )}
+
       {/* Global Header */}
       {!(isZenMode && currentView === 'reader') && (
         <Header
@@ -424,6 +514,8 @@ export default function App() {
               window.location.hash = '#/special/SpecialPages';
             } else if (view === 'directory') {
               window.location.hash = '#/usuarios';
+            } else if (view === 'bureaucrats') {
+              window.location.hash = '#/burocratas';
             } else if (view === 'promo_video') {
               window.location.hash = '#/video-comercial';
             } else if (view === 'dev_admin') {
@@ -564,6 +656,47 @@ export default function App() {
           />
         )}
 
+        {currentView === 'bureaucrats' && (
+          <BureaucratPage
+            currentUser={currentUser}
+            onUserChanged={setCurrentUser}
+            onBackToWiki={() => {
+              setCurrentView('home');
+              window.location.hash = '#/home';
+            }}
+            onOpenAdminConsole={tab => {
+              if (tab) setAdminSubTab(tab);
+              setCurrentView('dev_admin');
+              window.location.hash = '#/admin';
+            }}
+            onOpenUserPage={user => {
+              setSelectedUserForPage(user);
+              setCurrentView('user_page');
+              window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
+            }}
+            onStartChatWithUser={user => {
+              setChatTargetUser(user);
+              setIsChatOpen(true);
+            }}
+          />
+        )}
+
+        {currentView === 'portal' && (
+          <PortalView
+            portalType={activePortal}
+            currentUser={currentUser}
+            onNavigateHome={() => {
+              setCurrentView('home');
+              window.location.hash = '#/home';
+            }}
+            onNavigateArticle={handleNavigateArticle}
+            onOpenExtensionsManager={() => {
+              setCurrentView('bureaucrats');
+              window.location.hash = '#/burocratas';
+            }}
+          />
+        )}
+
         {currentView === 'dev_admin' && (
           <DevAdminDashboard
             activeArticleSlug={activeArticleSlug}
@@ -672,7 +805,12 @@ export default function App() {
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </button>
       )}
+      {/* Startup Extension Config Loading Indicator (non-blocking tiny badge if still syncing initially) */}
+      {isLoadingExtensions && (
+        <span className="sr-only" role="status">
+          Carregando configurações de extensões do Firebase...
+        </span>
+      )}
     </div>
-    </LgpdRequestsProvider>
   );
-}
+};

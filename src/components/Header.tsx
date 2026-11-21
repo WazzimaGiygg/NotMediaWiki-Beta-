@@ -49,6 +49,7 @@ import { FcmTopicSubscriptions } from './FcmTopicSubscriptions';
 import { onAuthStateChanged } from 'firebase/auth';
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { performVpnAudit } from '../utils/vpnDetector';
+import { useExtensions } from '../context/ExtensionsContext';
 
 interface HeaderProps {
   currentView: string;
@@ -114,6 +115,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [monthlyPoints, setMonthlyPoints] = useState<number>(0);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { isExtensionEnabled, supportTicketsConfig } = useExtensions();
+  const isChecklistExtEnabled = isExtensionEnabled('DailyChecklist', true);
 
   // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners + Web Push API)
   const [notifications, setNotifications] = useState<ArticleNotification[]>([]);
@@ -622,6 +625,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'reader', label: 'Artigos (Reader)' },
     { id: 'special', label: 'Páginas Especiais' },
     { id: 'directory', label: 'Diretório de Usuários' },
+    { id: 'bureaucrats', label: 'Burocratas' },
     { id: 'editor', label: 'Wikitext Editor' },
     { id: 'promo_video', label: 'Vídeo Comercial' },
     ...(isAdminOrBureaucrat ? [{ id: 'dev_admin', label: 'Desenvolvedor e Administrador' }] : []),
@@ -1040,17 +1044,19 @@ export const Header: React.FC<HeaderProps> = ({
           {(googleUserEmail || currentUser?.isGoogleUser) && currentUser && (
             <>
               {/* 3.05.3.af & 3.05.8.b - Checklist Diário & Pontos Mensais Trigger Button */}
-              <button
-                onClick={onOpenChecklist}
-                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
-                title="Abrir Checklist Diário e Pontos Mensais (3.05.3.af / 3.05.8.b)"
-              >
-                <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                <span className="hidden sm:inline">Checklist</span>
-                <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
-                  ⭐ {monthlyPoints.toFixed(1)}
-                </span>
-              </button>
+              {isChecklistExtEnabled && (
+                <button
+                  onClick={onOpenChecklist}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                  title="Abrir Checklist Diário e Pontos Mensais (3.05.3.af / 3.05.8.b)"
+                >
+                  <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span className="hidden sm:inline">Checklist</span>
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                    ⭐ {monthlyPoints.toFixed(1)}
+                  </span>
+                </button>
+              )}
 
               {/* User Karma Reputation Button */}
               {currentUser && (
@@ -1394,16 +1400,41 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>Chat Comunitário em Tempo Real</span>
                       </button>
 
+                      {isChecklistExtEnabled && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            onOpenChecklist?.();
+                          }}
+                          className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <Award className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Checklist Diário & Pontos (3.05.8.b)</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);
-                          onOpenChecklist?.();
+                          onSelectView('bureaucrats');
                         }}
-                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                        className="w-full text-left px-3 py-2 rounded hover:bg-purple-50 dark:hover:bg-purple-950/50 text-purple-700 dark:text-purple-300 flex items-center gap-2 cursor-pointer transition-colors"
                       >
-                        <Award className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Checklist Diário & Pontos (3.05.8.b)</span>
+                        <Shield className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                        <span>Página dos Burocratas & Extensões</span>
                       </button>
+
+                      {supportTicketsConfig.enabled && supportTicketsConfig.showInHeader && (
+                        <a
+                          href={wrapExternalUrl(supportTicketsConfig.url)}
+                          target={supportTicketsConfig.openInNewTab ? '_blank' : '_self'}
+                          rel="noopener noreferrer"
+                          className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>{supportTicketsConfig.buttonLabel}</span>
+                        </a>
+                      )}
                     </div>
 
                     {/* Network / VPN Verification Status */}

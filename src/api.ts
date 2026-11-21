@@ -54,6 +54,7 @@ import {
   deleteUserFromFirestore,
   fetchExtensionsFromFirestore,
   saveExtensionToFirestore,
+  deleteExtensionFromFirestore,
   syncAllExtensionsToFirestore,
   initOrSyncExtensionsOnWikiAccess,
   subscribeToExtensionsFromFirestore,
@@ -848,6 +849,10 @@ export const api = {
 
   async saveExtension(ext: WikiExtension, user?: UserSession | null): Promise<WikiExtension> {
     return saveExtensionToFirestore(ext, user);
+  },
+
+  async deleteExtension(extensionId: string, user?: UserSession | null): Promise<void> {
+    return deleteExtensionFromFirestore(extensionId, user);
   },
 
   async syncAllExtensions(extensions: WikiExtension[], user?: UserSession | null): Promise<{ saved: number }> {
