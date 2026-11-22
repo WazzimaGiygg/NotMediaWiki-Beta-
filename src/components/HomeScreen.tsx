@@ -31,6 +31,7 @@ import {
   LGPD_INVESTIGATION_SLUG,
   LGPD_INVESTIGATION_PDF_URL,
 } from '../data/lgpdInvestigationArticle';
+import { TEMPLATE_EXAMPLE_SLUG } from '../data/templateExampleArticle';
 import {
   fetchHomePageMetadata,
   saveHomePageMetadata,
@@ -489,7 +490,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => onNavigateArticle(TEMPLATE_EXAMPLE_SLUG)}
+              className="px-2.5 py-1 text-xs border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded flex items-center gap-1.5 cursor-pointer transition-colors font-medium"
+              title="Abrir artigo demonstrativo de uso de pré-definições MediaWiki"
+            >
+              <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+              Exemplo: Pré-definições
+            </button>
             <button
               onClick={handleSyncWithFirebase}
               disabled={isSyncing}

@@ -48,6 +48,10 @@ import { templateService, SaveTemplateInput, TemplateExpansionOptions } from './
 import { parseTitle } from './utils/namespaces';
 import { LGPD_INVESTIGATION_ARTICLE } from './data/lgpdInvestigationArticle';
 import {
+  TEMPLATE_EXAMPLE_ARTICLE,
+  TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE,
+} from './data/templateExampleArticle';
+import {
   fetchArticlesFromFirestore,
   fetchArticleFromFirestore,
   fetchRevisionsFromFirestore,
@@ -128,19 +132,23 @@ export const api = {
   // 1. Content Service (Firebase Firestore is the Single Source of Truth)
   // ---------------------------------------------------------------------------
   async getArticles(namespace?: number): Promise<Article[]> {
-    // Only return data synchronized in the Firebase database + canonical investigation dossier if not yet synced
+    // Only return data synchronized in the Firebase database + canonical built-in articles if not yet synced
+    const builtinCanonical = [
+      LGPD_INVESTIGATION_ARTICLE,
+      TEMPLATE_EXAMPLE_ARTICLE,
+      TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE,
+    ].filter(a => namespace === undefined || a.namespace === namespace);
+
     try {
       const fbArticles = (await fetchArticlesFromFirestore(namespace)) || [];
-      const hasInvestigation = fbArticles.some(
-        a => a.slug.toLowerCase() === LGPD_INVESTIGATION_ARTICLE.slug.toLowerCase()
+      const existingSlugs = new Set(fbArticles.map(a => a.slug.toLowerCase()));
+      const missingBuiltins = builtinCanonical.filter(
+        b => !existingSlugs.has(b.slug.toLowerCase())
       );
-      if (!hasInvestigation && (namespace === undefined || namespace === LGPD_INVESTIGATION_ARTICLE.namespace)) {
-        return [LGPD_INVESTIGATION_ARTICLE, ...fbArticles];
-      }
-      return fbArticles;
+      return [...missingBuiltins, ...fbArticles];
     } catch (e) {
       console.warn('Could not read articles from Firestore:', e);
-      return namespace === undefined || namespace === 0 ? [LGPD_INVESTIGATION_ARTICLE] : [];
+      return builtinCanonical;
     }
   },
 
@@ -220,12 +228,19 @@ export const api = {
       // ignore
     }
 
-    // 3. Fallback to built-in canonical LGPD & Marco Civil investigation article
-    if (
-      cleanSlug.toLowerCase() === LGPD_INVESTIGATION_ARTICLE.slug.toLowerCase() ||
-      decodeURIComponent(cleanSlug).toLowerCase() === LGPD_INVESTIGATION_ARTICLE.slug.toLowerCase()
-    ) {
-      return { ...LGPD_INVESTIGATION_ARTICLE };
+    // 3. Fallback to built-in canonical encyclopedia & example articles
+    const normalizedTarget = decodeURIComponent(cleanSlug).toLowerCase();
+    for (const builtin of [
+      LGPD_INVESTIGATION_ARTICLE,
+      TEMPLATE_EXAMPLE_ARTICLE,
+      TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE,
+    ]) {
+      if (
+        cleanSlug.toLowerCase() === builtin.slug.toLowerCase() ||
+        normalizedTarget === builtin.slug.toLowerCase()
+      ) {
+        return { ...builtin };
+      }
     }
 
     throw new Error(`Artigo "${slug}" não encontrado no banco de dados.`);
@@ -453,8 +468,19 @@ export const api = {
     const normQuery = normalize(cleanQuery);
     const terms = normQuery.split(/\s+/).filter(Boolean);
 
-    // Fetch articles directly from Firestore (with built-in cache/seed fallback)
-    const articles = await fetchArticlesFromFirestore(namespace);
+    // Fetch articles directly from Firestore (with built-in canonical articles fallback)
+    const fbArticles = await fetchArticlesFromFirestore(namespace);
+    const existingSlugs = new Set(fbArticles.map(a => a.slug.toLowerCase()));
+    const builtinExtras = [
+      LGPD_INVESTIGATION_ARTICLE,
+      TEMPLATE_EXAMPLE_ARTICLE,
+      TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE,
+    ].filter(
+      b =>
+        (namespace === undefined || b.namespace === namespace) &&
+        !existingSlugs.has(b.slug.toLowerCase())
+    );
+    const articles = [...fbArticles, ...builtinExtras];
 
     const matches: SearchMatch[] = [];
     for (const article of articles) {

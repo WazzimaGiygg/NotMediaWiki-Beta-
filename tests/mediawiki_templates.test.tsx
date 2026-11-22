@@ -51,6 +51,7 @@ import { NewArticleModal } from '../src/components/NewArticleModal';
 import { SpecialPagesHub } from '../src/components/SpecialPagesHub';
 import { ArticleViewer } from '../src/components/ArticleViewer';
 import { templateService, normalizeTemplateIdentity } from '../src/services/templateService';
+import { TEMPLATE_EXAMPLE_ARTICLE } from '../src/data/templateExampleArticle';
 import { Article } from '../src/types';
 
 function makeCustomTemplate(name: string, wikitext: string, summary = ''): Article {
@@ -355,5 +356,25 @@ describe('MediaWiki Predefinições (Templates) Engine & Parsoid Integration', (
     expect(html).toContain('Estável');
     expect(html).toContain('Ajuda:Predefinições');
     expect(html).toContain('{{Aviso}}');
+  });
+
+  it('renders the built-in Exemplo de Predefinições article with live {{CartaoModulo}} and built-in template expansions', () => {
+    const html = renderToStaticMarkup(
+      <ArticleViewer
+        title={TEMPLATE_EXAMPLE_ARTICLE.title}
+        wikitext={TEMPLATE_EXAMPLE_ARTICLE.wikitext}
+        siteName="NotMediaWiki"
+      />
+    );
+
+    expect(html).toContain('Artigo Demonstrativo de Pré-definições');
+    expect(html).toContain('Motor Parsoid');
+    expect(html).toContain('v2.4');
+    expect(html).toContain('Gerenciador de Extensões');
+    expect(html).toContain('Ecossistema de Pré-definições');
+    expect(html).toContain('Exemplo de Predefinições');
+    // Code blocks wrapped in <nowiki> remain literal documentation
+    expect(html).toContain('{{PAGENAME}}');
+    expect(html).not.toContain('wiki-template-error');
   });
 });

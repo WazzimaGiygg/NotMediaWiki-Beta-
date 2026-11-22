@@ -37,6 +37,7 @@ import { generateMediaWikiXmlDump, parseMediaWikiXmlDump } from '../utils/wikiXm
 import { parseSemanticFacts, SemanticPageData } from '../utils/semanticParser';
 import { CategoryTreeView } from './CategoryTreeView';
 import { BUILTIN_MEDIAWIKI_TEMPLATES, TEMPLATE_CATEGORY_LABELS } from '../data/defaultTemplates';
+import { TEMPLATE_EXAMPLE_SLUG } from '../data/templateExampleArticle';
 import { extractTemplateDeclaredParams } from '../utils/templateEngine';
 
 interface SpecialPagesHubProps {
@@ -1003,32 +1004,42 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
               </p>
             </div>
 
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                const cleaned = newTemplateName.trim().replace(/^(?:Predefinição|Predef|Template):/i, '').trim();
-                if (!cleaned) return;
-                const slug = `Predefinição:${cleaned.replace(/\s+/g, '_')}`;
-                setNewTemplateName('');
-                onOpenEdit(slug);
-              }}
-              className="flex items-center gap-2 shrink-0"
-            >
-              <input
-                type="text"
-                value={newTemplateName}
-                onChange={e => setNewTemplateName(e.target.value)}
-                placeholder="Nova predefinição (ex: CaixaProjeto)..."
-                className="border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-600"
-              />
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
-                type="submit"
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                type="button"
+                onClick={() => onNavigateArticle(TEMPLATE_EXAMPLE_SLUG)}
+                className="px-3 py-1.5 border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Criar Predefinição</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Ver Artigo de Exemplo</span>
               </button>
-            </form>
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  const cleaned = newTemplateName.trim().replace(/^(?:Predefinição|Predef|Template):/i, '').trim();
+                  if (!cleaned) return;
+                  const slug = `Predefinição:${cleaned.replace(/\s+/g, '_')}`;
+                  setNewTemplateName('');
+                  onOpenEdit(slug);
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={newTemplateName}
+                  onChange={e => setNewTemplateName(e.target.value)}
+                  placeholder="Nova predefinição (ex: CaixaProjeto)..."
+                  className="border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-600"
+                />
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Criar Predefinição</span>
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Custom Namespace 10 Templates in Firestore */}

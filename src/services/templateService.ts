@@ -27,6 +27,7 @@ import {
   buildDefaultTemplatePageSkeleton,
   buildTemplateInvocationWikitext,
 } from '../data/defaultTemplates';
+import { TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE } from '../data/templateExampleArticle';
 import {
   TemplateExpansionOptions,
   TemplateExpansionResult,
@@ -157,20 +158,27 @@ export class TemplateService {
   }
 
   private mergeCustomTemplates(explicit?: Article[]): Article[] {
-    if (!explicit || explicit.length === 0) {
-      return this.cachedCustomTemplates;
-    }
     const merged = new Map<string, Article>();
+    const defaultParsed = parseTitle(TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE.title);
+    const defaultKey = normalizeTemplateKey(
+      defaultParsed.baseTitle || TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE.title
+    );
+    if (defaultKey) {
+      merged.set(defaultKey, TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE);
+    }
+
     for (const art of this.cachedCustomTemplates) {
       const parsed = parseTitle(art.title || art.slug);
       const key = normalizeTemplateKey(parsed.baseTitle || art.title || art.slug);
       if (key) merged.set(key, art);
     }
-    for (const art of explicit) {
-      const parsed = parseTitle(art.title || art.slug);
-      if (art.namespace === 10 || parsed.namespaceId === 10) {
-        const key = normalizeTemplateKey(parsed.baseTitle || art.title || art.slug);
-        if (key) merged.set(key, { ...art, namespace: 10 });
+    if (explicit && explicit.length > 0) {
+      for (const art of explicit) {
+        const parsed = parseTitle(art.title || art.slug);
+        if (art.namespace === 10 || parsed.namespaceId === 10) {
+          const key = normalizeTemplateKey(parsed.baseTitle || art.title || art.slug);
+          if (key) merged.set(key, { ...art, namespace: 10 });
+        }
       }
     }
     return Array.from(merged.values());
@@ -270,11 +278,17 @@ export class TemplateService {
   public async getAllTemplates(): Promise<Article[]> {
     try {
       const list = (await fetchArticlesFromFirestore(10)) || [];
-      this.setCachedCustomTemplates(list);
+      const hasExample = list.some(
+        art =>
+          normalizeTemplateKey(parseTitle(art.title || art.slug).baseTitle || art.title) ===
+          normalizeTemplateKey('CartaoModulo')
+      );
+      const combined = hasExample ? list : [TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE, ...list];
+      this.setCachedCustomTemplates(combined);
       return this.cachedCustomTemplates;
     } catch (err) {
       console.warn('Erro ao listar predefinições do Firestore:', err);
-      return this.cachedCustomTemplates;
+      return this.mergeCustomTemplates();
     }
   }
 
@@ -305,7 +319,9 @@ export class TemplateService {
         }) || null
       );
     } catch {
-      return null;
+      return identity.key === normalizeTemplateKey('CartaoModulo')
+        ? TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE
+        : null;
     }
   }
 

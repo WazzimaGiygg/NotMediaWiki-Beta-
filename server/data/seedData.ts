@@ -1,4 +1,8 @@
 import { LGPD_INVESTIGATION_ARTICLE } from '../../src/data/lgpdInvestigationArticle';
+import {
+  TEMPLATE_EXAMPLE_ARTICLE,
+  TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE,
+} from '../../src/data/templateExampleArticle';
 
 export interface Article {
   id: string;
@@ -365,6 +369,8 @@ We tested 10,000 req/sec against \`/api/v1/content/articles/MediaWiki\`. P99 lat
 `
   },
   LGPD_INVESTIGATION_ARTICLE,
+  TEMPLATE_EXAMPLE_ARTICLE,
+  TEMPLATE_EXAMPLE_CUSTOM_TEMPLATE,
 ];
 
 export const INITIAL_REVISIONS: Revision[] = [
