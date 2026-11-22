@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2 } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks } from 'lucide-react';
 import { Article, ArticleDraft, AutoSaveStatus, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
@@ -18,6 +18,9 @@ import { INFOBOX_SOFTWARE_FIELDS, buildInfoboxSoftwareWikitext } from '../utils/
 import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
 import { ArticleFootnotes } from './ArticleFootnotes';
 import { ReferenceManagerModal } from './ReferenceManagerModal';
+import { TemplateManagerModal } from './TemplateManagerModal';
+import { buildDefaultTemplatePageSkeleton } from '../data/defaultTemplates';
+import { parseTitle } from '../utils/namespaces';
 
 interface WikiEditorProps {
   slug: string;
@@ -57,6 +60,10 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
   // Bibliographic Reference Manager Modal state
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
+
+  // MediaWiki Template Manager Modal & Custom Namespace 10 Templates state
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [customTemplates, setCustomTemplates] = useState<Article[]>([]);
 
   // Firestore Auto-Save state
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
@@ -125,6 +132,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       }
     };
 
+    api.getTemplates()
+      .then(tpls => {
+        if (isMounted) setCustomTemplates(tpls);
+      })
+      .catch(() => {});
+
     api.getArticle(slug)
       .then(art => {
         if (isMounted) {
@@ -138,10 +151,14 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         }
       })
       .catch(() => {
-        // New article template
+        // New article or new Predefinição template
         if (isMounted) {
           const defaultTitle = slug.replace(/_/g, ' ');
-          const template = `'''${defaultTitle}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`;
+          const parsedNewTitle = parseTitle(defaultTitle);
+          const template =
+            parsedNewTitle.namespaceId === 10
+              ? buildDefaultTemplatePageSkeleton(parsedNewTitle.baseTitle || defaultTitle)
+              : `'''${defaultTitle}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`;
           setTitle(defaultTitle);
           setWikitext(template);
           setInitialWikitext('');
@@ -248,8 +265,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   // Live Parsoid parse preview effect
   useEffect(() => {
     if (!wikitext) return;
+    const isTemplatePage = parseTitle(title).namespaceId === 10;
     const timer = setTimeout(() => {
-      api.parseWikitext(wikitext, title)
+      api.parseWikitext(wikitext, title, { customTemplates, isTemplatePage })
         .then(res => {
           setPreviewHtml(res.html);
           setPreviewTimeMs(res.parseTimeMs);
@@ -258,7 +276,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         .catch(err => setPreviewError(err.message));
     }, 250);
     return () => clearTimeout(timer);
-  }, [wikitext, title]);
+  }, [wikitext, title, customTemplates]);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -356,12 +374,14 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         return;
       }
 
+      const resolvedNs = parseTitle(title.trim()).namespaceId;
       const res = await api.saveArticle({
         slug: cleanSlug,
         title: title.trim(),
         wikitext,
         comment: summary.trim() || 'Updated wikitext via Node.js Parsoid editor',
         isMinor,
+        namespace: resolvedNs,
         authorUser: activeUser,
       });
 
@@ -670,6 +690,16 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-blue-700 font-medium"
           >
             [[Wikilink]]
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsTemplateModalOpen(true)}
+            data-testid="open-template-manager-btn"
+            className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded text-indigo-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+            title="Inserir predefinição MediaWiki ({{Aviso}}, {{Esboço}}, {{Navbox}}, {{Infocaixa}}, {{Predefinição:...}})"
+          >
+            <Blocks className="w-3 h-3 text-indigo-600" />
+            <span>{'{{ Predefinição }}'}</span>
           </button>
           <button
             type="button"
@@ -986,6 +1016,17 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         wikitext={wikitext}
         onClose={() => setIsRefModalOpen(false)}
         onInsertMarkup={markup => insertMarkup(markup)}
+      />
+
+      {/* MediaWiki Predefinições (Templates) Modal */}
+      <TemplateManagerModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onInsertTemplate={tplWikitext => insertMarkup(tplWikitext)}
+        customTemplates={customTemplates}
+        pageTitle={title}
+        currentUser={currentUser}
+        onTemplatesChanged={setCustomTemplates}
       />
     </div>
   );

@@ -44,6 +44,8 @@ import {
   playNotificationChime,
 } from './services/notificationService';
 import { clientParsoid } from './services/parsoid';
+import { templateService, SaveTemplateInput, TemplateExpansionOptions } from './services/templateService';
+import { parseTitle } from './utils/namespaces';
 import { LGPD_INVESTIGATION_ARTICLE } from './data/lgpdInvestigationArticle';
 import {
   fetchArticlesFromFirestore,
@@ -229,10 +231,34 @@ export const api = {
     throw new Error(`Artigo "${slug}" não encontrado no banco de dados.`);
   },
 
+  async getTemplates(): Promise<Article[]> {
+    return templateService.getAllTemplates();
+  },
+
+  async saveTemplate(input: SaveTemplateInput) {
+    return templateService.saveTemplate(input);
+  },
+
+  async deleteTemplate(nameOrSlug: string) {
+    return templateService.deleteTemplate(nameOrSlug);
+  },
+
+  subscribeTemplates(callback: (templates: Article[]) => void, onError?: (err: unknown) => void) {
+    return templateService.subscribeTemplates(callback, onError);
+  },
+
   async getRenderedArticle(slug: string): Promise<RenderedArticleResponse> {
     const cleanSlug = slug.trim().replace(/\s+/g, '_');
-    const article = await this.getArticle(cleanSlug);
-    const parsed = clientParsoid.parse(article.wikitext || '', article.title || cleanSlug);
+    const [article, customTemplates] = await Promise.all([
+      this.getArticle(cleanSlug),
+      this.getTemplates().catch(() => [] as Article[]),
+    ]);
+    const isTemplatePage =
+      article.namespace === 10 || parseTitle(article.title || cleanSlug).namespaceId === 10;
+    const parsed = clientParsoid.parse(article.wikitext || '', article.title || cleanSlug, {
+      customTemplates,
+      isTemplatePage,
+    });
 
     return {
       article: {
@@ -246,6 +272,8 @@ export const api = {
       internalLinks: parsed.internalLinks,
       externalLinks: parsed.externalLinks,
       references: parsed.references,
+      usedTemplates: parsed.usedTemplates,
+      missingTemplates: parsed.missingTemplates,
       ast: parsed.ast,
       parseTimeMs: parsed.parseTimeMs,
       cached: false,
@@ -355,9 +383,9 @@ export const api = {
   // ---------------------------------------------------------------------------
   // 2. Parsoid Service (Instant client parsing, resilient against HTML errors)
   // ---------------------------------------------------------------------------
-  async parseWikitext(wikitext: string, title?: string): Promise<any> {
+  async parseWikitext(wikitext: string, title?: string, options?: TemplateExpansionOptions): Promise<any> {
     // Use client-side Parsoid immediately
-    return clientParsoid.parse(wikitext, title || 'Parsed_Page');
+    return clientParsoid.parse(wikitext, title || 'Parsed_Page', options);
   },
 
   async tokenizeWikitext(wikitext: string): Promise<any> {

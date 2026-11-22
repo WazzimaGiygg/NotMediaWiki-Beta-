@@ -22,6 +22,8 @@ export interface RenderedArticleResponse {
   internalLinks?: string[];
   externalLinks?: string[];
   references?: string[];
+  usedTemplates?: string[];
+  missingTemplates?: string[];
   ast?: any[];
   cached?: boolean;
 }

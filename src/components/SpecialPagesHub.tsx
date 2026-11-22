@@ -26,6 +26,9 @@ import {
   Shuffle,
   Star,
   Bell,
+  Blocks,
+  Plus,
+  Edit3,
 } from 'lucide-react';
 import { Article, Revision, UserSession, WikiEvent, WatchlistSubscription } from '../types';
 import { api } from '../api';
@@ -33,6 +36,8 @@ import { MEDIAWIKI_NAMESPACES, getAvailableNamespaces, parseTitle } from '../uti
 import { generateMediaWikiXmlDump, parseMediaWikiXmlDump } from '../utils/wikiXmlDump';
 import { parseSemanticFacts, SemanticPageData } from '../utils/semanticParser';
 import { CategoryTreeView } from './CategoryTreeView';
+import { BUILTIN_MEDIAWIKI_TEMPLATES, TEMPLATE_CATEGORY_LABELS } from '../data/defaultTemplates';
+import { extractTemplateDeclaredParams } from '../utils/templateEngine';
 
 interface SpecialPagesHubProps {
   initialSpecialPage?: string;
@@ -79,6 +84,9 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   const [watchlist, setWatchlist] = useState<WatchlistSubscription[]>([]);
   const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [pushPermission, setPushPermission] = useState<string>(() => api.getWebPushPermissionState());
+
+  // New Namespace 10 template quick-create input
+  const [newTemplateName, setNewTemplateName] = useState<string>('');
   useEffect(() => {
     if (!currentUser?.id) return;
     const unsub = api.subscribeUserWatchlist(currentUser.id, list => {
@@ -140,6 +148,13 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       console.warn('Erro ao abrir página aleatória:', err);
     }
   };
+
+  // Namespace 10 Custom Templates
+  const customTemplatePages = useMemo(() => {
+    return articles
+      .filter(art => art.namespace === 10 || parseTitle(art.title || art.slug).namespaceId === 10)
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [articles]);
 
   // Semantic Data across all pages
   const semanticDatabase = useMemo(() => {
@@ -262,6 +277,7 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
             { id: 'SpecialPages', label: 'Índice de Especiais', icon: Layers },
             { id: 'RecentChanges', label: 'Mudanças Recentes (RecentChanges)', icon: Clock },
             { id: 'AllPages', label: 'Todas as Páginas (AllPages)', icon: FileText },
+            { id: 'Templates', label: 'Predefinições (Templates)', icon: Blocks },
             { id: 'Categories', label: 'Árvore de Categorias', icon: FolderTree },
             { id: 'SemanticData', label: 'Dados Estruturados (SMW / Cargo)', icon: Database },
             { id: 'WhatLinksHere', label: 'Páginas afluentes (WhatLinksHere)', icon: Link2 },
@@ -341,6 +357,13 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
                     Especial:TodasAsPáginas
                   </button>
                   <p className="text-[11px] text-slate-400">Lista completa com seletor de namespace e prefixos.</p>
+                </li>
+                <li>
+                  <button onClick={() => setActivePage('Templates')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
+                    <Blocks className="w-3 h-3 text-indigo-500" />
+                    <span>Especial:Predefinições (Namespace 10)</span>
+                  </button>
+                  <p className="text-[11px] text-slate-400">Catálogo de predefinições padrão e modelos reutilizáveis criados no Firebase.</p>
                 </li>
                 <li>
                   <button onClick={() => setActivePage('Categories')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
@@ -959,6 +982,151 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* VIEW: SPECIAL:TEMPLATES (Predefinições MediaWiki - Namespace 10) */}
+      {activePage === 'Templates' && (
+        <div
+          data-testid="special-templates-view"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-xs space-y-6"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Blocks className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <span>Especial:Predefinições (MediaWiki Templates · Namespace 10)</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Predefinições permitem transcluir caixas de aviso, infocaixas, navegações e modelos padronizados via sintaxe{' '}
+                <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{'{{Nome|parâmetro=valor}}'}</code>.
+              </p>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                const cleaned = newTemplateName.trim().replace(/^(?:Predefinição|Predef|Template):/i, '').trim();
+                if (!cleaned) return;
+                const slug = `Predefinição:${cleaned.replace(/\s+/g, '_')}`;
+                setNewTemplateName('');
+                onOpenEdit(slug);
+              }}
+              className="flex items-center gap-2 shrink-0"
+            >
+              <input
+                type="text"
+                value={newTemplateName}
+                onChange={e => setNewTemplateName(e.target.value)}
+                placeholder="Nova predefinição (ex: CaixaProjeto)..."
+                className="border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-600"
+              />
+              <button
+                type="submit"
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Criar Predefinição</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Custom Namespace 10 Templates in Firestore */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                Predefinições da Comunidade no Firebase (Namespace 10 · {customTemplatePages.length})
+              </h3>
+            </div>
+            {customTemplatePages.length === 0 ? (
+              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30 text-xs text-slate-500 dark:text-slate-400">
+                Nenhuma página personalizada foi criada no namespace <code>Predefinição:</code> ainda. Use o campo acima para criar sua primeira predefinição reutilizável.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {customTemplatePages.map(tpl => {
+                  const parsed = parseTitle(tpl.title || tpl.slug);
+                  const declared = extractTemplateDeclaredParams(tpl.wikitext || '');
+                  return (
+                    <div
+                      key={tpl.slug}
+                      className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex flex-col justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onNavigateArticle(tpl.slug)}
+                            className="font-mono font-bold text-xs text-blue-700 dark:text-blue-400 hover:underline text-left cursor-pointer"
+                          >
+                            {tpl.title}
+                          </button>
+                          <code className="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                            {'{{'}{parsed.baseTitle}{'}}'}
+                          </code>
+                        </div>
+                        {tpl.summary && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{tpl.summary}</p>
+                        )}
+                        {declared.length > 0 && (
+                          <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-1.5">
+                            Parâmetros: {declared.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
+                        <button
+                          type="button"
+                          onClick={() => onNavigateArticle(tpl.slug)}
+                          className="px-2.5 py-1 text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
+                        >
+                          Visualizar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenEdit(tpl.slug)}
+                          className="px-2.5 py-1 text-xs font-medium bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Editar código</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Built-in Standard MediaWiki Templates */}
+          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              Predefinições Padrão Integradas ({BUILTIN_MEDIAWIKI_TEMPLATES.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {BUILTIN_MEDIAWIKI_TEMPLATES.map(tpl => (
+                <div
+                  key={tpl.id}
+                  className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100">
+                      {'{{'}{tpl.name}{'}}'}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                      {TEMPLATE_CATEGORY_LABELS[tpl.category]}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {tpl.description}
+                  </p>
+                  <pre className="p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap">
+                    {tpl.exampleWikitext}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

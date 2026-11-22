@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { HomeScreen } from './components/HomeScreen';
-import { WikiReader } from './components/WikiReader';
+import { ArticleViewer } from './components/ArticleViewer';
 import { WikiEditor } from './components/WikiEditor';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DevAdminDashboard } from './components/DevAdminDashboard';
@@ -201,6 +201,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           handleRandomArticle();
         } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
           setCurrentView('bureaucrats');
+        } else if (['predefinicoes', 'predefinicao', 'templates', 'template'].includes(normalized)) {
+          setSpecialPageName('Templates');
+          setCurrentView('special');
         } else {
           setSpecialPageName(spName);
           setCurrentView('special');
@@ -213,6 +216,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           handleRandomArticle();
         } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
           setCurrentView('bureaucrats');
+        } else if (['predefinicoes', 'predefinicao', 'templates', 'template'].includes(normalized)) {
+          setSpecialPageName('Templates');
+          setCurrentView('special');
         } else {
           setSpecialPageName(spName);
           setCurrentView('special');
@@ -227,6 +233,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             handleRandomArticle();
           } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
             setCurrentView('bureaucrats');
+          } else if (['predefinicoes', 'predefinicao', 'templates', 'template'].includes(normalized)) {
+            setSpecialPageName('Templates');
+            setCurrentView('special');
           } else {
             setSpecialPageName(spName);
             setCurrentView('special');
@@ -657,7 +666,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
               window.location.hash = '#/home';
             }}
           >
-            <WikiReader
+            <ArticleViewer
               key={activeArticleSlug}
               slug={activeArticleSlug}
               currentUser={currentUser}

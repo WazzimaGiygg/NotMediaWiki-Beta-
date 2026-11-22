@@ -1,5 +1,17 @@
 import { wrapExternalUrl } from '../utils/urlHelper';
 import { getInfoboxFieldLabel, formatInfoboxFieldValue } from '../utils/infoboxSoftware';
+import {
+  templateService,
+  ServiceTemplateExpansionOptions,
+} from './templateService';
+
+export interface ParsoidParseOptions extends ServiceTemplateExpansionOptions {
+  skipTemplateExpansion?: boolean;
+  preExpandedTemplates?: {
+    usedTemplates: string[];
+    missingTemplates: string[];
+  };
+}
 
 export interface TocItem {
   id: string;
@@ -15,6 +27,8 @@ export interface ParseResult {
   internalLinks: string[];
   externalLinks: string[];
   references: string[];
+  usedTemplates?: string[];
+  missingTemplates?: string[];
   ast: any[];
   parseTimeMs: number;
 }
@@ -23,7 +37,7 @@ export class ClientParsoidService {
   /**
    * Transforms Wikitext markup into semantic HTML5, TOC, references and AST
    */
-  public parse(wikitext: string, pageTitle: string = 'Page'): ParseResult {
+  public parse(wikitext: string, pageTitle: string = 'Page', options?: ParsoidParseOptions): ParseResult {
     const startTime = performance.now();
     const categories: string[] = [];
     const internalLinks: string[] = [];
@@ -35,7 +49,7 @@ export class ClientParsoidService {
     let processed = wikitext;
 
     // 1. Extract and process Categories: [[Category:Foo]]
-    processed = processed.replace(/\[\[Category:([^\]]+)\]\]/gi, (_, cat) => {
+    processed = processed.replace(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi, (_, cat) => {
       const cleanCat = cat.trim();
       categories.push(cleanCat);
       ast.push({ type: 'Category', name: cleanCat });
@@ -101,9 +115,35 @@ export class ClientParsoidService {
       return `<sup class="reference" id="${refAnchorId}"><a href="#${noteAnchorId}" class="cite-ref-link text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs" data-ref-index="${refIdx}">[${refIdx}]</a></sup>`;
     });
 
-    // Remove standalone <references /> or {{reflist}} tags from inline content
+    // Remove standalone <references /> tags from inline content
     processed = processed.replace(/<references\s*\/?>/gi, '');
-    processed = processed.replace(/\{\{reflist\}\}/gi, '');
+
+    // 2.5. Expand MediaWiki Templates ({{Aviso}}, {{Esboço}}, {{Infocaixa}}, {{Navbox}}, Namespace 10 transclusions & magic words)
+    const templateExpanded = options?.skipTemplateExpansion
+      ? {
+          wikitext: processed,
+          usedTemplates: options.preExpandedTemplates?.usedTemplates || [],
+          missingTemplates: options.preExpandedTemplates?.missingTemplates || [],
+          errors: [],
+        }
+      : templateService.expandTemplates(processed, {
+          ...options,
+          pageTitle: options?.pageTitle || pageTitle,
+        });
+    processed = templateExpanded.wikitext;
+    for (const tplName of templateExpanded.usedTemplates) {
+      ast.push({ type: 'Template', name: tplName });
+    }
+
+    // Re-extract any categories introduced via transcluded templates
+    processed = processed.replace(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi, (_, cat) => {
+      const cleanCat = cat.trim();
+      if (!categories.includes(cleanCat)) {
+        categories.push(cleanCat);
+        ast.push({ type: 'Category', name: cleanCat });
+      }
+      return '';
+    });
 
     // 3. Process Infoboxes: {{Infobox ... }}
     processed = processed.replace(/\{\{Infobox\s+([a-zA-Z0-9_\-\s]+)\n([\s\S]*?)\n\}\}/gi, (_, type, body) => {
@@ -319,7 +359,10 @@ export class ClientParsoidService {
         trimmed.startsWith('<div') ||
         trimmed.startsWith('<li') ||
         trimmed.startsWith('<table') ||
-        trimmed.startsWith('<pre')
+        trimmed.startsWith('<pre') ||
+        trimmed.startsWith('<blockquote') ||
+        trimmed.startsWith('<nav') ||
+        trimmed.startsWith('<section')
       ) {
         return trimmed;
       }
@@ -343,6 +386,8 @@ export class ClientParsoidService {
       internalLinks,
       externalLinks,
       references,
+      usedTemplates: templateExpanded.usedTemplates,
+      missingTemplates: templateExpanded.missingTemplates,
       ast,
       parseTimeMs,
     };
@@ -356,7 +401,7 @@ export class ClientParsoidService {
     for (const line of lines) {
       if (line.match(/^={2,4}\s*.+\s*={2,4}$/)) {
         tokens.push({ type: 'HEADING', start: offset, end: offset + line.length, preview: line });
-      } else if (line.startsWith('{{Infobox')) {
+      } else if (line.includes('{{') && !line.startsWith('{|')) {
         tokens.push({ type: 'TEMPLATE_OPEN', start: offset, end: offset + line.length, preview: line });
       } else if (line.startsWith('{|')) {
         tokens.push({ type: 'TABLE_OPEN', start: offset, end: offset + line.length, preview: line });

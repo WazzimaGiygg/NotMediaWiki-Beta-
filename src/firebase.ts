@@ -30,6 +30,7 @@ import {
   getFirebaseConnectionInfo,
 } from './firebaseConfig';
 import { buildInitialUserPageWikitext } from './utils/infoboxUser';
+import { parseTitle } from './utils/namespaces';
 import {
   Article,
   Revision,
@@ -764,8 +765,16 @@ export async function fetchArticlesFromFirestore(namespace?: number): Promise<Ar
     const articles: Article[] = [];
     snap.forEach(docSnap => {
       const data = docSnap.data() as Article;
-      if (namespace === undefined || data.namespace === namespace) {
-        articles.push(data);
+      const inferredNs =
+        typeof data.namespace === 'number'
+          ? data.namespace
+          : parseTitle(data.title || data.slug || docSnap.id).namespaceId;
+      const parsedNs = parseTitle(data.title || data.slug || docSnap.id).namespaceId;
+      if (namespace === undefined || inferredNs === namespace || (namespace === 10 && parsedNs === 10)) {
+        articles.push({
+          ...data,
+          namespace: typeof data.namespace === 'number' ? data.namespace : inferredNs,
+        });
       }
     });
     return articles;
@@ -1008,12 +1017,12 @@ export async function saveArticleToFirestore(payload: {
     throw new Error('Você precisa fazer login com sua conta Google para criar ou editar artigos.');
   }
 
-  // 3. Build article document
+  const parsedTitleMeta = parseTitle(payload.title || cleanSlug);
   const articleDocData = {
     id: existingArticle?.id || `art-${cleanSlug.toLowerCase()}`,
     slug: cleanSlug,
     title: payload.title.trim(),
-    namespace: payload.namespace !== undefined ? payload.namespace : (cleanSlug.startsWith('Talk:') ? 1 : 0),
+    namespace: payload.namespace !== undefined ? payload.namespace : parsedTitleMeta.namespaceId,
     summary: payload.summary || payload.comment || 'Updated content',
     latestRevisionId: revId,
     createdAt: existingArticle?.createdAt || timestamp,

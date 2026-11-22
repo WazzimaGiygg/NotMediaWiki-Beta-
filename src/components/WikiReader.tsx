@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X, Focus } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X, Focus, Blocks } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -20,6 +20,7 @@ import { ArticleRatingWidget } from './ArticleRatingWidget';
 import { ArticleFeedbackWidget } from './ArticleFeedbackWidget';
 import { buildArticleReportData } from '../utils/reportGenerator';
 import { MEDIAWIKI_NAMESPACES, parseTitle, getSubpageBreadcrumbs } from '../utils/namespaces';
+import { extractTemplateDeclaredParams } from '../utils/templateEngine';
 import { parseSemanticFacts } from '../utils/semanticParser';
 import { SemanticFactbox } from './SemanticFactbox';
 import { CategoryTreeView } from './CategoryTreeView';
@@ -372,6 +373,10 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
         e.preventDefault();
         const targetSlug = decodeURIComponent(href.replace('#/wiki/', ''));
         onNavigate(targetSlug);
+      } else if (href && href.startsWith('#/edit/')) {
+        e.preventDefault();
+        const editTarget = decodeURIComponent(href.replace('#/edit/', ''));
+        onEdit(editTarget);
       } else if (href && href.startsWith('#')) {
         // Anchor link within page (e.g. section headings or #cite_note-X / #cite_ref-X)
         const elementId = href.substring(1);
@@ -1080,6 +1085,44 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               defaultOpen={false}
               className={isReaderMode ? 'mb-6' : 'mb-6 lg:hidden'}
             />
+          )}
+
+          {/* Canonical MediaWiki Namespace 10 Template Usage Header */}
+          {!isDistractionFree && parsedTitle.namespaceId === 10 && (
+            <div
+              data-testid="template-namespace-doc-header"
+              className="no-print mb-6 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/70 dark:bg-indigo-950/35 p-4 text-xs font-sans space-y-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-bold text-indigo-950 dark:text-indigo-100">
+                  <Blocks className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Predefinição MediaWiki (Namespace 10)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onEdit(slug)}
+                  className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-700 rounded text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100/60 cursor-pointer"
+                >
+                  Editar código da predefinição
+                </button>
+              </div>
+              <div className="text-indigo-900/90 dark:text-indigo-200 leading-relaxed">
+                Transclua esta página em qualquer artigo com{' '}
+                <code className="font-mono px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800">
+                  {'{{'}{parsedTitle.baseTitle}{'}}'}
+                </code>.
+                {(() => {
+                  const params = extractTemplateDeclaredParams(article.wikitext || '');
+                  if (params.length === 0) return null;
+                  return (
+                    <span className="ml-2">
+                      Parâmetros detectados:{' '}
+                      <span className="font-mono">{params.map(p => `|${p}=`).join(' ')}</span>
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
           )}
 
           {/* Rendered HTML Container */}
