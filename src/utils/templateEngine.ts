@@ -507,6 +507,65 @@ function renderBuiltinTemplate(
     );
   }
 
+  // 6b. {{Em tradução}} / {{Tradução}}
+  if (['em tradução', 'em traducao', 'tradução', 'traducao', 'translating'].includes(normalizedKey)) {
+    const idioma = getParam(call, ['idioma', '1', 'lang'], 'outro idioma');
+    const artigo = getParam(call, ['artigo', '2', 'article'], '');
+    const artigoText = artigo ? ` a partir do verbete <em>${artigo}</em>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-translating not-prose my-4 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/80 dark:bg-indigo-950/35 p-3.5 text-xs text-indigo-950 dark:text-indigo-100 font-sans flex items-center gap-3" role="note" data-template="Em tradução">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-indigo-200 dark:border-indigo-800 bg-white/90 dark:bg-indigo-900/40 flex items-center justify-center font-mono font-bold text-indigo-700 dark:text-indigo-300" aria-hidden="true">文</span>
+        <div class="leading-relaxed"><strong>Em tradução:</strong> este artigo está sendo traduzido do <strong>${idioma}</strong>${artigoText}. Algumas seções podem ainda estar em adaptação.</div>
+      </div>`
+    );
+  }
+
+  // 6c. {{Evento atual}} / {{Current}}
+  if (['evento atual', 'current', 'notícia recente', 'noticia recente'].includes(normalizedKey)) {
+    const assunto = getParam(call, ['assunto', '1', 'subject'], '');
+    const data = getParam(call, ['data', '2', 'date'], '');
+    const assuntoText = assunto ? ` sobre <strong>${assunto}</strong>` : '';
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${data})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-current not-prose my-4 rounded-lg border border-sky-200 dark:border-sky-800/80 bg-sky-50/85 dark:bg-sky-950/35 p-3.5 text-xs text-sky-950 dark:text-sky-100 font-sans flex items-center gap-3" role="note" data-template="Evento atual">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-sky-200 dark:border-sky-800 bg-white/90 dark:bg-sky-900/40 flex items-center justify-center font-bold text-sky-700 dark:text-sky-300" aria-hidden="true">⏱</span>
+        <div class="leading-relaxed"><strong>Evento atual${dataNote}:</strong> este artigo documenta um acontecimento em curso${assuntoText}; as informações podem evoluir rapidamente conforme novas fontes surgem.</div>
+      </div>`
+    );
+  }
+
+  // 6d. {{Parcial}} / {{NPOV}}
+  if (['parcial', 'npov', 'parcialidade', 'pov'].includes(normalizedKey)) {
+    const motivo = getParam(call, ['motivo', '1', 'reason'], 'A neutralidade deste verbete ou seção foi questionada pela comunidade.');
+    const data = getParam(call, ['data', '2', 'date'], '');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${data})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-npov not-prose my-4 rounded-lg border border-amber-300 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/35 p-4 text-xs text-amber-950 dark:text-amber-100 font-sans flex items-start gap-3" role="note" data-template="Parcial">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-amber-200 dark:border-amber-800 bg-white/90 dark:bg-amber-900/40 flex items-center justify-center font-bold text-amber-700 dark:text-amber-300" aria-hidden="true">⚖</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Aviso de Imparcialidade (NPOV)${dataNote}</strong>
+          <span>${motivo}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 6e. {{Revisão}} / {{Cleanup}}
+  if (['revisão', 'revisao', 'reciclagem', 'cleanup'].includes(normalizedKey)) {
+    const motivo = getParam(call, ['motivo', '1', 'reason'], 'Esta página requer revisão ortográfica, formatação wiki e organização de referências.');
+    const data = getParam(call, ['data', '2', 'date'], '');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${data})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-cleanup not-prose my-4 rounded-lg border border-violet-200 dark:border-violet-800/80 bg-violet-50/85 dark:bg-violet-950/35 p-4 text-xs text-violet-950 dark:text-violet-100 font-sans flex items-start gap-3" role="note" data-template="Revisão">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-violet-200 dark:border-violet-800 bg-white/90 dark:bg-violet-900/40 flex items-center justify-center font-bold text-violet-700 dark:text-violet-300" aria-hidden="true">✎</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Revisão Editorial Solicitada${dataNote}</strong>
+          <span>${motivo}</span>
+        </div>
+      </div>`
+    );
+  }
+
   // 7. {{Artigo principal}} / {{AP}} / {{Main}}
   if (['artigo principal', 'ap', 'main'].includes(normalizedKey)) {
     const targets = [
@@ -541,6 +600,27 @@ function renderBuiltinTemplate(
         ↳ Veja também: ${linksHtml}
       </div>`
     );
+  }
+
+  // 8b. {{Sem saída}} / {{Deadend}}
+  if (['sem saída', 'sem saida', 'deadend'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', '1', 'date'], '');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${data})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-deadend not-prose my-4 rounded-lg border border-amber-200 dark:border-amber-800/80 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 text-xs text-amber-950 dark:text-amber-100 font-sans flex items-center gap-3" role="note" data-template="Sem saída">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-amber-200 dark:border-amber-800 bg-white/90 dark:bg-amber-900/40 flex items-center justify-center font-mono font-bold text-amber-700 dark:text-amber-300" aria-hidden="true">⇄</span>
+        <div><strong>Página sem saída${dataNote}:</strong> este artigo contém poucas ou nenhuma ligação interna (<code>[[artigo]]</code>) para outros verbetes da enciclopédia.</div>
+      </div>`
+    );
+  }
+
+  // 8c. {{Predefinição|Nome|p1|p2}} / {{Tl|Nome}}
+  if (['predefinição', 'predefinicao', 'predef', 'tl', 'template link'].includes(normalizedKey)) {
+    const targetName = getParam(call, ['1', 'nome'], 'Aviso').replace(/^(?:Predefinição|Predef|Template):/i, '').trim();
+    const targetSlug = `Predefinição:${targetName.replace(/\s+/g, '_')}`;
+    const extraParams = call.positional.slice(1).map(p => p.trim()).filter(Boolean);
+    const paramsSuffix = extraParams.length > 0 ? `|${extraParams.join('|')}` : '';
+    return `<code class="wiki-template-tl font-mono text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" data-template="Predefinição">{{<a href="#/wiki/${encodeURIComponent(targetSlug)}" class="wiki-link text-blue-700 dark:text-blue-400 hover:underline font-semibold">${targetName}</a>${paramsSuffix}}}</code>`;
   }
 
   // 9. {{Carece de fontes}} / {{Citation needed}} (inline)
@@ -677,6 +757,88 @@ function renderBuiltinTemplate(
     );
   }
 
+  // 14b. {{Infocaixa pessoa}} / {{Infobox pessoa}} / {{Infobox biografia}}
+  if (['infocaixa pessoa', 'infobox pessoa', 'infobox biografia'].includes(normalizedKey)) {
+    const nome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], pageTitle);
+    const subtitulo = getParam(call, ['subtítulo', 'subtitulo', 'subtitle'], '');
+    const rawImg = getParam(call, ['imagem', 'image', 'foto'], '');
+    const safeImg = sanitizeImageSrc(rawImg);
+    const legenda = getParam(call, ['legenda', 'caption'], '');
+    const bioFields: Array<{ label: string; keys: string[] }> = [
+      { label: 'Nascimento', keys: ['nascimento', 'data_nascimento', 'birth_date'] },
+      { label: 'Local', keys: ['local', 'local_nascimento', 'birth_place'] },
+      { label: 'Ocupação', keys: ['ocupação', 'ocupacao', 'occupation', 'profissão', 'profissao'] },
+      { label: 'Nacionalidade', keys: ['nacionalidade', 'nationality'] },
+      { label: 'Contribuições', keys: ['obras', 'obras_notáveis', 'obras_notaveis', 'notable_works'] },
+      { label: 'Website', keys: ['website', 'site'] },
+    ];
+    const rows = bioFields
+      .map(f => ({ label: f.label, value: getParam(call, f.keys, '') }))
+      .filter(r => r.value);
+
+    const imgHtml = safeImg
+      ? `<div class="mb-3 flex flex-col items-center gap-1.5 pb-2 border-b border-slate-200/70 dark:border-slate-800/70"><img src="${safeImg}" alt="${escapeHtmlAttr(nome)}" class="max-h-32 w-auto object-contain rounded" />${legenda ? `<span class="text-[11px] text-slate-500 dark:text-slate-400 text-center">${legenda}</span>` : ''}</div>`
+      : '';
+    const rowsHtml = rows
+      .map(
+        r =>
+          `<tr class="border-b border-slate-100 dark:border-slate-800/70 last:border-0"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-2/5">${r.label}</th><td class="py-1.5 text-slate-600 dark:text-slate-400 break-words">${r.value}</td></tr>`
+      )
+      .join('');
+
+    return compactHtmlBlock(
+      `<aside class="wiki-template infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa pessoa">
+        <div class="text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800">
+          <div class="font-bold text-base text-slate-900 dark:text-slate-100">${nome}</div>
+          ${subtitulo ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${subtitulo}</div>` : ''}
+        </div>
+        ${imgHtml}
+        ${rowsHtml ? `<table class="w-full text-xs border-collapse">${rowsHtml}</table>` : ''}
+      </aside>`
+    );
+  }
+
+  // 14c. {{Infocaixa organização}} / {{Infobox empresa}}
+  if (['infocaixa organização', 'infocaixa organizacao', 'infobox organização', 'infobox organizacao', 'infobox empresa'].includes(normalizedKey)) {
+    const nome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], pageTitle);
+    const subtitulo = getParam(call, ['subtítulo', 'subtitulo', 'tipo', 'type'], '');
+    const rawImg = getParam(call, ['imagem', 'image', 'logo'], '');
+    const safeImg = sanitizeImageSrc(rawImg);
+    const legenda = getParam(call, ['legenda', 'caption'], '');
+    const orgFields: Array<{ label: string; keys: string[] }> = [
+      { label: 'Tipo', keys: ['tipo', 'type'] },
+      { label: 'Fundação', keys: ['fundação', 'fundacao', 'founded'] },
+      { label: 'Sede', keys: ['sede', 'headquarters', 'local'] },
+      { label: 'Fundadores', keys: ['fundadores', 'founders'] },
+      { label: 'Área de atuação', keys: ['área', 'area', 'industry'] },
+      { label: 'Website', keys: ['website', 'site'] },
+    ];
+    const rows = orgFields
+      .map(f => ({ label: f.label, value: getParam(call, f.keys, '') }))
+      .filter(r => r.value);
+
+    const imgHtml = safeImg
+      ? `<div class="mb-3 flex flex-col items-center gap-1.5 pb-2 border-b border-slate-200/70 dark:border-slate-800/70"><img src="${safeImg}" alt="${escapeHtmlAttr(nome)}" class="max-h-24 w-auto object-contain rounded" />${legenda ? `<span class="text-[11px] text-slate-500 dark:text-slate-400 text-center">${legenda}</span>` : ''}</div>`
+      : '';
+    const rowsHtml = rows
+      .map(
+        r =>
+          `<tr class="border-b border-slate-100 dark:border-slate-800/70 last:border-0"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-2/5">${r.label}</th><td class="py-1.5 text-slate-600 dark:text-slate-400 break-words">${r.value}</td></tr>`
+      )
+      .join('');
+
+    return compactHtmlBlock(
+      `<aside class="wiki-template infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa organização">
+        <div class="text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800">
+          <div class="font-bold text-base text-slate-900 dark:text-slate-100">${nome}</div>
+          ${subtitulo ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${subtitulo}</div>` : ''}
+        </div>
+        ${imgHtml}
+        ${rowsHtml ? `<table class="w-full text-xs border-collapse">${rowsHtml}</table>` : ''}
+      </aside>`
+    );
+  }
+
   // 15. {{Navbox}} / {{Caixa de navegação}}
   if (['navbox', 'navegação', 'navegacao', 'caixa de navegação', 'caixa de navegacao'].includes(normalizedKey)) {
     const titulo = getParam(call, ['título', 'titulo', 'title'], 'Navegação');
@@ -710,7 +872,66 @@ function renderBuiltinTemplate(
     );
   }
 
-  // 16. {{Reflist}} / {{Referências}}
+  // 16. {{Esclarecimento necessário}} / {{Clarify}} (inline)
+  if (['esclarecimento necessário', 'esclarecimento necessario', 'clarify', 'esclarecer'].includes(normalizedKey)) {
+    const razao = getParam(call, ['razão', 'razao', 'reason', '1'], '');
+    const data = getParam(call, ['data', 'date', '2'], '');
+    const tipParts = [razao || 'Este trecho necessita de esclarecimento editorial', data ? `(${data})` : ''].filter(Boolean);
+    return `<sup class="wiki-template-inline noprint font-sans text-[10px] text-amber-700 dark:text-amber-400 ml-0.5 select-none" data-template="Esclarecimento necessário" title="${escapeHtmlAttr(tipParts.join(' '))}">[<i>esclarecimento necessário</i>]</sup>`;
+  }
+
+  // 17. {{Tecla}} / {{Kbd}} (inline keyboard shortcuts)
+  if (['tecla', 'kbd', 'teclado'].includes(normalizedKey)) {
+    const keys = call.positional.map(k => k.trim()).filter(Boolean);
+    const singleNamed = getParam(call, ['tecla', 'key'], '');
+    const effectiveKeys = keys.length > 0 ? keys : singleNamed ? [singleNamed] : ['Enter'];
+    const renderedKeys = effectiveKeys
+      .map(
+        k =>
+          `<kbd class="inline-block px-1.5 py-0.5 text-[11px] font-mono font-semibold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded shadow-2xs">${k}</kbd>`
+      )
+      .join('<span class="mx-0.5 text-slate-400 font-mono text-[10px]">+</span>');
+    return `<span class="wiki-template-kbd inline-flex items-center align-baseline" data-template="Tecla">${renderedKeys}</span>`;
+  }
+
+  // 18. {{Citar web}} / {{Cite web}} (inline formatted bibliographic citation)
+  if (['citar web', 'cite web', 'referência web', 'referencia web'].includes(normalizedKey)) {
+    const titulo = getParam(call, ['título', 'titulo', 'title', '1'], 'Documento Web');
+    const url = getParam(call, ['url', 'link', '2'], '');
+    const autor = getParam(call, ['autor', 'author'], '');
+    const publicado = getParam(call, ['publicado', 'publisher', 'obra', 'work'], '');
+    const data = getParam(call, ['data', 'ano', 'date', 'year'], '');
+    const safeHref = /^https?:\/\//i.test(url) ? escapeHtmlAttr(url) : '';
+    const titlePart = safeHref
+      ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-blue-700 dark:text-blue-400 hover:underline font-medium">«${titulo}»</a>`
+      : `<span>«${titulo}»</span>`;
+    const meta = [autor ? `${autor}.` : '', titlePart, publicado ? `<em>${publicado}</em>` : '', data ? `(${data})` : '']
+      .filter(Boolean)
+      .join(' ');
+    return `<cite class="wiki-template-citation not-italic text-xs font-sans text-slate-700 dark:text-slate-300" data-template="Citar web">${meta}</cite>`;
+  }
+
+  // 19. {{Colunas}} / {{Lista de colunas}} / {{Div col}}
+  if (['colunas', 'lista de colunas', 'div col'].includes(normalizedKey)) {
+    const colCountRaw = Number(getParam(call, ['colunas', 'cols', '2'], '2'));
+    const colClass = colCountRaw === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
+    const rawContent = getParam(call, ['1', 'conteúdo', 'conteudo', 'content'], '');
+    if (!rawContent) return '';
+    const items = rawContent
+      .split(/\s*·\s*|\n+/)
+      .map(s => s.replace(/^\*\s*/, '').trim())
+      .filter(Boolean);
+    const itemsHtml = items
+      .map(item => `<div class="py-0.5 text-xs text-slate-700 dark:text-slate-300">• ${item}</div>`)
+      .join('');
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-columns my-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50 p-3.5 grid grid-cols-1 ${colClass} gap-x-6 gap-y-1 font-sans" data-template="Colunas">
+        ${itemsHtml}
+      </div>`
+    );
+  }
+
+  // 20. {{Reflist}} / {{Referências}}
   if (['reflist', 'referências', 'referencias', 'listaref'].includes(normalizedKey)) {
     return `<div class="wiki-template-reflist-anchor" data-template="Reflist"></div>`;
   }

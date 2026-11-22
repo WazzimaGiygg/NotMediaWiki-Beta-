@@ -377,4 +377,49 @@ describe('MediaWiki Predefinições (Templates) Engine & Parsoid Integration', (
     expect(html).toContain('{{PAGENAME}}');
     expect(html).not.toContain('wiki-template-error');
   });
+
+  it('expands the extended MediaWiki templates catalog (Em tradução, Evento atual, Parcial, Revisão, Sem saída, Predefinição, Infocaixa pessoa/organização, Esclarecimento necessário, Tecla, Citar web, Colunas)', () => {
+    expect(BUILTIN_MEDIAWIKI_TEMPLATES.length).toBeGreaterThanOrEqual(28);
+
+    const wikitext = [
+      '{{Em tradução|idioma=inglês|artigo=Parsoid}}',
+      '{{Evento atual|assunto=Migração v2|data=2026}}',
+      '{{Parcial|motivo=Adicionar fontes secundárias.|data=2026}}',
+      '{{Revisão|motivo=Ajustar seções.|data=2026}}',
+      '{{Sem saída|data=2026}}',
+      'Veja {{Predefinição|Aviso|tipo=dica}} e pressione {{Tecla|Ctrl|K}}.',
+      'Trecho técnico{{Esclarecimento necessário|razão=Explicar protocolo|data=2026}}.',
+      '{{Infocaixa pessoa|nome=Magnus Manske|ocupação=Desenvolvedor|nacionalidade=Alemão|obras=[[MediaWiki]]}}',
+      '{{Infocaixa organização|nome=Projetos WazzimaGiygg|tipo=Ecossistema Aberto|fundação=2024|sede=Brasil}}',
+      'Fonte: {{Citar web|autor=Equipe Core|título=Help:Templates|url=https://www.mediawiki.org/wiki/Help:Templates|publicado=MediaWiki.org|data=2026}}',
+      '{{Colunas|colunas=2|Alpha · Beta · Gamma · Delta}}',
+    ].join('\n\n');
+
+    const html = renderToStaticMarkup(
+      <ArticleViewer title="Catálogo Estendido" wikitext={wikitext} />
+    );
+
+    expect(html).toContain('data-template="Em tradução"');
+    expect(html).toContain('inglês');
+    expect(html).toContain('data-template="Evento atual"');
+    expect(html).toContain('Migração v2');
+    expect(html).toContain('data-template="Parcial"');
+    expect(html).toContain('data-template="Revisão"');
+    expect(html).toContain('data-template="Sem saída"');
+    expect(html).toContain('data-template="Predefinição"');
+    expect(html).toContain('Predefini%C3%A7%C3%A3o%3AAviso');
+    expect(html).toContain('data-template="Tecla"');
+    expect(html).toContain('<kbd');
+    expect(html).toContain('Ctrl');
+    expect(html).toContain('esclarecimento necessário');
+    expect(html).toContain('data-template="Infocaixa pessoa"');
+    expect(html).toContain('Magnus Manske');
+    expect(html).toContain('data-template="Infocaixa organização"');
+    expect(html).toContain('Projetos WazzimaGiygg');
+    expect(html).toContain('data-template="Citar web"');
+    expect(html).toContain('Help:Templates');
+    expect(html).toContain('data-template="Colunas"');
+    expect(html).toContain('Alpha');
+    expect(html).not.toContain('border-l-4');
+  });
 });

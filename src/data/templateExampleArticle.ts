@@ -138,8 +138,12 @@ Além das pré-definições personalizadas da comunidade, o wiki oferece modelos
 
 {{Citação|texto=Pré-definições separam o conteúdo editorial da apresentação estrutural reutilizável.|autor=Guia de Estilo|fonte={{SITENAME}} ({{CURRENTYEAR}})}}
 
-=== Marcação Editorial Inline (<code><nowiki>{{Carece de fontes}}</nowiki></code>) ===
-Esta frase demonstra uma marcação editorial inline{{Carece de fontes|data=novembro de 2026}} inserida diretamente no fluxo do parágrafo.
+=== Marcações Editoriais Inline, Teclas e Links de Pré-definição ===
+* Esta frase demonstra uma marcação editorial inline{{Carece de fontes|data=novembro de 2026}} e pedido de precisão{{Esclarecimento necessário|razão=Informar versão mínima.|data=2026}}.
+* Para pesquisar rapidamente na enciclopédia, pressione {{Tecla|Ctrl|K}} ou consulte a sintaxe de {{Predefinição|CartaoModulo|versao=2.4}}.
+
+=== Distribuição em Colunas (<code><nowiki>{{Colunas}}</nowiki></code>) ===
+{{Colunas|colunas=2|[[Aviso]] · [[Em tradução]] · [[Evento atual]] · [[Parcial]] · [[Revisão]] · [[Infocaixa pessoa]] · [[Infocaixa organização]] · [[Citar web]]}}
 
 == Parâmetros Dinâmicos e Palavras Mágicas ==
 O <code>templateService</code> também resolve palavras mágicas do MediaWiki em tempo de renderização:
@@ -159,10 +163,10 @@ O <code>templateService</code> também resolve palavras mágicas do MediaWiki em
 == Caixa de Navegação e Esboço ==
 {{Navbox
 | título = Ecossistema de Pré-definições
-| grupo1 = Modelos Integrados
-| lista1 = Aviso · Nota · Citação · Artigo principal · Carece de fontes · Ligação inativa
-| grupo2 = Estruturais e Personalizados
-| lista2 = Infocaixa · Navbox · Esboço · [[Predefinição:CartaoModulo]]
+| grupo1 = Avisos & Manutenção
+| lista1 = Aviso · Em tradução · Evento atual · Parcial · Revisão · Sem fontes · Em construção · Desambiguação · Spoiler
+| grupo2 = Navegação, Infocaixas & Dados
+| lista2 = Artigo principal · Veja também · Predefinição (Tl) · Infocaixa · Infocaixa pessoa · Infocaixa organização · Tecla · Citar web · Colunas · [[Predefinição:CartaoModulo]]
 }}
 
 {{Esboço|Documentação de Pré-definições MediaWiki}}
