@@ -21,6 +21,7 @@ import { ReferenceManagerModal } from './ReferenceManagerModal';
 import { TemplateManagerModal } from './TemplateManagerModal';
 import { buildDefaultTemplatePageSkeleton } from '../data/defaultTemplates';
 import { parseTitle } from '../utils/namespaces';
+import { useExtensions } from '../context/ExtensionsContext';
 
 interface WikiEditorProps {
   slug: string;
@@ -47,11 +48,32 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [botNotice, setBotNotice] = useState<{ title: string; text: string; type: 'info' | 'warning' } | null>(null);
   const [isCheckingGemini, setIsCheckingGemini] = useState<boolean>(false);
 
+  const { isExtensionEnabled } = useExtensions();
+  const isDraftAutosaveEnabled = isExtensionEnabled ? isExtensionEnabled('DraftAutoSaveRealtime', true) : true;
+  const isVisualEditorEnabled = isExtensionEnabled ? isExtensionEnabled('VisualEditor', true) : true;
+  const isTemplatesEnabled = isExtensionEnabled ? isExtensionEnabled('MediaWikiTemplates', true) : true;
+  const isInfoboxEnabled = isExtensionEnabled ? isExtensionEnabled('InfoboxBuilder', true) : true;
+  const isCiteEnabled = isExtensionEnabled ? isExtensionEnabled('Cite', true) : true;
+  const isSyntaxEnabled = isExtensionEnabled ? isExtensionEnabled('SyntaxHighlight_Prism', true) : true;
+  const isBotsEnabled = isExtensionEnabled ? isExtensionEnabled('BotAgent', true) : true;
+  const isChecklistEnabled = isExtensionEnabled ? isExtensionEnabled('DailyChecklist', true) : true;
+  const isSpamBlacklistEnabled = isExtensionEnabled ? isExtensionEnabled('SpamBlacklist', true) : true;
+  const isAbuseFilterEnabled = isExtensionEnabled ? isExtensionEnabled('AbuseFilter', true) : true;
+  const isParsoidEnabled = isExtensionEnabled ? isExtensionEnabled('ParsoidCompiler', true) : true;
+
   // Live Parsoid Preview state
-  const [activeTab, setActiveTab] = useState<'split' | 'edit' | 'preview'>('split');
+  const [activeTab, setActiveTab] = useState<'split' | 'edit' | 'preview'>(
+    isVisualEditorEnabled ? 'split' : 'edit'
+  );
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewTimeMs, setPreviewTimeMs] = useState<number>(0);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isVisualEditorEnabled && activeTab !== 'edit') {
+      setActiveTab('edit');
+    }
+  }, [isVisualEditorEnabled, activeTab]);
 
   // Infobox Software Builder Modal state
   const [isInfoboxModalOpen, setIsInfoboxModalOpen] = useState(false);
@@ -115,6 +137,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     setLastDraftSource(null);
 
     const checkExistingDraft = async (baseTitle: string, baseWikitext: string) => {
+      if (!isDraftAutosaveEnabled) return;
       try {
         const draft = await loadArticleDraft(effectiveUserId, slug);
         if (
@@ -132,11 +155,15 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       }
     };
 
-    api.getTemplates()
-      .then(tpls => {
-        if (isMounted) setCustomTemplates(tpls);
-      })
-      .catch(() => {});
+    if (isTemplatesEnabled) {
+      api.getTemplates()
+        .then(tpls => {
+          if (isMounted) setCustomTemplates(tpls);
+        })
+        .catch(() => {});
+    } else {
+      setCustomTemplates([]);
+    }
 
     api.getArticle(slug)
       .then(art => {
@@ -170,10 +197,10 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       });
 
     return () => { isMounted = false; };
-  }, [slug, effectiveUserId]);
+  }, [slug, effectiveUserId, isDraftAutosaveEnabled, isTemplatesEnabled]);
 
   const persistDraftNow = useCallback(async () => {
-    if (loading || saving || currentUser?.isBanned || recoverableDraft) return;
+    if (!isDraftAutosaveEnabled || loading || saving || currentUser?.isBanned || recoverableDraft) return;
     const current = latestEditorStateRef.current;
     if (!hasMeaningfulDraftChanges(current, baselineRef.current)) {
       return;
@@ -202,11 +229,11 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       setLastDraftSource('local');
       setAutoSaveStatus('error');
     }
-  }, [loading, saving, currentUser?.isBanned, recoverableDraft, effectiveUserId, slug]);
+  }, [isDraftAutosaveEnabled, loading, saving, currentUser?.isBanned, recoverableDraft, effectiveUserId, slug]);
 
   // Auto-save on typing inactivity (debounced)
   useEffect(() => {
-    if (loading || saving || currentUser?.isBanned || recoverableDraft) return;
+    if (!isDraftAutosaveEnabled || loading || saving || currentUser?.isBanned || recoverableDraft) return;
 
     const current = { title, wikitext, summary };
     if (!hasMeaningfulDraftChanges(current, baselineRef.current)) {
@@ -224,18 +251,18 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     }, AUTOSAVE_INACTIVITY_MS);
 
     return () => clearTimeout(inactivityTimer);
-  }, [title, wikitext, summary, isMinor, loading, saving, currentUser?.isBanned, recoverableDraft, persistDraftNow]);
+  }, [isDraftAutosaveEnabled, title, wikitext, summary, isMinor, loading, saving, currentUser?.isBanned, recoverableDraft, persistDraftNow]);
 
   // Periodic auto-save safety net (every 30s if dirty)
   useEffect(() => {
-    if (loading || saving || currentUser?.isBanned || recoverableDraft) return;
+    if (!isDraftAutosaveEnabled || loading || saving || currentUser?.isBanned || recoverableDraft) return;
 
     const intervalId = setInterval(() => {
       void persistDraftNow();
     }, AUTOSAVE_PERIODIC_MS);
 
     return () => clearInterval(intervalId);
-  }, [loading, saving, currentUser?.isBanned, recoverableDraft, persistDraftNow]);
+  }, [isDraftAutosaveEnabled, loading, saving, currentUser?.isBanned, recoverableDraft, persistDraftNow]);
 
   const handleRestoreDraft = () => {
     if (!recoverableDraft) return;
@@ -264,7 +291,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
   // Live Parsoid parse preview effect
   useEffect(() => {
-    if (!wikitext) return;
+    if (!wikitext || !isVisualEditorEnabled) return;
     const isTemplatePage = parseTitle(title).namespaceId === 10;
     const timer = setTimeout(() => {
       api.parseWikitext(wikitext, title, { customTemplates, isTemplatePage })
@@ -276,15 +303,15 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         .catch(err => setPreviewError(err.message));
     }, 250);
     return () => clearTimeout(timer);
-  }, [wikitext, title, customTemplates]);
+  }, [wikitext, title, customTemplates, isVisualEditorEnabled, isParsoidEnabled, isTemplatesEnabled, isCiteEnabled, isInfoboxEnabled]);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
   // Enhance code blocks in preview pane with syntax highlighting
   useEffect(() => {
-    if (!previewRef.current || !previewHtml) return;
+    if (!previewRef.current || !previewHtml || !isSyntaxEnabled || !isParsoidEnabled) return;
     enhanceCodeBlocks(previewRef.current);
-  }, [previewHtml, activeTab]);
+  }, [previewHtml, activeTab, isSyntaxEnabled, isParsoidEnabled]);
 
   const insertMarkup = (before: string, after: string = '', defaultText: string = '') => {
     const textarea = document.getElementById('wikitext-input') as HTMLTextAreaElement;
@@ -356,20 +383,34 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         views: 1,
       };
 
-      // 4.1.1.E0.1: Análise prévia por LgpdBot (Bloqueio de PII/CPF)
-      const lgpdIssues = botAgentService.inspectLgpd(tempArticle);
-      const criticalPii = lgpdIssues.find(i => i.severity === 'critical');
-      if (criticalPii) {
-        setErrorMessage(`Alerta LgpdBot (4.1.1.E0.1): ${criticalPii.title}. ${criticalPii.details}`);
+      if (isBotsEnabled) {
+        // 4.1.1.E0.1: Análise prévia por LgpdBot (Bloqueio de PII/CPF)
+        const lgpdIssues = botAgentService.inspectLgpd(tempArticle);
+        const criticalPii = lgpdIssues.find(i => i.severity === 'critical');
+        if (criticalPii) {
+          setErrorMessage(`Alerta LgpdBot (4.1.1.E0.1): ${criticalPii.title}. ${criticalPii.details}`);
+          setSaving(false);
+          return;
+        }
+
+        // 4.1.1.11E.1: Análise prévia por AntiVandalBot
+        const vandalIssues = botAgentService.inspectVandalism(tempArticle, initialWikitext);
+        const criticalVandal = vandalIssues.find(i => i.severity === 'critical');
+        if (criticalVandal) {
+          setErrorMessage(`Alerta AntiVandalBot (4.1.1.11E.1): ${criticalVandal.title}. ${criticalVandal.details}`);
+          setSaving(false);
+          return;
+        }
+      }
+
+      if (isSpamBlacklistEnabled && /(?:bit\.ly\/|tinyurl\.com\/|spam-phishing|free-crypto-giveaway)/i.test(wikitext)) {
+        setErrorMessage('Bloqueado pelo SpamBlacklist: URL externa suspeita detectada no conteúdo.');
         setSaving(false);
         return;
       }
 
-      // 4.1.1.11E.1: Análise prévia por AntiVandalBot
-      const vandalIssues = botAgentService.inspectVandalism(tempArticle, initialWikitext);
-      const criticalVandal = vandalIssues.find(i => i.severity === 'critical');
-      if (criticalVandal) {
-        setErrorMessage(`Alerta AntiVandalBot (4.1.1.11E.1): ${criticalVandal.title}. ${criticalVandal.details}`);
+      if (isAbuseFilterEnabled && /<script\b|javascript:/i.test(wikitext)) {
+        setErrorMessage('Bloqueado pelo AbuseFilter: Padrão XSS ou script embutido não permitido.');
         setSaving(false);
         return;
       }
@@ -387,28 +428,38 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
       // 4.1.1.18C.1: Auditoria contínua de contribuições de usuário
       if (activeUser) {
-        botAgentService.auditUserContributions(activeUser, {
-          articleSlug: cleanSlug,
-          charDelta: wikitext.length - initialWikitext.length,
-          isVandal: false,
-        }).catch(console.warn);
+        if (isBotsEnabled) {
+          botAgentService.auditUserContributions(activeUser, {
+            articleSlug: cleanSlug,
+            charDelta: wikitext.length - initialWikitext.length,
+            isVandal: false,
+          }).catch(console.warn);
+        }
 
-        // 3.05.8.b.b: Conceder 0.20 ponto diário por contribuição
-        recordDailyChecklistAction(activeUser.id, activeUser.username, 'contribution', {
-          articleSlug: cleanSlug,
-        }).catch(console.warn);
+        if (isChecklistEnabled) {
+          // 3.05.8.b.b: Conceder 0.20 ponto diário por contribuição
+          recordDailyChecklistAction(activeUser.id, activeUser.username, 'contribution', {
+            articleSlug: cleanSlug,
+          }).catch(console.warn);
+        }
       }
 
       // Clear auto-saved draft after successful publication
-      const activeUid = auth.currentUser?.uid || activeUser?.id || effectiveUserId;
-      deleteArticleDraft(activeUid, slug).catch(console.warn);
-      if (cleanSlug !== slug) {
-        deleteArticleDraft(activeUid, cleanSlug).catch(console.warn);
+      if (isDraftAutosaveEnabled) {
+        const activeUid = auth.currentUser?.uid || activeUser?.id || effectiveUserId;
+        deleteArticleDraft(activeUid, slug).catch(console.warn);
+        if (cleanSlug !== slug) {
+          deleteArticleDraft(activeUid, cleanSlug).catch(console.warn);
+        }
       }
       setAutoSaveStatus('idle');
       setLastDraftSavedAt(null);
 
-      setSuccessMessage(`Artigo "${res.article.title}" salvo com sucesso no Firebase Firestore! (+0.20 pt no Checklist Diário - 3.05.8.b.b)`);
+      setSuccessMessage(
+        isChecklistEnabled
+          ? `Artigo "${res.article.title}" salvo com sucesso no Firebase Firestore! (+0.20 pt no Checklist Diário - 3.05.8.b.b)`
+          : `Artigo "${res.article.title}" salvo com sucesso no Firebase Firestore!`
+      );
       setTimeout(() => {
         onSaved(res.article.slug);
       }, 700);
@@ -451,7 +502,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
         {/* Auto-Save Status + View Layout Tabs */}
         <div className="flex flex-wrap items-center justify-end gap-2.5">
-          {autoSaveStatus !== 'idle' && (
+          {isDraftAutosaveEnabled && autoSaveStatus !== 'idle' && (
             <div
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[11px] font-medium transition-colors ${
                 autoSaveStatus === 'saving'
@@ -514,15 +565,17 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
           {/* View Layout Tabs */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded">
-            <button
-              onClick={() => setActiveTab('split')}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                activeTab === 'split' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Columns className="w-3 h-3" />
-              Dual Split
-            </button>
+            {isVisualEditorEnabled && (
+              <button
+                onClick={() => setActiveTab('split')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'split' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Columns className="w-3 h-3" />
+                Dual Split
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('edit')}
               className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
@@ -532,21 +585,23 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               <Code className="w-3 h-3" />
               Wikitext
             </button>
-            <button
-              onClick={() => setActiveTab('preview')}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                activeTab === 'preview' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Eye className="w-3 h-3" />
-              Parsoid Preview
-            </button>
+            {isVisualEditorEnabled && (
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'preview' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Eye className="w-3 h-3" />
+                Parsoid Preview
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Recoverable Draft Banner */}
-      {recoverableDraft && (
+      {isDraftAutosaveEnabled && recoverableDraft && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-950 text-xs rounded-lg flex flex-wrap items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2.5">
             <RotateCcw className="w-4 h-4 text-amber-700 shrink-0" />
@@ -661,116 +716,140 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
       <form onSubmit={handleSave}>
         {/* Wikitext Syntax Quick-Bar */}
+        {(isVisualEditorEnabled || isTemplatesEnabled || isInfoboxEnabled || isCiteEnabled || isSyntaxEnabled || isBotsEnabled) && (
         <div className="bg-slate-50 border border-slate-200 rounded-t p-2 flex flex-wrap items-center gap-1 text-xs">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-2">Markup:</span>
-          <button
-            type="button"
-            onClick={() => insertMarkup('== ', ' ==', 'Section heading')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-medium"
-          >
-            Heading
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup("'''", "'''", 'bold text')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-bold"
-          >
-            Bold
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup("''", "''", 'italic text')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 italic"
-          >
-            Italic
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup('[[', ']]', 'Article Title')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-blue-700 font-medium"
-          >
-            [[Wikilink]]
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsTemplateModalOpen(true)}
-            data-testid="open-template-manager-btn"
-            className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded text-indigo-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-            title="Inserir predefinição MediaWiki ({{Aviso}}, {{Esboço}}, {{Navbox}}, {{Infocaixa}}, {{Predefinição:...}})"
-          >
-            <Blocks className="w-3 h-3 text-indigo-600" />
-            <span>{'{{ Predefinição }}'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={openInfoboxBuilder}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px] cursor-pointer"
-            title="Abrir assistente de Infobox software (nome, e-mail, desenvolvedor, versão, licença, links e mais)"
-          >
-            {'{Infobox software}'}
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup('{| class="wikitable"\n! Header 1 !! Header 2\n|-\n| Cell 1 || Cell 2\n|}\n')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px]"
-          >
-            {'{| Table |}'}
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup('<ref>', '</ref>', 'Citation source')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px] cursor-pointer"
-            title="Inserir tag <ref> simples"
-          >
-            &lt;ref&gt;
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsRefModalOpen(true)}
-            className="px-2 py-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded text-amber-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-            title="Abrir Gestor de Referências Bibliográficas (inserir ou reutilizar <ref>)"
-          >
-            <BookOpen className="w-3 h-3 text-amber-600" />
-            <span>Referências</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup('* ', '', 'Bullet item')}
-            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-medium"
-          >
-            * List
-          </button>
-          <button
-            type="button"
-            onClick={() => insertMarkup('<syntaxhighlight lang="typescript">\n', '\n</syntaxhighlight>\n', '// Escreva seu código aqui\nconst answer: number = 42;')}
-            className="px-2 py-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded text-blue-700 font-mono text-[11px] font-semibold"
-            title="Inserir bloco de código formatado com realce de sintaxe"
-          >
-            &lt;code&gt; Syntax
-          </button>
-          <button
-            type="button"
-            onClick={handleCheckCitationsInline}
-            disabled={isCheckingGemini}
-            className="px-2 py-1 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-            title="4.1.1.WV.1: Verificar fontes e citações faltantes com CitationBot (Gemini 3.8 Flash)"
-          >
-            <Sparkles className="w-3 h-3 text-purple-600 animate-pulse" />
-            <span>{isCheckingGemini ? 'Checando...' : 'CitationBot (Gemini)'}</span>
-          </button>
+          {isVisualEditorEnabled && (
+            <>
+              <button
+                type="button"
+                onClick={() => insertMarkup('== ', ' ==', 'Section heading')}
+                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-medium"
+              >
+                Heading
+              </button>
+              <button
+                type="button"
+                onClick={() => insertMarkup("'''", "'''", 'bold text')}
+                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-bold"
+              >
+                Bold
+              </button>
+              <button
+                type="button"
+                onClick={() => insertMarkup("''", "''", 'italic text')}
+                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 italic"
+              >
+                Italic
+              </button>
+              <button
+                type="button"
+                onClick={() => insertMarkup('[[', ']]', 'Article Title')}
+                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-blue-700 font-medium"
+              >
+                [[Wikilink]]
+              </button>
+            </>
+          )}
+          {isTemplatesEnabled && (
+            <button
+              type="button"
+              onClick={() => setIsTemplateModalOpen(true)}
+              data-testid="open-template-manager-btn"
+              className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded text-indigo-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+              title="Inserir predefinição MediaWiki ({{Aviso}}, {{Esboço}}, {{Navbox}}, {{Infocaixa}}, {{Predefinição:...}})"
+            >
+              <Blocks className="w-3 h-3 text-indigo-600" />
+              <span>{'{{ Predefinição }}'}</span>
+            </button>
+          )}
+          {isInfoboxEnabled && (
+            <button
+              type="button"
+              onClick={openInfoboxBuilder}
+              className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px] cursor-pointer"
+              title="Abrir assistente de Infobox software (nome, e-mail, desenvolvedor, versão, licença, links e mais)"
+            >
+              {'{Infobox software}'}
+            </button>
+          )}
+          {isVisualEditorEnabled && (
+            <button
+              type="button"
+              onClick={() => insertMarkup('{| class="wikitable"\n! Header 1 !! Header 2\n|-\n| Cell 1 || Cell 2\n|}\n')}
+              className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px]"
+            >
+              {'{| Table |}'}
+            </button>
+          )}
+          {isCiteEnabled && (
+            <>
+              <button
+                type="button"
+                onClick={() => insertMarkup('<ref>', '</ref>', 'Citation source')}
+                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-mono text-[11px] cursor-pointer"
+                title="Inserir tag <ref> simples"
+              >
+                &lt;ref&gt;
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRefModalOpen(true)}
+                className="px-2 py-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded text-amber-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                title="Abrir Gestor de Referências Bibliográficas (inserir ou reutilizar <ref>)"
+              >
+                <BookOpen className="w-3 h-3 text-amber-600" />
+                <span>Referências</span>
+              </button>
+            </>
+          )}
+          {isVisualEditorEnabled && (
+            <button
+              type="button"
+              onClick={() => insertMarkup('* ', '', 'Bullet item')}
+              className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-medium"
+            >
+              * List
+            </button>
+          )}
+          {isSyntaxEnabled && (
+            <button
+              type="button"
+              onClick={() => insertMarkup('<syntaxhighlight lang="typescript">\n', '\n</syntaxhighlight>\n', '// Escreva seu código aqui\nconst answer: number = 42;')}
+              className="px-2 py-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded text-blue-700 font-mono text-[11px] font-semibold"
+              title="Inserir bloco de código formatado com realce de sintaxe"
+            >
+              &lt;code&gt; Syntax
+            </button>
+          )}
+          {isBotsEnabled && (
+            <button
+              type="button"
+              onClick={handleCheckCitationsInline}
+              disabled={isCheckingGemini}
+              className="px-2 py-1 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+              title="4.1.1.WV.1: Verificar fontes e citações faltantes com CitationBot (Gemini 3.8 Flash)"
+            >
+              <Sparkles className="w-3 h-3 text-purple-600 animate-pulse" />
+              <span>{isCheckingGemini ? 'Checando...' : 'CitationBot (Gemini)'}</span>
+            </button>
+          )}
 
-          <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500 font-mono">
-            <span>Parsoid preview:</span>
-            <span className="text-emerald-700 font-semibold">{previewTimeMs}ms</span>
-          </div>
+          {isVisualEditorEnabled && (
+            <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+              <span>Parsoid preview:</span>
+              <span className="text-emerald-700 font-semibold">{previewTimeMs}ms</span>
+            </div>
+          )}
         </div>
+        )}
 
         {/* Editor Main Content Area */}
-        <div className={`grid border-x border-b border-slate-200 bg-white ${
-          activeTab === 'split' ? 'grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200' : 'grid-cols-1'
+        <div className={`grid border border-slate-200 bg-white ${
+          activeTab === 'split' && isVisualEditorEnabled ? 'grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200' : 'grid-cols-1'
         }`}>
           {/* Source Input */}
-          {(activeTab === 'split' || activeTab === 'edit') && (
+          {(activeTab === 'split' || activeTab === 'edit' || !isVisualEditorEnabled) && (
             <div className="p-2">
               <textarea
                 id="wikitext-input"
@@ -784,7 +863,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           )}
 
           {/* Live Parsoid HTML Render */}
-          {(activeTab === 'split' || activeTab === 'preview') && (
+          {isVisualEditorEnabled && (activeTab === 'split' || activeTab === 'preview') && (
             <div className="p-4 bg-slate-50/40 overflow-y-auto max-h-[520px]">
               <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200 flex items-center justify-between">
                 <span>Parsoid AST Rendered Output</span>
@@ -799,11 +878,13 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
                     className="wiki-content prose max-w-none text-slate-800 font-serif text-sm leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-slate-400 italic">No content to render</p>' }}
                   />
-                  <ArticleFootnotes
-                    wikitext={wikitext}
-                    articleTitle={title}
-                    className="mt-6 pt-4"
-                  />
+                  {isParsoidEnabled && isCiteEnabled && (
+                    <ArticleFootnotes
+                      wikitext={wikitext}
+                      articleTitle={title}
+                      className="mt-6 pt-4"
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -870,7 +951,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       </form>
 
       {/* Infobox Software Builder & Usage Reference Modal */}
-      {isInfoboxModalOpen && (
+      {isInfoboxEnabled && isInfoboxModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
           role="dialog"
@@ -1011,23 +1092,27 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         </div>
       )}
       {/* Bibliographic Reference Manager Modal */}
-      <ReferenceManagerModal
-        isOpen={isRefModalOpen}
-        wikitext={wikitext}
-        onClose={() => setIsRefModalOpen(false)}
-        onInsertMarkup={markup => insertMarkup(markup)}
-      />
+      {isCiteEnabled && (
+        <ReferenceManagerModal
+          isOpen={isRefModalOpen}
+          wikitext={wikitext}
+          onClose={() => setIsRefModalOpen(false)}
+          onInsertMarkup={markup => insertMarkup(markup)}
+        />
+      )}
 
       {/* MediaWiki Predefinições (Templates) Modal */}
-      <TemplateManagerModal
-        isOpen={isTemplateModalOpen}
-        onClose={() => setIsTemplateModalOpen(false)}
-        onInsertTemplate={tplWikitext => insertMarkup(tplWikitext)}
-        customTemplates={customTemplates}
-        pageTitle={title}
-        currentUser={currentUser}
-        onTemplatesChanged={setCustomTemplates}
-      />
+      {isTemplatesEnabled && (
+        <TemplateManagerModal
+          isOpen={isTemplateModalOpen}
+          onClose={() => setIsTemplateModalOpen(false)}
+          onInsertTemplate={tplWikitext => insertMarkup(tplWikitext)}
+          customTemplates={customTemplates}
+          pageTitle={title}
+          currentUser={currentUser}
+          onTemplatesChanged={setCustomTemplates}
+        />
+      )}
     </div>
   );
 };

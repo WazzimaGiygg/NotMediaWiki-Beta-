@@ -4,9 +4,15 @@ import {
   templateService,
   ServiceTemplateExpansionOptions,
 } from './templateService';
+import { isRuntimeExtensionEnabled } from '../extensions';
 
 export interface ParsoidParseOptions extends ServiceTemplateExpansionOptions {
   skipTemplateExpansion?: boolean;
+  parsoidEnabled?: boolean;
+  citeEnabled?: boolean;
+  templatesEnabled?: boolean;
+  infoboxEnabled?: boolean;
+  syntaxEnabled?: boolean;
   preExpandedTemplates?: {
     usedTemplates: string[];
     missingTemplates: string[];
@@ -46,6 +52,31 @@ export class ClientParsoidService {
     const toc: TocItem[] = [];
     const ast: any[] = [];
 
+    const isParsoid = options?.parsoidEnabled ?? isRuntimeExtensionEnabled('ParsoidCompiler');
+    if (!isParsoid) {
+      const escaped = wikitext
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const parseTimeMs = Math.round((performance.now() - startTime) * 100) / 100;
+      return {
+        html: `<div class="mb-3 px-3 py-2 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-200">Extensão <strong>ParsoidCompiler</strong> desativada — exibindo wikitexto bruto.</div><pre class="whitespace-pre-wrap font-mono text-xs bg-slate-50 dark:bg-slate-900 p-4 rounded border border-slate-200 dark:border-slate-800 overflow-x-auto">${escaped}</pre>`,
+        toc: [],
+        categories: [],
+        internalLinks: [],
+        externalLinks: [],
+        references: [],
+        usedTemplates: [],
+        missingTemplates: [],
+        ast: [],
+        parseTimeMs,
+      };
+    }
+
+    const isCite = options?.citeEnabled ?? isRuntimeExtensionEnabled('Cite');
+    const isTemplates = options?.templatesEnabled ?? isRuntimeExtensionEnabled('MediaWikiTemplates');
+    const isInfobox = options?.infoboxEnabled ?? isRuntimeExtensionEnabled('InfoboxBuilder');
+
     let processed = wikitext;
 
     // 1. Extract and process Categories: [[Category:Foo]]
@@ -57,73 +88,75 @@ export class ClientParsoidService {
     });
 
     // 2. Extract <ref> tags (supporting <ref>, <ref name="...">, <ref name="..." />, <ref group="...">)
-    let refCounter = 1;
-    const namedRefs = new Map<string, { index: number; text: string; group?: string; count: number }>();
+    if (isCite) {
+      let refCounter = 1;
+      const namedRefs = new Map<string, { index: number; text: string; group?: string; count: number }>();
 
-    processed = processed.replace(/<ref(?:\s+([^>]*?))?(?:\/>|>([\s\S]*?)<\/ref>)/gi, (_, rawAttrs, content) => {
-      let name: string | undefined;
-      let group: string | undefined;
+      processed = processed.replace(/<ref(?:\s+([^>]*?))?(?:\/>|>([\s\S]*?)<\/ref>)/gi, (_, rawAttrs, content) => {
+        let name: string | undefined;
+        let group: string | undefined;
 
-      if (rawAttrs) {
-        const nameMatch = rawAttrs.match(/name\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/i);
-        if (nameMatch) {
-          name = (nameMatch[1] || nameMatch[2] || nameMatch[3]).trim();
+        if (rawAttrs) {
+          const nameMatch = rawAttrs.match(/name\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/i);
+          if (nameMatch) {
+            name = (nameMatch[1] || nameMatch[2] || nameMatch[3]).trim();
+          }
+          const groupMatch = rawAttrs.match(/group\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/i);
+          if (groupMatch) {
+            group = (groupMatch[1] || groupMatch[2] || groupMatch[3]).trim();
+          }
         }
-        const groupMatch = rawAttrs.match(/group\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/i);
-        if (groupMatch) {
-          group = (groupMatch[1] || groupMatch[2] || groupMatch[3]).trim();
+
+        const trimmed = content ? content.trim() : '';
+        let refIdx: number;
+        let refText: string;
+        let occurrence = 0;
+
+        if (name && namedRefs.has(name)) {
+          const existing = namedRefs.get(name)!;
+          refIdx = existing.index;
+          refText = existing.text || trimmed;
+          if (!existing.text && trimmed) {
+            existing.text = trimmed;
+          }
+          existing.count += 1;
+          occurrence = existing.count;
+        } else {
+          refIdx = refCounter++;
+          refText = trimmed;
+          if (name) {
+            namedRefs.set(name, { index: refIdx, text: trimmed, group, count: 0 });
+          }
+          references.push(refText);
         }
-      }
 
-      const trimmed = content ? content.trim() : '';
-      let refIdx: number;
-      let refText: string;
-      let occurrence = 0;
+        const refAnchorId = occurrence === 0 ? `cite_ref-${refIdx}` : `cite_ref-${refIdx}_${occurrence}`;
+        const noteAnchorId = `cite_note-${refIdx}`;
 
-      if (name && namedRefs.has(name)) {
-        const existing = namedRefs.get(name)!;
-        refIdx = existing.index;
-        refText = existing.text || trimmed;
-        if (!existing.text && trimmed) {
-          existing.text = trimmed;
-        }
-        existing.count += 1;
-        occurrence = existing.count;
-      } else {
-        refIdx = refCounter++;
-        refText = trimmed;
-        if (name) {
-          namedRefs.set(name, { index: refIdx, text: trimmed, group, count: 0 });
-        }
-        references.push(refText);
-      }
+        ast.push({
+          type: 'Reference',
+          index: refIdx,
+          name,
+          group,
+          text: refText,
+          refId: refAnchorId,
+          noteId: noteAnchorId,
+          occurrence,
+        });
 
-      const refAnchorId = occurrence === 0 ? `cite_ref-${refIdx}` : `cite_ref-${refIdx}_${occurrence}`;
-      const noteAnchorId = `cite_note-${refIdx}`;
-
-      ast.push({
-        type: 'Reference',
-        index: refIdx,
-        name,
-        group,
-        text: refText,
-        refId: refAnchorId,
-        noteId: noteAnchorId,
-        occurrence,
+        return `<sup class="reference" id="${refAnchorId}"><a href="#${noteAnchorId}" class="cite-ref-link text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs" data-ref-index="${refIdx}">[${refIdx}]</a></sup>`;
       });
 
-      return `<sup class="reference" id="${refAnchorId}"><a href="#${noteAnchorId}" class="cite-ref-link text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs" data-ref-index="${refIdx}">[${refIdx}]</a></sup>`;
-    });
-
-    // Remove standalone <references /> tags from inline content
-    processed = processed.replace(/<references\s*\/?>/gi, '');
+      // Remove standalone <references /> tags from inline content
+      processed = processed.replace(/<references\s*\/?>/gi, '');
+    }
 
     // 2.5. Expand MediaWiki Templates ({{Aviso}}, {{Esboço}}, {{Infocaixa}}, {{Navbox}}, Namespace 10 transclusions & magic words)
-    const templateExpanded = options?.skipTemplateExpansion
+    const templateExpanded = options?.skipTemplateExpansion || !isTemplates
       ? {
           wikitext: processed,
-          usedTemplates: options.preExpandedTemplates?.usedTemplates || [],
-          missingTemplates: options.preExpandedTemplates?.missingTemplates || [],
+          usedTemplates: options?.preExpandedTemplates?.usedTemplates || [],
+          missingTemplates: options?.preExpandedTemplates?.missingTemplates || [],
           errors: [],
         }
       : templateService.expandTemplates(processed, {
@@ -146,7 +179,8 @@ export class ClientParsoidService {
     });
 
     // 3. Process Infoboxes: {{Infobox ... }}
-    processed = processed.replace(/\{\{Infobox\s+([a-zA-Z0-9_\-\s]+)\n([\s\S]*?)\n\}\}/gi, (_, type, body) => {
+    if (isInfobox) {
+      processed = processed.replace(/\{\{Infobox\s+([a-zA-Z0-9_\-\s]+)\n([\s\S]*?)\n\}\}/gi, (_, type, body) => {
       const rows: { key: string; value: string }[] = [];
       const lines = body.split('\n');
       let currentKey = '';
@@ -204,7 +238,8 @@ export class ClientParsoidService {
       }
       infoboxHtml += `</table></aside>`;
       return infoboxHtml;
-    });
+      });
+    }
 
     // 4. Tables: {| class="wikitable" ... |}
     processed = processed.replace(/\{\|([\s\S]*?)\|\}/g, (_, tableContent) => {

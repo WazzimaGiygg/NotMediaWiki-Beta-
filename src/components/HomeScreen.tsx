@@ -60,7 +60,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSwitchUser,
   onRandomArticle,
 }) => {
-  const { siteTitleConfig } = useExtensions();
+  const { siteTitleConfig, isExtensionEnabled } = useExtensions();
+  const isHomeCustomizerEnabled = isExtensionEnabled ? isExtensionEnabled('HomePageCustomizer', true) : true;
+  const isGovernanceEnabled = isExtensionEnabled ? isExtensionEnabled('GovernanceAndCompliance', true) : true;
+  const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
+  const isTemplatesEnabled = isExtensionEnabled ? isExtensionEnabled('MediaWikiTemplates', true) : true;
   const [homeMeta, setHomeMeta] = useState<HomePageMetadata>({
     id: 'home_page',
     htmlContent: DEFAULT_HOMEPAGE_HTML,
@@ -345,16 +349,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             Criar Novo Artigo
           </button>
 
-          <button
-            onClick={onRandomArticle}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shadow-2xs cursor-pointer"
-            title="Sortear e abrir um verbete aleatório da enciclopédia (Special:Random)"
-          >
-            <Shuffle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>Artigo Aleatório</span>
-          </button>
+          {isRandomEnabled && (
+            <button
+              onClick={onRandomArticle}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shadow-2xs cursor-pointer"
+              title="Sortear e abrir um verbete aleatório da enciclopédia (Special:Random)"
+            >
+              <Shuffle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Artigo Aleatório</span>
+            </button>
+          )}
 
-          {isBureaucrat && (
+          {isBureaucrat && isHomeCustomizerEnabled && (
             <button
               onClick={handleOpenHtmlEditor}
               className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
@@ -384,6 +390,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {/* SECTION 1: Bureaucrat-Customized Home Page (HTML) */}
+      {isHomeCustomizerEnabled && (
       <section className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
         {/* Section Header with Bureaucrat Info */}
         <div className="bg-slate-50 px-6 py-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
@@ -428,8 +435,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           />
         </div>
       </section>
+      )}
 
       {/* DOSSIÊ ESPECIAL: Investigação LGPD e Marco Civil sobre a Wikipédia e WMF */}
+      {isGovernanceEnabled && (
       <section className="bg-gradient-to-br from-rose-950 via-slate-900 to-slate-950 text-white border border-rose-900/60 rounded-xl p-6 sm:p-7 shadow-md">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-3xl">
@@ -475,6 +484,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
       </section>
+      )}
 
       {/* SECTION 2: Artigos Recentes (Recent Articles from Firebase) */}
       <div className="space-y-4">
@@ -491,15 +501,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => onNavigateArticle(TEMPLATE_EXAMPLE_SLUG)}
-              className="px-2.5 py-1 text-xs border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded flex items-center gap-1.5 cursor-pointer transition-colors font-medium"
-              title="Abrir artigo demonstrativo de uso de pré-definições MediaWiki"
-            >
-              <Code2 className="w-3.5 h-3.5 text-indigo-600" />
-              Exemplo: Pré-definições
-            </button>
+            {isTemplatesEnabled && (
+              <button
+                type="button"
+                onClick={() => onNavigateArticle(TEMPLATE_EXAMPLE_SLUG)}
+                className="px-2.5 py-1 text-xs border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded flex items-center gap-1.5 cursor-pointer transition-colors font-medium"
+                title="Abrir artigo demonstrativo de uso de pré-definições MediaWiki"
+              >
+                <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+                Exemplo: Pré-definições
+              </button>
+            )}
             <button
               onClick={handleSyncWithFirebase}
               disabled={isSyncing}
@@ -644,7 +656,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </div>
 
       {/* BUREAUCRAT HTML EDITOR MODAL */}
-      {isEditorOpen && (
+      {isHomeCustomizerEnabled && isEditorOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}

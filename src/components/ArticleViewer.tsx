@@ -7,6 +7,7 @@ import { parseFootnoteTagsInHtml } from '../utils/citationParser';
 import { parseTitle } from '../utils/namespaces';
 import { ArticleFootnotes } from './ArticleFootnotes';
 import { WikiReader } from './WikiReader';
+import { useExtensions } from '../context/ExtensionsContext';
 
 export interface ArticleViewerProps {
   /** Slug do artigo (modo leitor completo conectado ao WikiReader + Firestore) */
@@ -66,6 +67,12 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
   onZenModeChange,
   className = '',
 }) => {
+  const { isExtensionEnabled } = useExtensions();
+  const isParsoidEnabled = isExtensionEnabled ? isExtensionEnabled('ParsoidCompiler', true) : true;
+  const isTemplatesEnabled = isExtensionEnabled ? isExtensionEnabled('MediaWikiTemplates', true) : true;
+  const isCiteEnabled = isExtensionEnabled ? isExtensionEnabled('Cite', true) : true;
+  const isInfoboxEnabled = isExtensionEnabled ? isExtensionEnabled('InfoboxBuilder', true) : true;
+
   const [liveTemplates, setLiveTemplates] = useState<Article[]>(() =>
     customTemplates && customTemplates.length > 0
       ? customTemplates
@@ -74,7 +81,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
 
   // Hidrata e sincroniza pré-definições do Firestore via templateService antes da renderização
   useEffect(() => {
-    if (wikitext === undefined) return;
+    if (wikitext === undefined || !isTemplatesEnabled) return;
     if (customTemplates && customTemplates.length > 0) {
       setLiveTemplates(customTemplates);
       return;
@@ -106,40 +113,73 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
       mounted = false;
       unsubscribe?.();
     };
-  }, [wikitext, customTemplates]);
+  }, [wikitext, customTemplates, isTemplatesEnabled]);
 
   // Processa o wikitexto via templateService expandindo {{Nome|params}} antes da renderização Parsoid
   const directParsed = useMemo(() => {
     if (wikitext === undefined) return null;
 
+    if (!isParsoidEnabled) {
+      return clientParsoid.parse(wikitext, title, {
+        parsoidEnabled: false,
+        citeEnabled: isCiteEnabled,
+        templatesEnabled: isTemplatesEnabled,
+        infoboxEnabled: isInfoboxEnabled,
+      });
+    }
+
     const isTemplatePage = parseTitle(title).namespaceId === 10;
-    const expanded = templateService.expandTemplates(wikitext, {
-      customTemplates: customTemplates || liveTemplates,
-      pageTitle: title,
-      siteName,
-      isTemplatePage,
-      dynamicParams,
-    });
+    const expanded = isTemplatesEnabled
+      ? templateService.expandTemplates(wikitext, {
+          customTemplates: customTemplates || liveTemplates,
+          pageTitle: title,
+          siteName,
+          isTemplatePage,
+          dynamicParams,
+        })
+      : {
+          wikitext,
+          usedTemplates: [],
+          missingTemplates: [],
+        };
 
     const parsed = clientParsoid.parse(expanded.wikitext, title, {
       customTemplates: customTemplates || liveTemplates,
       siteName,
       isTemplatePage,
       skipTemplateExpansion: true,
+      parsoidEnabled: isParsoidEnabled,
+      citeEnabled: isCiteEnabled,
+      templatesEnabled: isTemplatesEnabled,
+      infoboxEnabled: isInfoboxEnabled,
       preExpandedTemplates: {
         usedTemplates: expanded.usedTemplates,
         missingTemplates: expanded.missingTemplates,
       },
     });
 
-    const { html: withFootnotes } = parseFootnoteTagsInHtml(parsed.html);
+    const htmlWithFootnotes = isCiteEnabled
+      ? parseFootnoteTagsInHtml(parsed.html).html
+      : parsed.html;
+
     return {
       ...parsed,
       usedTemplates: expanded.usedTemplates,
       missingTemplates: expanded.missingTemplates,
-      html: withFootnotes,
+      html: htmlWithFootnotes,
     };
-  }, [wikitext, title, customTemplates, liveTemplates, siteName, dynamicParams]);
+  }, [
+    wikitext,
+    title,
+    customTemplates,
+    liveTemplates,
+    siteName,
+    dynamicParams,
+    isParsoidEnabled,
+    isTemplatesEnabled,
+    isCiteEnabled,
+    isInfoboxEnabled,
+  ]);
 
   // Modo A: Leitor enciclopédico completo conectado ao Firestore via slug
   if (wikitext === undefined && slug) {
@@ -185,7 +225,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
         onClick={handleContentClick}
         dangerouslySetInnerHTML={{ __html: directParsed?.html || '' }}
       />
-      {wikitext && (
+      {wikitext && isParsoidEnabled && isCiteEnabled && (
         <ArticleFootnotes
           ast={directParsed?.ast}
           references={directParsed?.references}

@@ -39,6 +39,7 @@ import { CategoryTreeView } from './CategoryTreeView';
 import { BUILTIN_MEDIAWIKI_TEMPLATES, TEMPLATE_CATEGORY_LABELS } from '../data/defaultTemplates';
 import { TEMPLATE_EXAMPLE_SLUG } from '../data/templateExampleArticle';
 import { extractTemplateDeclaredParams } from '../utils/templateEngine';
+import { useExtensions } from '../context/ExtensionsContext';
 
 interface SpecialPagesHubProps {
   initialSpecialPage?: string;
@@ -57,6 +58,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   currentUser,
   onRandomArticle,
 }) => {
+  const { isExtensionEnabled } = useExtensions();
+  const isTemplatesEnabled = isExtensionEnabled ? isExtensionEnabled('MediaWikiTemplates', true) : true;
+  const isCategoriesEnabled = isExtensionEnabled ? isExtensionEnabled('CategoryTree', true) : true;
+  const isCargoEnabled = isExtensionEnabled ? isExtensionEnabled('Cargo', true) : true;
+  const isWatchlistEnabled = isExtensionEnabled ? isExtensionEnabled('WatchlistSubscriptions', true) : true;
+  const isRecentChangesEnabled = isExtensionEnabled ? isExtensionEnabled('EventStreams', true) : true;
+  const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
+
   const [activePage, setActivePage] = useState<string>(initialSpecialPage);
   const [articles, setArticles] = useState<Article[]>([]);
   const [revisions, setRevisions] = useState<Revision[]>([]);
@@ -136,6 +145,7 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   }, [articles, allPagesNamespace, allPagesPrefix]);
 
   const handleRandomPage = async () => {
+    if (!isRandomEnabled) return;
     if (onRandomArticle) {
       onRandomArticle();
       return;
@@ -275,33 +285,35 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
         {/* Special Pages Navigation Pills */}
         <div className="flex items-center gap-1.5 pt-3 overflow-x-auto no-scrollbar">
           {[
-            { id: 'SpecialPages', label: 'Índice de Especiais', icon: Layers },
-            { id: 'RecentChanges', label: 'Mudanças Recentes (RecentChanges)', icon: Clock },
-            { id: 'AllPages', label: 'Todas as Páginas (AllPages)', icon: FileText },
-            { id: 'Templates', label: 'Predefinições (Templates)', icon: Blocks },
-            { id: 'Categories', label: 'Árvore de Categorias', icon: FolderTree },
-            { id: 'SemanticData', label: 'Dados Estruturados (SMW / Cargo)', icon: Database },
-            { id: 'WhatLinksHere', label: 'Páginas afluentes (WhatLinksHere)', icon: Link2 },
-            { id: 'Contributions', label: 'Contribuições de Usuário', icon: Users },
-            { id: 'Import', label: 'Importar Dump XML', icon: Upload },
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activePage === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActivePage(tab.id)}
-                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                  isActive
-                    ? 'bg-slate-900 text-white dark:bg-blue-600 shadow-2xs font-semibold'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+            { id: 'SpecialPages', label: 'Índice de Especiais', icon: Layers, visible: true },
+            { id: 'RecentChanges', label: 'Mudanças Recentes (RecentChanges)', icon: Clock, visible: isRecentChangesEnabled },
+            { id: 'AllPages', label: 'Todas as Páginas (AllPages)', icon: FileText, visible: true },
+            { id: 'Templates', label: 'Predefinições (Templates)', icon: Blocks, visible: isTemplatesEnabled },
+            { id: 'Categories', label: 'Árvore de Categorias', icon: FolderTree, visible: isCategoriesEnabled },
+            { id: 'SemanticData', label: 'Dados Estruturados (SMW / Cargo)', icon: Database, visible: isCargoEnabled },
+            { id: 'WhatLinksHere', label: 'Páginas afluentes (WhatLinksHere)', icon: Link2, visible: true },
+            { id: 'Contributions', label: 'Contribuições de Usuário', icon: Users, visible: true },
+            { id: 'Import', label: 'Importar Dump XML', icon: Upload, visible: true },
+          ]
+            .filter(tab => tab.visible)
+            .map(tab => {
+              const Icon = tab.icon;
+              const isActive = activePage === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActivePage(tab.id)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-blue-600 shadow-2xs font-semibold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
         </div>
       </div>
 
@@ -325,12 +337,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
                 <span>Mudanças e Registos</span>
               </h3>
               <ul className="space-y-1.5 text-slate-600 dark:text-slate-400">
-                <li>
-                  <button onClick={() => setActivePage('RecentChanges')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
-                    Especial:MudançasRecentes
-                  </button>
-                  <p className="text-[11px] text-slate-400">Acompanhamento de edições, deltas e bots em tempo real.</p>
-                </li>
+                {isRecentChangesEnabled && (
+                  <li>
+                    <button onClick={() => setActivePage('RecentChanges')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                      Especial:MudançasRecentes
+                    </button>
+                    <p className="text-[11px] text-slate-400">Acompanhamento de edições, deltas e bots em tempo real.</p>
+                  </li>
+                )}
                 <li>
                   <button onClick={() => setActivePage('WhatLinksHere')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
                     Especial:PáginasAfluentes
@@ -359,39 +373,49 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
                   </button>
                   <p className="text-[11px] text-slate-400">Lista completa com seletor de namespace e prefixos.</p>
                 </li>
-                <li>
-                  <button onClick={() => setActivePage('Templates')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
-                    <Blocks className="w-3 h-3 text-indigo-500" />
-                    <span>Especial:Predefinições (Namespace 10)</span>
-                  </button>
-                  <p className="text-[11px] text-slate-400">Catálogo de predefinições padrão e modelos reutilizáveis criados no Firebase.</p>
-                </li>
-                <li>
-                  <button onClick={() => setActivePage('Categories')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
-                    Especial:ÁrvoreDeCategorias
-                  </button>
-                  <p className="text-[11px] text-slate-400">Taxonomia hierárquica e subcategorias expansíveis.</p>
-                </li>
-                <li>
-                  <button onClick={() => setActivePage('SemanticData')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
-                    Especial:DadosEstruturados
-                  </button>
-                  <p className="text-[11px] text-slate-400">Semantic MediaWiki / Cargo factboxes e consultas.</p>
-                </li>
-                <li>
-                  <button onClick={handleRandomPage} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
-                    <Shuffle className="w-3 h-3 text-indigo-500" />
-                    <span>Especial:PáginaAleatória (Special:Random)</span>
-                  </button>
-                  <p className="text-[11px] text-slate-400">Navega imediatamente para um verbete enciclopédico sorteado ao acaso.</p>
-                </li>
-                <li>
-                  <button onClick={() => setActivePage('Watchlist')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
-                    <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                    <span>Especial:PáginasVigiadas (Special:Watchlist)</span>
-                  </button>
-                  <p className="text-[11px] text-slate-400">Artigos que você segue com notificações push e registro de edições recentes.</p>
-                </li>
+                {isTemplatesEnabled && (
+                  <li>
+                    <button onClick={() => setActivePage('Templates')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
+                      <Blocks className="w-3 h-3 text-indigo-500" />
+                      <span>Especial:Predefinições (Namespace 10)</span>
+                    </button>
+                    <p className="text-[11px] text-slate-400">Catálogo de predefinições padrão e modelos reutilizáveis criados no Firebase.</p>
+                  </li>
+                )}
+                {isCategoriesEnabled && (
+                  <li>
+                    <button onClick={() => setActivePage('Categories')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                      Especial:ÁrvoreDeCategorias
+                    </button>
+                    <p className="text-[11px] text-slate-400">Taxonomia hierárquica e subcategorias expansíveis.</p>
+                  </li>
+                )}
+                {isCargoEnabled && (
+                  <li>
+                    <button onClick={() => setActivePage('SemanticData')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                      Especial:DadosEstruturados
+                    </button>
+                    <p className="text-[11px] text-slate-400">Semantic MediaWiki / Cargo factboxes e consultas.</p>
+                  </li>
+                )}
+                {isRandomEnabled && (
+                  <li>
+                    <button onClick={handleRandomPage} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
+                      <Shuffle className="w-3 h-3 text-indigo-500" />
+                      <span>Especial:PáginaAleatória (Special:Random)</span>
+                    </button>
+                    <p className="text-[11px] text-slate-400">Navega imediatamente para um verbete enciclopédico sorteado ao acaso.</p>
+                  </li>
+                )}
+                {isWatchlistEnabled && (
+                  <li>
+                    <button onClick={() => setActivePage('Watchlist')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold">
+                      <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      <span>Especial:PáginasVigiadas (Special:Watchlist)</span>
+                    </button>
+                    <p className="text-[11px] text-slate-400">Artigos que você segue com notificações push e registro de edições recentes.</p>
+                  </li>
+                )}
               </ul>
             </div>
 
@@ -432,7 +456,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       )}
 
       {/* VIEW: SPECIAL:RECENTCHANGES */}
-      {activePage === 'RecentChanges' && (
+      {activePage === 'RecentChanges' && !isRecentChangesEnabled && (
+        <DisabledSpecialExtensionNotice
+          extensionName="EventStreams"
+          title="Mudanças Recentes (Special:RecentChanges)"
+          onBackToIndex={() => setActivePage('SpecialPages')}
+        />
+      )}
+      {activePage === 'RecentChanges' && isRecentChangesEnabled && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
@@ -630,7 +661,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       )}
 
       {/* VIEW: SPECIAL:CATEGORIES (CategoryTree) */}
-      {activePage === 'Categories' && (
+      {activePage === 'Categories' && !isCategoriesEnabled && (
+        <DisabledSpecialExtensionNotice
+          extensionName="CategoryTree"
+          title="Árvore de Categorias (Special:Categories)"
+          onBackToIndex={() => setActivePage('SpecialPages')}
+        />
+      )}
+      {activePage === 'Categories' && isCategoriesEnabled && (
         <CategoryTreeView
           articles={articles}
           onNavigateArticle={onNavigateArticle}
@@ -638,7 +676,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       )}
 
       {/* VIEW: SPECIAL:SEMANTICDATA (SMW / Cargo) */}
-      {activePage === 'SemanticData' && (
+      {activePage === 'SemanticData' && !isCargoEnabled && (
+        <DisabledSpecialExtensionNotice
+          extensionName="Cargo"
+          title="Dados Estruturados (SMW / Cargo)"
+          onBackToIndex={() => setActivePage('SpecialPages')}
+        />
+      )}
+      {activePage === 'SemanticData' && isCargoEnabled && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
@@ -837,7 +882,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       )}
 
       {/* VIEW: SPECIAL:WATCHLIST (Páginas Vigiadas) */}
-      {activePage === 'Watchlist' && (
+      {activePage === 'Watchlist' && !isWatchlistEnabled && (
+        <DisabledSpecialExtensionNotice
+          extensionName="WatchlistSubscriptions"
+          title="Páginas Vigiadas (Special:Watchlist)"
+          onBackToIndex={() => setActivePage('SpecialPages')}
+        />
+      )}
+      {activePage === 'Watchlist' && isWatchlistEnabled && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -987,7 +1039,14 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
       )}
 
       {/* VIEW: SPECIAL:TEMPLATES (Predefinições MediaWiki - Namespace 10) */}
-      {activePage === 'Templates' && (
+      {activePage === 'Templates' && !isTemplatesEnabled && (
+        <DisabledSpecialExtensionNotice
+          extensionName="MediaWikiTemplates"
+          title="Predefinições MediaWiki (Namespace 10)"
+          onBackToIndex={() => setActivePage('SpecialPages')}
+        />
+      )}
+      {activePage === 'Templates' && isTemplatesEnabled && (
         <div
           data-testid="special-templates-view"
           className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-xs space-y-6"
@@ -1143,3 +1202,45 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
     </div>
   );
 };
+
+interface DisabledSpecialExtensionNoticeProps {
+  extensionName: string;
+  title: string;
+  onBackToIndex: () => void;
+}
+
+const DisabledSpecialExtensionNotice: React.FC<DisabledSpecialExtensionNoticeProps> = ({
+  extensionName,
+  title,
+  onBackToIndex,
+}) => (
+  <div
+    data-testid={`disabled-special-${extensionName}`}
+    className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg p-6 text-center space-y-3 shadow-xs"
+  >
+    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+      Extensão Desativada • {title}
+    </h3>
+    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-lg mx-auto">
+      O recurso <code className="font-mono text-amber-700 dark:text-amber-300">{extensionName}</code> está desativado nas configurações de extensões do Wiki.
+    </p>
+    <div className="flex items-center justify-center gap-2 pt-1">
+      <button
+        type="button"
+        onClick={onBackToIndex}
+        className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded cursor-pointer"
+      >
+        Voltar ao Índice de Especiais
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          window.location.hash = '#/burocratas';
+        }}
+        className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer"
+      >
+        Gerenciar Extensões
+      </button>
+    </div>
+  </div>
+);

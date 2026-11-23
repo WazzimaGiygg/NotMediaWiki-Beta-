@@ -70,8 +70,10 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
     syncAllExtensions: syncAllToCloud,
     deleteExtension: deleteExtensionFromCloud,
     refreshExtensions,
+    isExtensionEnabled,
   } = useExtensions();
 
+  const isPdfExportEnabled = isExtensionEnabled ? isExtensionEnabled('PdfPrintExport', true) : true;
   const canManageExtensions = hasBureaucratPrivileges(currentUser, auth.currentUser?.email) && Boolean(auth.currentUser);
 
   // UI state
@@ -222,6 +224,33 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
     }
   };
 
+  const handleEnableAllExtensions = async () => {
+    if (!canManageExtensions) {
+      showToast('Apenas burocratas autenticados via Google podem ativar todas as extensões.', 'warning');
+      return;
+    }
+    const allEnabled = extensions.map(ext => ({
+      ...ext,
+      enabled: true,
+      lastUpdated: new Date().toISOString().split('T')[0],
+    }));
+    setExtensions(allEnabled);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allEnabled));
+    } catch {}
+
+    setIsSyncingWithCloud(true);
+    try {
+      const res = await syncAllToCloud(allEnabled);
+      showToast(`Todas as ${res.saved} extensões da Wiki foram ativadas e salvas no Firebase!`, 'success');
+      setLastCloudSyncTime(new Date().toLocaleTimeString('pt-BR'));
+    } catch (err: any) {
+      showToast(`Extensões ativadas localmente (Firebase aviso: ${err.message})`, 'warning');
+    } finally {
+      setIsSyncingWithCloud(false);
+    }
+  };
+
   // Filter extensions
   const filteredExtensions = useMemo(() => {
     return extensions.filter(ext => {
@@ -347,6 +376,8 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
         return { label: 'Infra & Eventos', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800' };
       case 'media':
         return { label: 'Mídia & Assets', bg: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' };
+      case 'engagement':
+        return { label: 'Engajamento & Comunidade', bg: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800' };
       default:
         return { label: 'Geral', bg: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' };
     }
@@ -434,14 +465,16 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
               );
             })()}
 
-            <button
-              onClick={() => setIsReportModalOpen(true)}
-              className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-              title="Gerar Relatório Oficial em PDF no padrão do Wiki"
-            >
-              <Printer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <span>Relatório PDF</span>
-            </button>
+            {isPdfExportEnabled && (
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="Gerar Relatório Oficial em PDF no padrão do Wiki"
+              >
+                <Printer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Relatório PDF</span>
+              </button>
+            )}
 
             <button
               onClick={handleSyncAllToCloud}
@@ -495,10 +528,20 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
             </button>
 
             <button
+              onClick={handleEnableAllExtensions}
+              disabled={isSyncingWithCloud || !canManageExtensions || metrics.disabled === 0}
+              className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              title="Ativar todas as extensões e recursos da Wiki"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Ativar Todas</span>
+            </button>
+
+            <button
               onClick={() => setIsConfirmResetOpen(true)}
               disabled={!canManageExtensions}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-              title="Restaurar extensões padrão"
+              title="Restaurar extensões padrão (todas ativadas)"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Padrões</span>
@@ -682,11 +725,13 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
                 className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
               >
                 <option value="all">Todas as Categorias</option>
-                <option value="parser">Parser & AST (Cite, Parsoid, Math)</option>
-                <option value="ui">Interface & UI (TOC, Related, Prism)</option>
-                <option value="search">Busca (CirrusSearch)</option>
-                <option value="security">Segurança & RBAC (CentralAuth, Spam)</option>
-                <option value="infra">Infraestrutura (EventStreams, Diff)</option>
+                <option value="parser">Parser & AST (Cite, Parsoid, Templates, Infobox)</option>
+                <option value="ui">Interface & UI (TOC, Related, Focus, Temas)</option>
+                <option value="search">Busca & Taxonomia (CirrusSearch, Cargo, Categorias)</option>
+                <option value="security">Segurança & RBAC (CentralAuth, Spam, Abuse, BLP)</option>
+                <option value="infra">Infraestrutura & App (EventStreams, Diff, PWA, Logs)</option>
+                <option value="media">Mídia & Exportação (PDF, Vídeo Comercial)</option>
+                <option value="engagement">Engajamento & Comunidade (Chat, Echo, Watchlist, Karma)</option>
               </select>
             </div>
 
@@ -1551,7 +1596,7 @@ export const ExtensionsManager: React.FC<ExtensionsManagerProps> = ({ currentUse
       )}
 
       {/* MODAL 5: OFFICIAL STANDARD PDF REPORT */}
-      {isReportModalOpen && (
+      {isReportModalOpen && isPdfExportEnabled && (
         <WikiReportModal
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}

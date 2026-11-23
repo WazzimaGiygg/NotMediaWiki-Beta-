@@ -16,6 +16,28 @@ import {
   PORTAL_EXTENSIONS,
   getPortalsConfig,
 } from './portalsExtension';
+import {
+  templatesExtension,
+  infoboxExtension,
+  focusReadingModeExtension,
+  pdfPrintExportExtension,
+  articleFeedbackKarmaExtension,
+  draftAutosaveRealtimeExtension,
+  communityChatExtension,
+  userDirectoryProfilesExtension,
+  talkPagesExtension,
+  watchlistSubscriptionsExtension,
+  specialPagesHubExtension,
+  categoryTreeExtension,
+  randomArticleExtension,
+  pwaMobileDesktopAppExtension,
+  promoVideoStudioExtension,
+  wikidiotaParodyBannerExtension,
+  governanceAndComplianceExtension,
+  homePageCustomizerExtension,
+  googleOneTapQuickLoginExtension,
+  WIKI_FEATURE_EXTENSIONS,
+} from './wikiFeatureExtensions';
 
 export {
   systemLogsExtension,
@@ -45,6 +67,26 @@ export {
   jornalWazzimaGiyggExtension,
   PORTAL_EXTENSIONS,
   getPortalsConfig,
+  templatesExtension,
+  infoboxExtension,
+  focusReadingModeExtension,
+  pdfPrintExportExtension,
+  articleFeedbackKarmaExtension,
+  draftAutosaveRealtimeExtension,
+  communityChatExtension,
+  userDirectoryProfilesExtension,
+  talkPagesExtension,
+  watchlistSubscriptionsExtension,
+  specialPagesHubExtension,
+  categoryTreeExtension,
+  randomArticleExtension,
+  pwaMobileDesktopAppExtension,
+  promoVideoStudioExtension,
+  wikidiotaParodyBannerExtension,
+  governanceAndComplianceExtension,
+  homePageCustomizerExtension,
+  googleOneTapQuickLoginExtension,
+  WIKI_FEATURE_EXTENSIONS,
 };
 
 export const MANAGED_FEATURE_EXTENSIONS = [
@@ -62,7 +104,48 @@ export const MANAGED_FEATURE_EXTENSIONS = [
   wikiLivrosExtension,
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
+  ...WIKI_FEATURE_EXTENSIONS,
 ];
+
+/**
+ * Leitura síncrona do estado de uma extensão por id ou name, consultando
+ * lista explícita ou cache em localStorage (`notmediawiki_extensions`).
+ */
+export function isRuntimeExtensionEnabled(
+  idOrName: string,
+  runtimeExtensions?: { id: string; name?: string; enabled: boolean }[],
+  fallback = true
+): boolean {
+  const normalizedTarget = idOrName.toLowerCase();
+  let source = runtimeExtensions;
+
+  if (!source || source.length === 0) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem('notmediawiki_extensions');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            source = parsed;
+          }
+        }
+      }
+    } catch {
+      // Ignore storage read errors
+    }
+  }
+
+  if (source && source.length > 0) {
+    const found = source.find(
+      e => e.id === idOrName || (e.name && e.name.toLowerCase() === normalizedTarget)
+    );
+    if (found !== undefined) {
+      return Boolean(found.enabled);
+    }
+  }
+
+  return fallback;
+}
 
 /**
  * Retorna se um recurso específico está habilitado, verificando
@@ -70,7 +153,7 @@ export const MANAGED_FEATURE_EXTENSIONS = [
  */
 export function isFeatureExtensionEnabled(
   featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist' | 'bots' | 'support' | 'redirect' | 'maintenance' | 'livros' | 'universitario' | 'jornal',
-  runtimeExtensions?: { id: string; enabled: boolean }[]
+  runtimeExtensions?: { id: string; name?: string; enabled: boolean }[]
 ): boolean {
   const idMap: Record<string, { fileEnabled: boolean; extId: string }> = {
     logs: { fileEnabled: EXTENSION_SYSTEM_LOGS_ENABLED, extId: systemLogsExtension.id },

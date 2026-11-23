@@ -128,7 +128,19 @@ export const Header: React.FC<HeaderProps> = ({
     setUserTheme,
     openThemeSelector,
   } = useExtensions();
-  const isChecklistExtEnabled = isExtensionEnabled('DailyChecklist', true);
+  const isChecklistExtEnabled = isExtensionEnabled ? isExtensionEnabled('DailyChecklist', true) : true;
+  const isCirrusEnabled = isExtensionEnabled ? isExtensionEnabled('CirrusSearch', true) : true;
+  const isEchoEnabled = isExtensionEnabled ? isExtensionEnabled('Echo', true) : true;
+  const isKarmaEnabled = isExtensionEnabled ? isExtensionEnabled('ArticleRatingAndKarma', true) : true;
+  const isChatEnabled = isExtensionEnabled ? isExtensionEnabled('CommunityChat', true) : true;
+  const isDirectoryEnabled = isExtensionEnabled ? isExtensionEnabled('UserDirectoryProfiles', true) : true;
+  const isSpecialPagesEnabled = isExtensionEnabled ? isExtensionEnabled('SpecialPagesHub', true) : true;
+  const isPromoStudioEnabled = isExtensionEnabled ? isExtensionEnabled('PromoVideoStudio', true) : true;
+  const isPwaEnabled = isExtensionEnabled ? isExtensionEnabled('PwaMobileDesktopApp', true) : true;
+  const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
+  const isFocusModeEnabled = isExtensionEnabled ? isExtensionEnabled('FocusReadingMode', true) : true;
+  const isGovernanceEnabled = isExtensionEnabled ? isExtensionEnabled('GovernanceAndCompliance', true) : true;
+  const isThemeAppearanceEnabled = isExtensionEnabled ? isExtensionEnabled('ThemeAppearance', true) : true;
 
   // Real-time Push & Watchlist Notifications (Firestore onSnapshot listeners + Web Push API)
   const [notifications, setNotifications] = useState<ArticleNotification[]>([]);
@@ -184,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   useEffect(() => {
-    if (!currentUser?.id) {
+    if (!currentUser?.id || !isEchoEnabled) {
       setNotifications([]);
       setWatchedArticles([]);
       setLiveAlert(null);
@@ -244,7 +256,7 @@ export const Header: React.FC<HeaderProps> = ({
         clearTimeout(liveAlertTimerRef.current);
       }
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, isEchoEnabled]);
 
   const handleMarkAsRead = (notificationId: string) => {
     setNotifications(prev => prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)));
@@ -322,6 +334,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Global keyboard shortcut: Ctrl+K / Cmd+K or / to focus search
   useEffect(() => {
+    if (!isCirrusEnabled) return;
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -342,10 +355,10 @@ export const Header: React.FC<HeaderProps> = ({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  }, [isCirrusEnabled]);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!isCirrusEnabled || !searchQuery.trim()) {
       setSuggestions([]);
       setIsSearching(false);
       setSelectedIndex(-1);
@@ -367,7 +380,7 @@ export const Header: React.FC<HeaderProps> = ({
         });
     }, 150);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, isCirrusEnabled]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -449,6 +462,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Run VPN verification audit on initial load for the logged-in session
   useEffect(() => {
+    if (!isGovernanceEnabled) {
+      setShowVpnBanner(false);
+      return;
+    }
     if (currentUser) {
       performVpnAudit(currentUser)
         .then(res => {
@@ -459,7 +476,7 @@ export const Header: React.FC<HeaderProps> = ({
         })
         .catch(console.warn);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, isGovernanceEnabled]);
 
   const runVpnCheck = async () => {
     setIsTestingVpn(true);
@@ -617,18 +634,18 @@ export const Header: React.FC<HeaderProps> = ({
   const navItems = [
     { id: 'home', label: 'Página Inicial (Início)' },
     { id: 'reader', label: 'Artigos (Reader)' },
-    { id: 'special', label: 'Páginas Especiais' },
-    { id: 'directory', label: 'Diretório de Usuários' },
+    ...(isSpecialPagesEnabled ? [{ id: 'special', label: 'Páginas Especiais' }] : []),
+    ...(isDirectoryEnabled ? [{ id: 'directory', label: 'Diretório de Usuários' }] : []),
     { id: 'bureaucrats', label: 'Burocratas' },
     { id: 'editor', label: 'Wikitext Editor' },
-    { id: 'promo_video', label: 'Vídeo Comercial' },
+    ...(isPromoStudioEnabled ? [{ id: 'promo_video', label: 'Vídeo Comercial' }] : []),
     ...(isAdminOrBureaucrat ? [{ id: 'dev_admin', label: 'Desenvolvedor e Administrador' }] : []),
   ];
 
   return (
     <header className="sticky top-0 z-50 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
       {/* VPN & Proxy Security Notification on Login */}
-      {showVpnBanner && vpnStatus && (
+      {isGovernanceEnabled && showVpnBanner && vpnStatus && (
         <div className="bg-rose-600 text-white px-4 py-2 text-xs flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2 max-w-5xl">
             <ShieldAlert className="w-4 h-4 shrink-0 text-rose-200" />
@@ -654,7 +671,7 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       {/* Real-time Firestore Notification Banner when a followed article is edited */}
-      {liveAlert && (
+      {isEchoEnabled && liveAlert && (
         <div
           role="status"
           aria-live="polite"
@@ -785,7 +802,8 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Global Instant Search Bar */}
+        {/* Global Instant Search Bar (CirrusSearch) */}
+        {isCirrusEnabled ? (
         <div ref={searchRef} className="relative flex-1 max-w-md">
           <form onSubmit={handleSearchSubmit} className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -943,6 +961,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <Plus className="w-3.5 h-3.5" />
                           Criar página &ldquo;{searchQuery}&rdquo;
                         </button>
+                      {isRandomEnabled && (
                         <button
                           type="button"
                           onClick={() => {
@@ -954,6 +973,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <Shuffle className="w-3.5 h-3.5 text-indigo-500" />
                           Buscar Artigo Aleatório
                         </button>
+                      )}
                       </div>
                     </div>
                   ) : null}
@@ -971,18 +991,20 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>Buscar em todo o texto</span>
                         <span>→</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSuggestions(false);
-                          handleRandomClick();
-                        }}
-                        className="font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 cursor-pointer"
-                        title="Buscar e abrir um verbete sorteado aleatoriamente"
-                      >
-                        <Shuffle className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Artigo Aleatório</span>
-                      </button>
+                      {isRandomEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSuggestions(false);
+                            handleRandomClick();
+                          }}
+                          className="font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 cursor-pointer"
+                          title="Buscar e abrir um verbete sorteado aleatoriamente"
+                        >
+                          <Shuffle className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Artigo Aleatório</span>
+                        </button>
+                      )}
                     </div>
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">
                       <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">↑↓</kbd> navegar <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Enter</kbd> abrir <kbd className="font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 ml-1">Esc</kbd> fechar
@@ -993,19 +1015,24 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+        ) : (
+          <div className="flex-1" />
+        )}
 
         {/* Action Controls: New Page & Authentication */}
         <div className="flex items-center gap-2 shrink-0">
           {/* Special:Random / Artigo Aleatório Action Button */}
-          <button
-            onClick={handleRandomClick}
-            disabled={isLoadingRandom}
-            className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap disabled:opacity-50"
-            title="Sortear e abrir uma página aleatória da enciclopédia (Special:Random)"
-          >
-            <Shuffle className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isLoadingRandom ? 'animate-spin' : ''}`} />
-            <span className="hidden md:inline">Página Aleatória</span>
-          </button>
+          {isRandomEnabled && (
+            <button
+              onClick={handleRandomClick}
+              disabled={isLoadingRandom}
+              className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap disabled:opacity-50"
+              title="Sortear e abrir uma página aleatória da enciclopédia (Special:Random)"
+            >
+              <Shuffle className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isLoadingRandom ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">Página Aleatória</span>
+            </button>
+          )}
 
           {/* + Nova Página Button */}
           <button
@@ -1034,48 +1061,52 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
           {/* Mobile & Desktop App Option Button */}
-          <button
-            id="btn-header-app-options"
-            type="button"
-            onClick={() => {
-              if (onOpenAppOptions) {
-                onOpenAppOptions();
-              } else if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
-              }
-            }}
-            className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
-            title="Aplicativo Mobile & para Computador (Instalar ou alternar modo)"
-            aria-label="Opções de aplicativo mobile e computador"
-          >
-            <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            <span className="hidden xl:inline">App</span>
-          </button>
+          {isPwaEnabled && (
+            <button
+              id="btn-header-app-options"
+              type="button"
+              onClick={() => {
+                if (onOpenAppOptions) {
+                  onOpenAppOptions();
+                } else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
+                }
+              }}
+              className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+              title="Aplicativo Mobile & para Computador (Instalar ou alternar modo)"
+              aria-label="Opções de aplicativo mobile e computador"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="hidden xl:inline">App</span>
+            </button>
+          )}
 
           {/* Global Light / Dark Quick Toggle */}
-          <button
-            onClick={toggleDarkMode}
-            disabled={
-              themeAppearanceConfig.extensionEnabled &&
-              !themeAppearanceConfig.allowUserThemeSwitch
-            }
-            className="p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-            title={
-              themeAppearanceConfig.extensionEnabled &&
-              !themeAppearanceConfig.allowUserThemeSwitch
-                ? `Tema fixado pelo burocrata: ${activeTheme.name}`
-                : isDarkMode
-                  ? 'Mudar para Modo Claro'
-                  : 'Mudar para Modo Escuro'
-            }
-            aria-label={isDarkMode ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
-          >
-            {isDarkMode ? (
-              <Sun className="w-4 h-4 text-amber-400" />
-            ) : (
-              <Moon className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-            )}
-          </button>
+          {isThemeAppearanceEnabled && (
+            <button
+              onClick={toggleDarkMode}
+              disabled={
+                themeAppearanceConfig.extensionEnabled &&
+                !themeAppearanceConfig.allowUserThemeSwitch
+              }
+              className="p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title={
+                themeAppearanceConfig.extensionEnabled &&
+                !themeAppearanceConfig.allowUserThemeSwitch
+                  ? `Tema fixado pelo burocrata: ${activeTheme.name}`
+                  : isDarkMode
+                    ? 'Mudar para Modo Claro'
+                    : 'Mudar para Modo Escuro'
+              }
+              aria-label={isDarkMode ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
+            >
+              {isDarkMode ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+              )}
+            </button>
+          )}
 
           {/* Google Sign-in / Connected State */}
           {googleUserEmail ? (
@@ -1140,7 +1171,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* User Karma Reputation Button */}
-              {currentUser && (
+              {currentUser && isKarmaEnabled && (
                 <button
                   onClick={onOpenMyUserPage}
                   className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
@@ -1155,6 +1186,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Push & Watchlist Notifications Bell */}
+              {isEchoEnabled && (
               <div ref={notifRef} className="relative">
                 <button
                   type="button"
@@ -1385,17 +1417,20 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Real-time Chat Trigger Button */}
-              <button
-                onClick={onOpenChat}
-                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
-                title="Abrir Chat em Tempo Real com outros usuários"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Chat</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              </button>
+              {isChatEnabled && (
+                <button
+                  onClick={onOpenChat}
+                  className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                  title="Abrir Chat em Tempo Real com outros usuários"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Chat</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </button>
+              )}
 
               {/* Current User Profile Badge with Dropdown */}
               <div ref={userMenuRef} className="relative">
@@ -1439,47 +1474,57 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
                         <span>Papel: <strong className="text-slate-700 dark:text-slate-300 capitalize">{currentUser?.role}</strong></span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
-                          <Zap className="w-3 h-3 fill-amber-500 text-amber-500" />
-                          {currentUser?.karma ?? 10} Karma
-                        </span>
+                        {isKarmaEnabled && (
+                          <>
+                            <span>•</span>
+                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
+                              <Zap className="w-3 h-3 fill-amber-500 text-amber-500" />
+                              {currentUser?.karma ?? 10} Karma
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
                     <div className="px-1 py-1 space-y-0.5">
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onOpenMyUserPage?.();
-                        }}
-                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                        <span>Minha Página Pessoal</span>
-                      </button>
+                      {isDirectoryEnabled && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              onOpenMyUserPage?.();
+                            }}
+                            className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                          >
+                            <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            <span>Minha Página Pessoal</span>
+                          </button>
 
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onOpenDirectory?.();
-                        }}
-                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                        <span>Diretório Público de Usuários</span>
-                      </button>
+                          <button
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              onOpenDirectory?.();
+                            }}
+                            className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                          >
+                            <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                            <span>Diretório Público de Usuários</span>
+                          </button>
+                        </>
+                      )}
 
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onOpenChat?.();
-                        }}
-                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        <span>Chat Comunitário em Tempo Real</span>
-                      </button>
+                      {isChatEnabled && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            onOpenChat?.();
+                          }}
+                          className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Chat Comunitário em Tempo Real</span>
+                        </button>
+                      )}
 
                       {isChecklistExtEnabled && (
                         <button
@@ -1507,20 +1552,22 @@ export const Header: React.FC<HeaderProps> = ({
                         </button>
                       )}
 
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          if (onOpenAppOptions) {
-                            onOpenAppOptions();
-                          } else if (typeof window !== 'undefined') {
-                            window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
-                          }
-                        }}
-                        className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Aplicativo Mobile &amp; Computador</span>
-                      </button>
+                      {isPwaEnabled && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            if (onOpenAppOptions) {
+                              onOpenAppOptions();
+                            } else if (typeof window !== 'undefined') {
+                              window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
+                            }
+                          }}
+                          className="w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Aplicativo Mobile &amp; Computador</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {
@@ -1547,6 +1594,7 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
 
                     {/* Network / VPN Verification Status */}
+                    {isGovernanceEnabled && (
                     <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850/60 text-[11px] space-y-1.5">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-slate-700 dark:text-slate-300">Auditoria de VPN / Rede:</span>
@@ -1580,6 +1628,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <div className="text-slate-400 text-[10px]">Clique em Reavaliar para checar IP e proxy.</div>
                       )}
                     </div>
+                    )}
 
                     <div className="px-1 pt-1 border-t border-slate-100 dark:border-slate-800">
                       <button
@@ -1623,16 +1672,18 @@ export const Header: React.FC<HeaderProps> = ({
             })}
 
             {/* Special:Random Navigation Link */}
-            <button
-              type="button"
-              onClick={handleRandomClick}
-              disabled={isLoadingRandom}
-              className="px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="Acessar uma página aleatória da enciclopédia (Special:Random)"
-            >
-              <Shuffle className={`w-3.5 h-3.5 text-blue-500 dark:text-blue-400 ${isLoadingRandom ? 'animate-spin' : ''}`} />
-              <span>Página Aleatória</span>
-            </button>
+            {isRandomEnabled && (
+              <button
+                type="button"
+                onClick={handleRandomClick}
+                disabled={isLoadingRandom}
+                className="px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Acessar uma página aleatória da enciclopédia (Special:Random)"
+              >
+                <Shuffle className={`w-3.5 h-3.5 text-blue-500 dark:text-blue-400 ${isLoadingRandom ? 'animate-spin' : ''}`} />
+                <span>Página Aleatória</span>
+              </button>
+            )}
           </nav>
 
           {/* Quick Context & Reading Progress Indicator */}
@@ -1646,27 +1697,29 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               {/* Reading Progress Indicator Badge in Header */}
-              <button
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium transition-all cursor-pointer ${
-                  activeProgress === 100
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 shadow-2xs'
-                }`}
-                title="Progresso de leitura do artigo. Clique para voltar ao topo."
-              >
-                <BookOpen className={`w-3.5 h-3.5 ${activeProgress === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`} />
-                <span className="text-[11px] font-sans hidden sm:inline">Leitura:</span>
-                <span className="font-mono font-bold text-[11px]">
-                  {activeProgress}%
-                </span>
-                {activeProgress === 100 ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ml-0.5" />
-                ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse ml-0.5" />
-                )}
-              </button>
+              {isFocusModeEnabled && (
+                <button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium transition-all cursor-pointer ${
+                    activeProgress === 100
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 shadow-2xs'
+                  }`}
+                  title="Progresso de leitura do artigo. Clique para voltar ao topo."
+                >
+                  <BookOpen className={`w-3.5 h-3.5 ${activeProgress === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`} />
+                  <span className="text-[11px] font-sans hidden sm:inline">Leitura:</span>
+                  <span className="font-mono font-bold text-[11px]">
+                    {activeProgress}%
+                  </span>
+                  {activeProgress === 100 ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ml-0.5" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse ml-0.5" />
+                  )}
+                </button>
+              )}
             </div>
           ) : (
             <div className="hidden lg:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
@@ -1680,7 +1733,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Reading Progress Bar pinned at the bottom edge of the sticky Header */}
-      {currentView === 'reader' && (
+      {currentView === 'reader' && isFocusModeEnabled && (
         <div
           className="w-full h-1 bg-slate-200/50 dark:bg-slate-800/80 relative overflow-hidden"
           role="progressbar"

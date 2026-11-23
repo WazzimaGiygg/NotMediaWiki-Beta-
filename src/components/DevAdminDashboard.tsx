@@ -50,6 +50,7 @@ import { BotManagementView } from './admin/BotManagementView';
 import { UserSession, Article, WikiExtension } from '../types';
 import { api } from '../api';
 import { isFeatureExtensionEnabled } from '../extensions';
+import { useExtensions } from '../context/ExtensionsContext';
 
 interface DevAdminDashboardProps {
   activeArticleSlug: string;
@@ -103,33 +104,39 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
 
   const [categoryFilter, setCategoryFilter] = useState<'todos' | 'governanca' | 'sistema'>('todos');
 
-  // Verificar se cada recurso está habilitado via arquivo da extensão / runtime
-  const isLogsEnabled = isFeatureExtensionEnabled('logs', extensions);
-  const isMeshEnabled = isFeatureExtensionEnabled('mesh', extensions);
-  const isEventsEnabled = isFeatureExtensionEnabled('events', extensions);
-  const isMigrationEnabled = isFeatureExtensionEnabled('migration', extensions);
-  const isWorkbenchEnabled = isFeatureExtensionEnabled('workbench', extensions);
-  const isBotsEnabled = isFeatureExtensionEnabled('bots', extensions);
+  const { extensions: contextExtensions, isExtensionEnabled } = useExtensions();
+  const effectiveExtensions = contextExtensions && contextExtensions.length > 0 ? contextExtensions : extensions;
+
+  // Verificar se cada recurso está habilitado via extensão em tempo real
+  const isLogsEnabled = isFeatureExtensionEnabled('logs', effectiveExtensions);
+  const isMeshEnabled = isFeatureExtensionEnabled('mesh', effectiveExtensions);
+  const isEventsEnabled = isFeatureExtensionEnabled('events', effectiveExtensions);
+  const isMigrationEnabled = isFeatureExtensionEnabled('migration', effectiveExtensions);
+  const isWorkbenchEnabled = isFeatureExtensionEnabled('workbench', effectiveExtensions);
+  const isBotsEnabled = isFeatureExtensionEnabled('bots', effectiveExtensions);
+  const isChecklistEnabled = isExtensionEnabled ? isExtensionEnabled('DailyChecklist', true) : isFeatureExtensionEnabled('checklist', effectiveExtensions);
+  const isGovernanceEnabled = isExtensionEnabled ? isExtensionEnabled('GovernanceAndCompliance', true) : true;
+  const isHistoryEnabled = isExtensionEnabled ? isExtensionEnabled('DiffLedger', true) : true;
 
   const adminTabs = [
     // Governança, Jurídico & Compliance (Solicitados pelo usuário)
-    { id: 'arbitration', label: 'Conselho de Arbitragem', icon: Scale, badge: 'ArbCom', category: 'governanca', enabled: true },
-    { id: 'checkuser', label: 'Verificação de Contas (Fantoches)', icon: Fingerprint, badge: 'CheckUser', category: 'governanca', enabled: true },
-    { id: 'unblock', label: 'Avaliação de Desbloqueio', icon: Unlock, badge: 'Revisão', category: 'governanca', enabled: true },
-    { id: 'data_removal', label: 'Pedido de Remoção de Dados', icon: Trash2, badge: 'Oversight', category: 'governanca', enabled: true },
-    { id: 'emergency', label: 'Contato de Emergência', icon: Siren, badge: '24/7 SOS', category: 'governanca', enabled: true },
-    { id: 'lgpd_rules', label: 'Regras LGPD e Marco Civil', icon: Shield, badge: 'Legislação BR', category: 'governanca', enabled: true },
-    { id: 'blp_ethics', label: 'Conselho de Ética (Pessoas Vivas)', icon: HeartHandshake, badge: 'WP:BLP', category: 'governanca', enabled: true },
+    { id: 'arbitration', label: 'Conselho de Arbitragem', icon: Scale, badge: isGovernanceEnabled ? 'ArbCom' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
+    { id: 'checkuser', label: 'Verificação de Contas (Fantoches)', icon: Fingerprint, badge: isGovernanceEnabled ? 'CheckUser' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
+    { id: 'unblock', label: 'Avaliação de Desbloqueio', icon: Unlock, badge: isGovernanceEnabled ? 'Revisão' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
+    { id: 'data_removal', label: 'Pedido de Remoção de Dados', icon: Trash2, badge: isGovernanceEnabled ? 'Oversight' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
+    { id: 'emergency', label: 'Contato de Emergência', icon: Siren, badge: isGovernanceEnabled ? '24/7 SOS' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
+    { id: 'lgpd_rules', label: 'Regras LGPD e Marco Civil', icon: Shield, badge: isGovernanceEnabled ? 'Legislação BR' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
+    { id: 'blp_ethics', label: 'Conselho de Ética (Pessoas Vivas)', icon: HeartHandshake, badge: isGovernanceEnabled ? 'WP:BLP' : 'Desativado', category: 'governanca', enabled: isGovernanceEnabled },
     // Moderação & Administração
     { id: 'users', label: 'Gerenciamento de Usuários', icon: Users, badge: 'Moderação', category: 'governanca', enabled: true },
     { id: 'domains', label: 'Domínios Permitidos', icon: Globe, badge: 'Burocrata', category: 'governanca', enabled: true },
     // Sistema, Extensões & Infraestrutura
     { id: 'bots', label: 'Agente de Bots (4.1.1.8T.1)', icon: Bot, badge: isBotsEnabled ? '4.1.1.8T' : 'Desativado', category: 'sistema', enabled: isBotsEnabled },
-    { id: 'daily_checklist', label: 'Checklist Diário & Pontos', icon: Award, badge: '3.05.8.b', category: 'sistema', enabled: true },
-    { id: 'vpn_checker', label: 'Verificador de VPN e Redes', icon: ShieldAlert, badge: 'Anti-Proxy', category: 'sistema', enabled: true },
+    { id: 'daily_checklist', label: 'Checklist Diário & Pontos', icon: Award, badge: isChecklistEnabled ? '3.05.8.b' : 'Desativado', category: 'sistema', enabled: isChecklistEnabled },
+    { id: 'vpn_checker', label: 'Verificador de VPN e Redes', icon: ShieldAlert, badge: isGovernanceEnabled ? 'Anti-Proxy' : 'Desativado', category: 'sistema', enabled: isGovernanceEnabled },
     { id: 'extensions', label: 'Extensões do Sistema', icon: Puzzle, badge: 'Special:Version', category: 'sistema', enabled: true },
     { id: 'firebase', label: 'Firebase Cloud', icon: Cloud, badge: 'Firestore', category: 'sistema', enabled: true },
-    { id: 'history', label: 'Histórico & Diffs', icon: Clock, badge: 'Ledger', category: 'sistema', enabled: true },
+    { id: 'history', label: 'Histórico & Diffs', icon: Clock, badge: isHistoryEnabled ? 'Ledger' : 'Desativado', category: 'sistema', enabled: isHistoryEnabled },
     { id: 'logs', label: 'Logs de Microsserviços', icon: ScrollText, badge: isLogsEnabled ? 'Realtime' : 'Desativado', category: 'sistema', enabled: isLogsEnabled },
     { id: 'mesh', label: 'Service Mesh & Telemetria', icon: Server, badge: isMeshEnabled ? 'Cluster' : 'Desativado', category: 'sistema', enabled: isMeshEnabled },
     { id: 'events', label: 'EventStreams', icon: Radio, badge: isEventsEnabled ? 'SSE / Kafka' : 'Desativado', category: 'sistema', enabled: isEventsEnabled },
@@ -226,37 +233,100 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
       {/* Tab Specific Content */}
       <div className="bg-slate-50/30 rounded-lg">
         {activeTab === 'arbitration' && (
-          <ArbitrationCouncil currentUser={currentUser} />
+          isGovernanceEnabled ? (
+            <ArbitrationCouncil currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Conselho de Arbitragem"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'checkuser' && (
-          <CheckUserVerification currentUser={currentUser} />
+          isGovernanceEnabled ? (
+            <CheckUserVerification currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Verificação de Contas (CheckUser)"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'unblock' && (
-          <UnblockEvaluation currentUser={currentUser} />
+          isGovernanceEnabled ? (
+            <UnblockEvaluation currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Avaliação de Desbloqueio"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'data_removal' && (
-          <AdminLgpdDashboard
-            currentUser={currentUser}
-            onNavigateArticle={onNavigateArticle}
-          />
+          isGovernanceEnabled ? (
+            <AdminLgpdDashboard
+              currentUser={currentUser}
+              onNavigateArticle={onNavigateArticle}
+            />
+          ) : (
+            <DisabledFeatureNotice
+              title="Pedido de Remoção de Dados"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'emergency' && (
-          <EmergencyContact currentUser={currentUser} />
+          isGovernanceEnabled ? (
+            <EmergencyContact currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Contato de Emergência"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'lgpd_rules' && (
-          <LgpdMarcoCivilRules currentUser={currentUser} />
+          isGovernanceEnabled ? (
+            <LgpdMarcoCivilRules currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Regras LGPD e Marco Civil"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'blp_ethics' && (
-          <BlpEthicsCouncil
-            currentUser={currentUser}
-            onNavigateArticle={onNavigateArticle}
-          />
+          isGovernanceEnabled ? (
+            <BlpEthicsCouncil
+              currentUser={currentUser}
+              onNavigateArticle={onNavigateArticle}
+            />
+          ) : (
+            <DisabledFeatureNotice
+              title="Conselho de Ética (WP:BLP)"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'users' && (
@@ -271,11 +341,29 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
         )}
 
         {activeTab === 'vpn_checker' && (
-          <VpnAdminChecker currentUser={currentUser} />
+          isGovernanceEnabled ? (
+            <VpnAdminChecker currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Verificador de VPN e Redes"
+              extensionName="GovernanceAndCompliance"
+              file="src/extensions/wikiFeatureExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'daily_checklist' && (
-          <ChecklistGamificationAdmin currentUser={currentUser} />
+          isChecklistEnabled ? (
+            <ChecklistGamificationAdmin currentUser={currentUser} />
+          ) : (
+            <DisabledFeatureNotice
+              title="Checklist Diário & Pontos"
+              extensionName="DailyChecklist"
+              file="src/extensions/dailyChecklistExtension.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
+            />
+          )
         )}
 
         {activeTab === 'extensions' && (
@@ -316,50 +404,59 @@ export const DevAdminDashboard: React.FC<DevAdminDashboardProps> = ({
         )}
 
         {activeTab === 'history' && (
-          <div className="space-y-4">
-            {/* Quick Article Picker for History */}
-            <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800">Artigo em Análise no Histórico:</span>
-                <select
-                  value={selectedArticleSlug}
-                  onChange={e => setSelectedArticleSlug(e.target.value)}
-                  className="bg-slate-50 border border-slate-300 rounded px-3 py-1.5 font-medium text-slate-800 outline-none cursor-pointer focus:ring-1 focus:ring-blue-500"
-                >
-                  {allArticles.map(a => (
-                    <option key={a.slug} value={a.slug}>
-                      {a.title} ({a.slug})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Quick Article Pill Buttons */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-slate-400 text-[11px] font-mono mr-1">Atalhos:</span>
-                {allArticles.slice(0, 5).map(a => (
-                  <button
-                    key={a.slug}
-                    onClick={() => setSelectedArticleSlug(a.slug)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                      selectedArticleSlug === a.slug
-                        ? 'bg-blue-600 text-white font-semibold'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    }`}
+          isHistoryEnabled ? (
+            <div className="space-y-4">
+              {/* Quick Article Picker for History */}
+              <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-800">Artigo em Análise no Histórico:</span>
+                  <select
+                    value={selectedArticleSlug}
+                    onChange={e => setSelectedArticleSlug(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded px-3 py-1.5 font-medium text-slate-800 outline-none cursor-pointer focus:ring-1 focus:ring-blue-500"
                   >
-                    {a.title}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {allArticles.map(a => (
+                      <option key={a.slug} value={a.slug}>
+                        {a.title} ({a.slug})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <HistoryDiff
-              slug={selectedArticleSlug}
-              currentUser={currentUser}
-              onNavigate={onNavigateArticle}
-              onBackToReader={onBackToReader}
+                {/* Quick Article Pill Buttons */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-slate-400 text-[11px] font-mono mr-1">Atalhos:</span>
+                  {allArticles.slice(0, 5).map(a => (
+                    <button
+                      key={a.slug}
+                      onClick={() => setSelectedArticleSlug(a.slug)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                        selectedArticleSlug === a.slug
+                          ? 'bg-blue-600 text-white font-semibold'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {a.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <HistoryDiff
+                slug={selectedArticleSlug}
+                currentUser={currentUser}
+                onNavigate={onNavigateArticle}
+                onBackToReader={onBackToReader}
+              />
+            </div>
+          ) : (
+            <DisabledFeatureNotice
+              title="Histórico & Diffs"
+              extensionName="DiffLedger"
+              file="src/data/defaultExtensions.ts"
+              onManageExtensions={() => setActiveTab('extensions')}
             />
-          </div>
+          )
         )}
 
         {activeTab === 'events' && (

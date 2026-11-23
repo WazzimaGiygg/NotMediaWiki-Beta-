@@ -24,6 +24,7 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
   const { deviceMode: sharedDeviceMode, setDeviceMode: setSharedDeviceMode } = useAppPlatformMode();
 
   const {
+    isExtensionEnabled,
     supportTicketsConfig,
     siteTitleConfig,
     themeAppearanceConfig,
@@ -31,6 +32,12 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
     setUserTheme,
     openThemeSelector,
   } = useExtensions();
+  const isMobileFrontendEnabled = isExtensionEnabled ? isExtensionEnabled('MobileFrontend', true) : true;
+  const isPwaAppEnabled = isExtensionEnabled ? isExtensionEnabled('PwaMobileDesktopApp', true) : true;
+  const isThemeAppearanceEnabled = isExtensionEnabled ? isExtensionEnabled('ThemeAppearance', true) : true;
+  const isParodyBannerEnabled = isExtensionEnabled ? isExtensionEnabled('WikidiotaParodyBanner', true) : true;
+  const isGovernanceEnabled = isExtensionEnabled ? isExtensionEnabled('GovernanceAndCompliance', true) : true;
+  const showDisplayBar = isMobileFrontendEnabled || isPwaAppEnabled || isThemeAppearanceEnabled;
   const isDark = activeTheme.colorScheme === 'dark';
   const deviceMode = controlledDeviceMode ?? sharedDeviceMode;
 
@@ -60,6 +67,7 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-4 min-w-0">
         {/* Modo de Exibição & Aparência Bar (WikiZero standard) */}
+        {showDisplayBar && (
         <div className="bg-slate-200/70 dark:bg-slate-900/90 p-2.5 rounded-lg flex flex-wrap items-center justify-between gap-2 border border-slate-300/80 dark:border-slate-800">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
@@ -71,97 +79,106 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              id="btn-footer-mobile-view"
-              type="button"
-              onClick={() => handleSelectDeviceMode('mobile')}
-              className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                deviceMode === 'mobile'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
-              }`}
-              title="Ativar layout e navegação otimizados para smartphones e telas touch"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>Versão móvel</span>
-              {deviceMode === 'mobile' && (
-                <span className="text-[9px] bg-blue-500 text-white px-1 rounded-xs uppercase">Ativo</span>
-              )}
-            </button>
+            {isMobileFrontendEnabled && (
+              <>
+                <button
+                  id="btn-footer-mobile-view"
+                  type="button"
+                  onClick={() => handleSelectDeviceMode('mobile')}
+                  className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    deviceMode === 'mobile'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
+                  }`}
+                  title="Ativar layout e navegação otimizados para smartphones e telas touch"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Versão móvel</span>
+                  {deviceMode === 'mobile' && (
+                    <span className="text-[9px] bg-blue-500 text-white px-1 rounded-xs uppercase">Ativo</span>
+                  )}
+                </button>
 
-            <button
-              id="btn-footer-desktop-view"
-              type="button"
-              onClick={() => handleSelectDeviceMode('desktop')}
-              className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                deviceMode === 'desktop'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
-              }`}
-              title="Ativar layout completo e painéis de computador"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              <span>Versão para computador</span>
-              {deviceMode === 'desktop' && (
-                <span className="text-[9px] bg-blue-500 text-white px-1 rounded-xs uppercase">Ativo</span>
-              )}
-            </button>
+                <button
+                  id="btn-footer-desktop-view"
+                  type="button"
+                  onClick={() => handleSelectDeviceMode('desktop')}
+                  className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    deviceMode === 'desktop'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
+                  }`}
+                  title="Ativar layout completo e painéis de computador"
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>Versão para computador</span>
+                  {deviceMode === 'desktop' && (
+                    <span className="text-[9px] bg-blue-500 text-white px-1 rounded-xs uppercase">Ativo</span>
+                  )}
+                </button>
 
-            <button
-              id="btn-footer-tv-view"
-              type="button"
-              onClick={() => handleSelectDeviceMode('tv')}
-              className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                deviceMode === 'tv'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
-              }`}
-              title="Ativar interface 10-foot otimizada para Smart TVs e controle remoto"
-            >
-              <Tv className="w-3.5 h-3.5" />
-              <span>Modo Smart TV</span>
-              {deviceMode === 'tv' && (
-                <span className="text-[9px] bg-indigo-500 text-white px-1 rounded-xs uppercase">Ativo</span>
-              )}
-            </button>
+                <button
+                  id="btn-footer-tv-view"
+                  type="button"
+                  onClick={() => handleSelectDeviceMode('tv')}
+                  className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    deviceMode === 'tv'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
+                  }`}
+                  title="Ativar interface 10-foot otimizada para Smart TVs e controle remoto"
+                >
+                  <Tv className="w-3.5 h-3.5" />
+                  <span>Modo Smart TV</span>
+                  {deviceMode === 'tv' && (
+                    <span className="text-[9px] bg-indigo-500 text-white px-1 rounded-xs uppercase">Ativo</span>
+                  )}
+                </button>
+              </>
+            )}
 
-            <button
-              id="btn-footer-appearance-page"
-              type="button"
-              onClick={handleToggleAppearance}
-              className="px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs cursor-pointer"
-              title="Abrir seletor de temas e aparência da enciclopédia"
-            >
-              <Palette className="w-3.5 h-3.5 text-amber-500" />
-              <span>
-                Aparência &amp; Temas (
-                {themeAppearanceConfig.extensionEnabled
-                  ? activeTheme.shortLabel
-                  : isDark
-                    ? 'Escuro'
-                    : 'Claro'}
-                )
-              </span>
-            </button>
+            {isThemeAppearanceEnabled && (
+              <button
+                id="btn-footer-appearance-page"
+                type="button"
+                onClick={handleToggleAppearance}
+                className="px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs cursor-pointer"
+                title="Abrir seletor de temas e aparência da enciclopédia"
+              >
+                <Palette className="w-3.5 h-3.5 text-amber-500" />
+                <span>
+                  Aparência &amp; Temas (
+                  {themeAppearanceConfig.extensionEnabled
+                    ? activeTheme.shortLabel
+                    : isDark
+                      ? 'Escuro'
+                      : 'Claro'}
+                  )
+                </span>
+              </button>
+            )}
 
-            <button
-              id="btn-footer-install-app"
-              type="button"
-              onClick={() => {
-                if (onOpenAppOptions) {
-                  onOpenAppOptions();
-                } else if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
-                }
-              }}
-              className="px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-blue-600 hover:bg-blue-700 text-white shadow-2xs cursor-pointer"
-              title="Instalar aplicativo no celular (Mobile) ou computador (Windows, macOS e Linux)"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>App Mobile / Computador</span>
-            </button>
+            {isPwaAppEnabled && (
+              <button
+                id="btn-footer-install-app"
+                type="button"
+                onClick={() => {
+                  if (onOpenAppOptions) {
+                    onOpenAppOptions();
+                  } else if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('notmediawiki:open-app-modal'));
+                  }
+                }}
+                className="px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-blue-600 hover:bg-blue-700 text-white shadow-2xs cursor-pointer"
+                title="Instalar aplicativo no celular (Mobile) ou computador (Windows, macOS e Linux)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>App Mobile / Computador</span>
+              </button>
+            )}
           </div>
         </div>
+        )}
 
         {/* Frase Principal da Wiki */}
         <div className="py-2.5 px-4 rounded-lg bg-blue-50/80 dark:bg-slate-900/90 border border-blue-200/80 dark:border-slate-800 text-center shadow-2xs">
@@ -245,7 +262,7 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
               • Em conformidade com a <strong>LGPD (Lei nº 13.709/2018)</strong> e o{' '}
               <strong>Marco Civil (Lei nº 12.965/2014)</strong>. DPO: pedrohenriquecardonaperes@gmail.com
             </p>
-            {activeTheme.id === 'wikidiota' && (
+            {isParodyBannerEnabled && activeTheme.id === 'wikidiota' && (
               <p className="text-rose-800 font-sans text-[11px] pt-1">
                 <strong>Wikidiota (Edição Paródia)</strong> · Sátira institucional atribuída à{' '}
                 <strong>Wikiomite Foundation</strong> — Crônicas do Feudo de LittleSunshine, Ditadura de Conde Edmond Dantès, Corrupção de Johannnes89 e Reinado do Chronus.
@@ -303,26 +320,28 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
             )}
 
             {/* 3. CONFORME LGPD & MCI */}
-            <button
-              type="button"
-              onClick={onNavigateLgpd}
-              title="Conformidade integral com a LGPD (Lei nº 13.709/2018) e Marco Civil da Internet (Lei nº 12.965/2014) no Brasil"
-              className="inline-flex items-center justify-between w-[88px] h-[31px] bg-gradient-to-br from-[#062c1e] via-[#051f15] to-[#02100b] border border-emerald-500/70 hover:border-emerald-400 rounded transition p-1 shadow-xs group cursor-pointer text-left"
-            >
-              <div className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0">
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current text-emerald-400">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
-                </svg>
-              </div>
-              <div className="flex flex-col text-right leading-none pr-0.5">
-                <span className="text-[5.2px] font-mono tracking-tighter text-emerald-400 font-bold uppercase">
-                  CONFORME
-                </span>
-                <span className="text-[7.5px] font-sans font-bold text-emerald-100 group-hover:text-white tracking-tight">
-                  LGPD &amp; MCI
-                </span>
-              </div>
-            </button>
+            {isGovernanceEnabled && (
+              <button
+                type="button"
+                onClick={onNavigateLgpd}
+                title="Conformidade integral com a LGPD (Lei nº 13.709/2018) e Marco Civil da Internet (Lei nº 12.965/2014) no Brasil"
+                className="inline-flex items-center justify-between w-[88px] h-[31px] bg-gradient-to-br from-[#062c1e] via-[#051f15] to-[#02100b] border border-emerald-500/70 hover:border-emerald-400 rounded transition p-1 shadow-xs group cursor-pointer text-left"
+              >
+                <div className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current text-emerald-400">
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+                  </svg>
+                </div>
+                <div className="flex flex-col text-right leading-none pr-0.5">
+                  <span className="text-[5.2px] font-mono tracking-tighter text-emerald-400 font-bold uppercase">
+                    CONFORME
+                  </span>
+                  <span className="text-[7.5px] font-sans font-bold text-emerald-100 group-hover:text-white tracking-tight">
+                    LGPD &amp; MCI
+                  </span>
+                </div>
+              </button>
+            )}
 
             {/* 4. POWERED BY Firebase DB */}
             <a

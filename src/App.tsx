@@ -37,6 +37,7 @@ import { WikidiotaParodyBanner } from './components/WikidiotaParodyBanner';
 import { AppInstallModal } from './components/AppInstallModal';
 import { MobileAppNavBar } from './components/MobileAppNavBar';
 import { useAppPlatformMode } from './hooks/usePWAInstall';
+import { isRuntimeExtensionEnabled } from './extensions';
 
 interface WikiAppShellProps {
   currentUser: UserSession | null;
@@ -101,7 +102,24 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     maintenanceConfig,
     saveExtension,
     retryLoadExtensions,
+    isExtensionEnabled,
   } = useExtensions();
+
+  const isParodyBannerEnabled = isExtensionEnabled ? isExtensionEnabled('WikidiotaParodyBanner', true) : true;
+  const isGoogleOneTapEnabled = isExtensionEnabled ? isExtensionEnabled('GoogleOneTapQuickLogin', true) : true;
+  const isCommunityChatEnabled = isExtensionEnabled ? isExtensionEnabled('CommunityChat', true) : true;
+  const isDailyChecklistEnabled = isExtensionEnabled ? isExtensionEnabled('DailyChecklist', true) : true;
+  const isPwaAppEnabled = isExtensionEnabled ? isExtensionEnabled('PwaMobileDesktopApp', true) : true;
+  const isMobileFrontendEnabled = isExtensionEnabled ? isExtensionEnabled('MobileFrontend', true) : true;
+  const isThemeAppearanceEnabled = isExtensionEnabled ? isExtensionEnabled('ThemeAppearance', true) : true;
+  const isUserDirectoryEnabled = isExtensionEnabled ? isExtensionEnabled('UserDirectoryProfiles', true) : true;
+  const isHistoryEnabled = isExtensionEnabled ? isExtensionEnabled('DiffLedger', true) : true;
+  const isCirrusSearchEnabled = isExtensionEnabled ? isExtensionEnabled('CirrusSearch', true) : true;
+  const isSpecialPagesEnabled = isExtensionEnabled ? isExtensionEnabled('SpecialPagesHub', true) : true;
+  const isPromoVideoEnabled = isExtensionEnabled ? isExtensionEnabled('PromoVideoStudio', true) : true;
+  const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
+  const isWikiSeoEnabled = isExtensionEnabled ? isExtensionEnabled('WikiSEO', true) : true;
+  const isExternalRedirectEnabled = isExtensionEnabled ? isExtensionEnabled('ExternalRedirect', true) : true;
 
   // Reset Zen Mode whenever navigating away from the article reader
   useEffect(() => {
@@ -120,7 +138,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
 
   // Keep canonical & SEO metadata synchronized for non-article views using configured site title
   useEffect(() => {
-    if (currentView === 'reader') return;
+    if (currentView === 'reader' || !isWikiSeoEnabled) return;
     const siteTitle = siteTitleConfig.siteTitle;
     const brandName = siteTitleConfig.fullBrandName || SITE_BRAND_NAME;
 
@@ -154,7 +172,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     } else {
       applyDefaultSiteSeo(siteTitleConfig.siteTitle, siteTitleConfig.siteSubtitle);
     }
-  }, [currentView, searchQuery, specialPageName, siteTitleConfig]);
+  }, [currentView, searchQuery, specialPageName, siteTitleConfig, isWikiSeoEnabled]);
 
   useEffect(() => {
     // Sincronização de domínios permitidos com o Firebase Firestore ao iniciar
@@ -365,6 +383,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         !href.startsWith('#');
 
       if (isExternal && !href.startsWith('https://wazzimagiygg.com/rv/?uid=')) {
+        if (!isRuntimeExtensionEnabled('ExternalRedirect', undefined, true)) return;
         e.preventDefault();
         e.stopPropagation();
         const safeUrl = wrapExternalUrl(href);
@@ -400,6 +419,9 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   }, []);
 
   const handleRandomArticle = async () => {
+    if (!isRuntimeExtensionEnabled('RandomArticle', extensions, true) || !isRandomEnabled) {
+      return;
+    }
     try {
       const article = await api.getRandomArticle(activeArticleSlug);
       if (article && article.slug) {
@@ -636,7 +658,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       )}
 
       {/* Floating Google Quick Login Popup (Top Right Corner) */}
-      {!(isZenMode && currentView === 'reader') && (
+      {isGoogleOneTapEnabled && !(isZenMode && currentView === 'reader') && (
         <GoogleOneTapPopup
           currentUser={currentUser}
           onUserChanged={setCurrentUser}
@@ -644,7 +666,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       )}
 
       {/* Wikidiota Parody Theme Satirical Chronicle Banner */}
-      {!(isZenMode && currentView === 'reader') && <WikidiotaParodyBanner />}
+      {isParodyBannerEnabled && !(isZenMode && currentView === 'reader') && <WikidiotaParodyBanner />}
 
       {/* Main View Container */}
       <main className="flex-1">
@@ -685,41 +707,73 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         )}
 
         {currentView === 'directory' && (
-          <UserDirectory
-            currentUser={currentUser}
-            onOpenUserPage={user => {
-              setSelectedUserForPage(user);
-              setCurrentView('user_page');
-              window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
-            }}
-            onStartChatWithUser={user => {
-              setChatTargetUser(user);
-              setIsChatOpen(true);
-            }}
-          />
+          isUserDirectoryEnabled ? (
+            <UserDirectory
+              currentUser={currentUser}
+              onOpenUserPage={user => {
+                setSelectedUserForPage(user);
+                setCurrentView('user_page');
+                window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
+              }}
+              onStartChatWithUser={user => {
+                if (!isCommunityChatEnabled) return;
+                setChatTargetUser(user);
+                setIsChatOpen(true);
+              }}
+            />
+          ) : (
+            <DisabledExtensionView
+              extensionName="UserDirectoryProfiles"
+              featureLabel="Diretório de Usuários"
+              onGoHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onManageExtensions={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          )
         )}
 
         {currentView === 'user_page' && (
-          <UserPageView
-            targetUser={selectedUserForPage || currentUser || {
-              id: 'mafersao1100',
-              username: 'Mafersao',
-              userTag: '#1100',
-              role: 'bureaucrat',
-              editCount: 5,
-              avatar: 'MA',
-              email: 'mafersao1100@gmail.com',
-            }}
-            currentUser={currentUser}
-            onBack={() => {
-              setCurrentView('reader');
-              window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
-            }}
-            onStartChat={user => {
-              setChatTargetUser(user);
-              setIsChatOpen(true);
-            }}
-          />
+          isUserDirectoryEnabled ? (
+            <UserPageView
+              targetUser={selectedUserForPage || currentUser || {
+                id: 'mafersao1100',
+                username: 'Mafersao',
+                userTag: '#1100',
+                role: 'bureaucrat',
+                editCount: 5,
+                avatar: 'MA',
+                email: 'mafersao1100@gmail.com',
+              }}
+              currentUser={currentUser}
+              onBack={() => {
+                setCurrentView('reader');
+                window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+              }}
+              onStartChat={user => {
+                if (!isCommunityChatEnabled) return;
+                setChatTargetUser(user);
+                setIsChatOpen(true);
+              }}
+            />
+          ) : (
+            <DisabledExtensionView
+              extensionName="UserDirectoryProfiles"
+              featureLabel="Páginas Pessoais de Usuários"
+              onGoHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onManageExtensions={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          )
         )}
 
         {currentView === 'editor' && (
@@ -739,13 +793,28 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         )}
 
         {currentView === 'history' && (
-          <ArticleHistory
-            slug={activeArticleSlug}
-            currentUser={currentUser}
-            onNavigateArticle={handleNavigateArticle}
-            onBackToReader={() => handleNavigateArticle(activeArticleSlug)}
-            onEditArticle={handleOpenEdit}
-          />
+          isHistoryEnabled ? (
+            <ArticleHistory
+              slug={activeArticleSlug}
+              currentUser={currentUser}
+              onNavigateArticle={handleNavigateArticle}
+              onBackToReader={() => handleNavigateArticle(activeArticleSlug)}
+              onEditArticle={handleOpenEdit}
+            />
+          ) : (
+            <DisabledExtensionView
+              extensionName="DiffLedger"
+              featureLabel="Histórico de Revisões & Diffs"
+              onGoHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onManageExtensions={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          )
         )}
 
         {currentView === 'bureaucrats' && (
@@ -804,31 +873,76 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         )}
 
         {currentView === 'special' && (
-          <SpecialPagesHub
-            initialSpecialPage={specialPageName}
-            currentUser={currentUser}
-            onNavigateArticle={handleNavigateArticle}
-            onOpenEdit={handleOpenEdit}
-            onOpenHistory={handleOpenHistory}
-            onRandomArticle={handleRandomArticle}
-          />
+          isSpecialPagesEnabled ? (
+            <SpecialPagesHub
+              initialSpecialPage={specialPageName}
+              currentUser={currentUser}
+              onNavigateArticle={handleNavigateArticle}
+              onOpenEdit={handleOpenEdit}
+              onOpenHistory={handleOpenHistory}
+              onRandomArticle={handleRandomArticle}
+            />
+          ) : (
+            <DisabledExtensionView
+              extensionName="SpecialPagesHub"
+              featureLabel="Central de Páginas Especiais"
+              onGoHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onManageExtensions={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          )
         )}
 
         {currentView === 'search' && (
-          <SearchResults
-            initialQuery={searchQuery}
-            onNavigateArticle={handleNavigateArticle}
-            onRandomArticle={handleRandomArticle}
-          />
+          isCirrusSearchEnabled ? (
+            <SearchResults
+              initialQuery={searchQuery}
+              onNavigateArticle={handleNavigateArticle}
+              onRandomArticle={handleRandomArticle}
+            />
+          ) : (
+            <DisabledExtensionView
+              extensionName="CirrusSearch"
+              featureLabel="Busca Full-Text & Sugestões"
+              onGoHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onManageExtensions={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          )
         )}
 
         {currentView === 'promo_video' && (
-          <PromoVideoStudio
-            onBack={() => {
-              setCurrentView('home');
-              window.location.hash = '#/home';
-            }}
-          />
+          isPromoVideoEnabled ? (
+            <PromoVideoStudio
+              onBack={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+            />
+          ) : (
+            <DisabledExtensionView
+              extensionName="PromoVideoStudio"
+              featureLabel="Estúdio de Vídeo Comercial"
+              onGoHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onManageExtensions={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          )
         )}
       </main>
 
@@ -859,48 +973,46 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       />
 
       {/* 3.05.3.af & 3.05.8.b - Daily Checklist & Monthly Points Modal */}
-      <DailyChecklistModal
-        isOpen={isChecklistOpen}
-        onClose={() => setIsChecklistOpen(false)}
-        currentUser={currentUser}
-        onUserChanged={setCurrentUser}
-        onNavigateToArticle={handleNavigateArticle}
-        onNavigateToEditor={slug => handleOpenEdit(slug || 'MediaWiki')}
-      />
-
-      {/* Real-time Chat Drawer */}
-      <ChatDrawer
-        currentUser={currentUser}
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        targetUserForNewChat={chatTargetUser}
-        onClearTargetUser={() => setChatTargetUser(null)}
-      />
-
-      {/* Google One Tap / Quick Sign-in popup at top-right */}
-      {!(isZenMode && currentView === 'reader') && (
-        <GoogleOneTapPopup
+      {isDailyChecklistEnabled && (
+        <DailyChecklistModal
+          isOpen={isChecklistOpen}
+          onClose={() => setIsChecklistOpen(false)}
           currentUser={currentUser}
           onUserChanged={setCurrentUser}
+          onNavigateToArticle={handleNavigateArticle}
+          onNavigateToEditor={slug => handleOpenEdit(slug || 'MediaWiki')}
+        />
+      )}
+
+      {/* Real-time Chat Drawer */}
+      {isCommunityChatEnabled && (
+        <ChatDrawer
+          currentUser={currentUser}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          targetUserForNewChat={chatTargetUser}
+          onClearTargetUser={() => setChatTargetUser(null)}
         />
       )}
 
       {/* Offline connectivity indicator */}
-      <OfflineIndicator />
+      {isPwaAppEnabled && <OfflineIndicator />}
 
       {/* Theme Appearance Extension Modal */}
-      <ThemeSelectorModal />
+      {isThemeAppearanceEnabled && <ThemeSelectorModal />}
 
       {/* Mobile & Desktop App Install & Mode Options Modal */}
-      <AppInstallModal
-        isOpen={isAppModalOpen}
-        onClose={() => setIsAppModalOpen(false)}
-        deviceMode={deviceMode}
-        onChangeDeviceMode={setDeviceMode}
-      />
+      {isPwaAppEnabled && (
+        <AppInstallModal
+          isOpen={isAppModalOpen}
+          onClose={() => setIsAppModalOpen(false)}
+          deviceMode={deviceMode}
+          onChangeDeviceMode={setDeviceMode}
+        />
+      )}
 
       {/* Mobile Bottom Tab Bar */}
-      {!(isZenMode && currentView === 'reader') && (
+      {isMobileFrontendEnabled && !(isZenMode && currentView === 'reader') && (
         <MobileAppNavBar
           currentView={currentView}
           deviceMode={deviceMode}
@@ -919,7 +1031,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       )}
 
       {/* Floating Chat Trigger Button */}
-      {!isChatOpen && !(isZenMode && currentView === 'reader') && (
+      {isCommunityChatEnabled && !isChatOpen && !(isZenMode && currentView === 'reader') && (
         <button
           onClick={() => setIsChatOpen(true)}
           className={`fixed ${
@@ -941,3 +1053,50 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     </div>
   );
 };
+
+interface DisabledExtensionViewProps {
+  extensionName: string;
+  featureLabel: string;
+  onGoHome: () => void;
+  onManageExtensions: () => void;
+}
+
+const DisabledExtensionView: React.FC<DisabledExtensionViewProps> = ({
+  extensionName,
+  featureLabel,
+  onGoHome,
+  onManageExtensions,
+}) => (
+  <div
+    data-testid={`disabled-view-${extensionName}`}
+    className="max-w-xl mx-auto my-12 px-4"
+  >
+    <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center space-y-4 shadow-sm">
+      <div className="text-xs font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400">
+        Extensão Desativada: {extensionName}
+      </div>
+      <h2 className="text-lg font-serif font-bold text-slate-900 dark:text-slate-100">
+        {featureLabel} indisponível no momento
+      </h2>
+      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+        Este recurso foi desativado no Gerenciador de Extensões do Wiki. Burocratas podem reativá-lo a qualquer momento na Página dos Burocratas.
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onGoHome}
+          className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg cursor-pointer"
+        >
+          Voltar ao Início
+        </button>
+        <button
+          type="button"
+          onClick={onManageExtensions}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
+        >
+          Gerenciar em Burocratas
+        </button>
+      </div>
+    </div>
+  </div>
+);

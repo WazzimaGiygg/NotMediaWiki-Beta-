@@ -46,6 +46,7 @@ import {
 import { clientParsoid } from './services/parsoid';
 import { templateService, SaveTemplateInput, TemplateExpansionOptions } from './services/templateService';
 import { parseTitle } from './utils/namespaces';
+import { isRuntimeExtensionEnabled } from './extensions';
 import { LGPD_INVESTIGATION_ARTICLE } from './data/lgpdInvestigationArticle';
 import {
   TEMPLATE_EXAMPLE_ARTICLE,
@@ -264,15 +265,24 @@ export const api = {
 
   async getRenderedArticle(slug: string): Promise<RenderedArticleResponse> {
     const cleanSlug = slug.trim().replace(/\s+/g, '_');
+    const parsoidEnabled = isRuntimeExtensionEnabled('ParsoidCompiler');
+    const citeEnabled = isRuntimeExtensionEnabled('Cite');
+    const templatesEnabled = isRuntimeExtensionEnabled('MediaWikiTemplates');
+    const infoboxEnabled = isRuntimeExtensionEnabled('InfoboxBuilder');
+
     const [article, customTemplates] = await Promise.all([
       this.getArticle(cleanSlug),
-      this.getTemplates().catch(() => [] as Article[]),
+      templatesEnabled ? this.getTemplates().catch(() => [] as Article[]) : Promise.resolve([] as Article[]),
     ]);
     const isTemplatePage =
       article.namespace === 10 || parseTitle(article.title || cleanSlug).namespaceId === 10;
     const parsed = clientParsoid.parse(article.wikitext || '', article.title || cleanSlug, {
       customTemplates,
       isTemplatePage,
+      parsoidEnabled,
+      citeEnabled,
+      templatesEnabled,
+      infoboxEnabled,
     });
 
     return {
@@ -399,8 +409,14 @@ export const api = {
   // 2. Parsoid Service (Instant client parsing, resilient against HTML errors)
   // ---------------------------------------------------------------------------
   async parseWikitext(wikitext: string, title?: string, options?: TemplateExpansionOptions): Promise<any> {
-    // Use client-side Parsoid immediately
-    return clientParsoid.parse(wikitext, title || 'Parsed_Page', options);
+    // Use client-side Parsoid immediately with active extension flags
+    return clientParsoid.parse(wikitext, title || 'Parsed_Page', {
+      ...options,
+      parsoidEnabled: isRuntimeExtensionEnabled('ParsoidCompiler'),
+      citeEnabled: isRuntimeExtensionEnabled('Cite'),
+      templatesEnabled: isRuntimeExtensionEnabled('MediaWikiTemplates'),
+      infoboxEnabled: isRuntimeExtensionEnabled('InfoboxBuilder'),
+    });
   },
 
   async tokenizeWikitext(wikitext: string): Promise<any> {
