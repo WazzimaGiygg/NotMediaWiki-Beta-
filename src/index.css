@@ -905,6 +905,124 @@ html[data-wiki-theme="windows-31"] .wiki-content .wikitable td {
   border-color: #c0c0c0;
 }
 
+/* 6. Windows 95 (Explorer Clássico 32-bit) */
+html[data-wiki-theme="windows-95"] body {
+  background-color: #008080;
+  color: #000000;
+  font-family: 'MS Sans Serif', 'Tahoma', 'Microsoft Sans Serif', Arial, sans-serif;
+}
+
+html[data-wiki-theme="windows-95"] .min-h-screen {
+  background-color: #008080 !important;
+  color: #000000 !important;
+}
+
+html[data-wiki-theme="windows-95"] header {
+  background-color: #c0c0c0 !important;
+  border-top: 2px solid #ffffff !important;
+  border-bottom: 2px solid #808080 !important;
+  box-shadow: inset 0 -1px 0 #000000 !important;
+  border-radius: 0 !important;
+}
+
+html[data-wiki-theme="windows-95"] footer[data-testid="wiki-global-footer"] {
+  background-color: #c0c0c0 !important;
+  border-top: 2px solid #ffffff !important;
+  box-shadow: inset 0 1px 0 #dfdfdf !important;
+  color: #000000 !important;
+  border-radius: 0 !important;
+}
+
+html[data-wiki-theme="windows-95"] main .bg-white,
+html[data-wiki-theme="windows-95"] main article,
+html[data-wiki-theme="windows-95"] main aside > div {
+  background-color: #ffffff;
+  border-radius: 0 !important;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #000000;
+  border-bottom: 2px solid #000000;
+  box-shadow: inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #808080, 2px 2px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-wiki-theme="windows-95"] main .bg-slate-50 {
+  background-color: #c0c0c0 !important;
+  border-radius: 0 !important;
+  border-color: #808080 !important;
+}
+
+html[data-wiki-theme="windows-95"] header button,
+html[data-wiki-theme="windows-95"] footer[data-testid="wiki-global-footer"] button,
+html[data-wiki-theme="windows-95"] main button {
+  border-radius: 0 !important;
+  box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #808080;
+}
+
+html[data-wiki-theme="windows-95"] header button:active,
+html[data-wiki-theme="windows-95"] footer[data-testid="wiki-global-footer"] button:active,
+html[data-wiki-theme="windows-95"] main button:active {
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #ffffff !important;
+}
+
+html[data-wiki-theme="windows-95"] header input,
+html[data-wiki-theme="windows-95"] main input,
+html[data-wiki-theme="windows-95"] main textarea,
+html[data-wiki-theme="windows-95"] main select {
+  border-radius: 0 !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-top: 1px solid #808080 !important;
+  border-left: 1px solid #808080 !important;
+  border-right: 1px solid #ffffff !important;
+  border-bottom: 1px solid #ffffff !important;
+  box-shadow: inset 1px 1px 0 #000000, inset -1px -1px 0 #dfdfdf !important;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content {
+  color: #000000;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content h1,
+html[data-wiki-theme="windows-95"] .wiki-content h2 {
+  font-family: 'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
+  color: #000080;
+  border-bottom: 2px solid #808080;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content h3,
+html[data-wiki-theme="windows-95"] .wiki-content h4 {
+  font-family: 'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
+  color: #000000;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content a {
+  color: #0000ff;
+  text-decoration: underline;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content a:visited {
+  color: #800080;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content .infobox,
+html[data-wiki-theme="windows-95"] .wiki-content .wikitable {
+  border-radius: 0 !important;
+  border: 2px solid #808080;
+  box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #000000;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content .wikitable th {
+  background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+  color: #ffffff;
+  border-color: #808080;
+}
+
+html[data-wiki-theme="windows-95"] .wiki-content .wikitable td {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #c0c0c0;
+}
+
 /* ==========================================================================
    App Platform Mode (Mobile App vs Computer Desktop Mode vs Smart TV)
    ========================================================================== */
@@ -932,6 +1050,81 @@ html[data-device-mode="mobile"] main .lg\:col-span-4 {
 html[data-device-mode="tv"] {
   font-size: 18px;
 }
+
+/* ==========================================================================
+   MediaWiki Template Reading-Mode Debug Highlights (All Themes + Dark Mode)
+   ========================================================================== */
+.wiki-content .wiki-template-invalid-braces {
+  color: #9f1239;
+  background-color: rgba(255, 228, 230, 0.85);
+  border: 1px solid #fda4af;
+  text-decoration: underline wavy #e11d48;
+  text-underline-offset: 3px;
+}
+
+.wiki-content .wiki-template-missing-param {
+  color: #92400e;
+  background-color: rgba(254, 243, 199, 0.9);
+  border: 1px solid #fcd34d;
+  text-decoration: underline wavy #d97706;
+  text-underline-offset: 3px;
+}
+
+.wiki-content a.wiki-redlink {
+  color: #be123c !important;
+  text-decoration: underline dotted #e11d48;
+  text-underline-offset: 3px;
+}
+
+html.dark .wiki-content .wiki-template-invalid-braces,
+html[data-wiki-theme="high-contrast-dark"] .wiki-content .wiki-template-invalid-braces {
+  color: #fecdd3;
+  background-color: rgba(136, 19, 55, 0.45);
+  border-color: rgba(225, 29, 72, 0.65);
+  text-decoration-color: #fb7185;
+}
+
+html.dark .wiki-content .wiki-template-missing-param,
+html[data-wiki-theme="high-contrast-dark"] .wiki-content .wiki-template-missing-param {
+  color: #fde68a;
+  background-color: rgba(120, 53, 15, 0.45);
+  border-color: rgba(217, 119, 6, 0.65);
+  text-decoration-color: #fbbf24;
+}
+
+html.dark .wiki-content a.wiki-redlink,
+html[data-wiki-theme="high-contrast-dark"] .wiki-content a.wiki-redlink {
+  color: #fda4af !important;
+  text-decoration-color: #fb7185;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content a.wiki-redlink,
+html[data-wiki-theme="windows-95"] .wiki-content a.wiki-redlink {
+  color: #800000 !important;
+  border-radius: 0;
+}
+
+html[data-wiki-theme="windows-31"] .wiki-content .wiki-template-invalid-braces,
+html[data-wiki-theme="windows-31"] .wiki-content .wiki-template-missing-param,
+html[data-wiki-theme="windows-95"] .wiki-content .wiki-template-invalid-braces,
+html[data-wiki-theme="windows-95"] .wiki-content .wiki-template-missing-param {
+  border-radius: 0;
+}
+
+.wiki-content.hide-template-debug-highlights .wiki-template-invalid-braces,
+.wiki-content.hide-template-debug-highlights .wiki-template-missing-param {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  text-decoration: none !important;
+  color: inherit !important;
+  padding: 0 !important;
+}
+
+.wiki-content.hide-template-debug-highlights .wiki-template-has-missing-params {
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+}
+
 
 
 

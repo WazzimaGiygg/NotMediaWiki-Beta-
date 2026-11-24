@@ -41,7 +41,6 @@ import {
   loginWithGoogle,
   logoutGoogle,
   auth,
-  fetchUsersFromFirestore,
   recordDailyChecklistAction,
   subscribeToMonthlyPoints,
   getCurrentMonthString,
@@ -307,26 +306,9 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   useEffect(() => {
-    // Listen to Firebase auth state
-    const unsubscribe = onAuthStateChanged(auth, async fbUser => {
-      if (fbUser) {
-        setGoogleUserEmail(fbUser.email);
-        try {
-          const cloudUsers = await fetchUsersFromFirestore();
-          const match = cloudUsers.find(u => u.id === fbUser.uid || u.email === fbUser.email);
-          if (match) {
-            const serverUser = await api.upsertUser(match);
-            if (!currentUser || currentUser.id !== match.id) {
-              await api.switchUser(match.id).catch(console.warn);
-              onUserChanged(serverUser);
-            }
-          }
-        } catch (e) {
-          console.warn('Silent Google auth sync notice:', e);
-        }
-      } else {
-        setGoogleUserEmail(null);
-      }
+    // Keep track of signed-in Google email for Header admin UI affordances
+    const unsubscribe = onAuthStateChanged(auth, fbUser => {
+      setGoogleUserEmail(fbUser?.email || null);
     });
 
     return () => unsubscribe();
@@ -732,6 +714,26 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={openThemeSelector}
             className="px-2 py-0.5 bg-[#c0c0c0] text-black border border-t-white border-l-white border-r-[#808080] border-b-[#808080] hover:bg-[#d4d0c8] text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+            title="Abrir seletor de Aparência & Temas"
+          >
+            Trocar Tema
+          </button>
+        </div>
+      )}
+
+      {/* Windows 95 Explorer Gradient Titlebar (only active in windows-95 theme) */}
+      {activeTheme.id === 'windows-95' && (
+        <div
+          data-testid="win95-title-bar"
+          className="bg-gradient-to-r from-[#000080] to-[#1084d0] text-white px-3 py-1 flex items-center justify-between gap-2 text-xs font-sans border-b border-black"
+        >
+          <span className="font-bold tracking-tight truncate">
+            Explorador — {siteTitleConfig.siteTitle} (Windows 95)
+          </span>
+          <button
+            type="button"
+            onClick={openThemeSelector}
+            className="px-2 py-0.5 bg-[#c0c0c0] text-black border border-t-white border-l-white border-r-[#000000] border-b-[#000000] shadow-[inset_1px_1px_0_#dfdfdf,inset_-1px_-1px_0_#808080] hover:bg-[#d4d0c8] text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
             title="Abrir seletor de Aparência & Temas"
           >
             Trocar Tema

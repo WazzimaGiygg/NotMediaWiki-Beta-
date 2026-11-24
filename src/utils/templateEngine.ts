@@ -1,4 +1,4 @@
-import { Article } from '../types';
+import { Article, TemplateDiagnostic, TemplateDiagnosticType } from '../types';
 import { BUILTIN_MEDIAWIKI_TEMPLATES } from '../data/defaultTemplates';
 import { parseTitle } from './namespaces';
 
@@ -8,6 +8,7 @@ export interface TemplateExpansionOptions {
   customTemplates?: Article[];
   isTemplatePage?: boolean;
   maxDepth?: number;
+  highlightDiagnostics?: boolean;
 }
 
 export interface TemplateExpansionResult {
@@ -15,6 +16,7 @@ export interface TemplateExpansionResult {
   usedTemplates: string[];
   missingTemplates: string[];
   errors: string[];
+  diagnostics: TemplateDiagnostic[];
 }
 
 export interface ParsedTemplateCall {
@@ -45,6 +47,67 @@ function escapeHtmlAttr(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/**
+ * Escapes HTML special characters AND Parsoid wiki-markup delimiters inside diagnostic spans/titles
+ * so Parsoid never parses brackets, quotes, backticks, or emphasis inside debug highlights.
+ */
+function escapeDiagnosticText(value: string): string {
+  return (value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&#39;')
+    .replace(/\[/g, '&#91;')
+    .replace(/\]/g, '&#93;')
+    .replace(/`/g, '&#96;')
+    .replace(/\*/g, '&#42;')
+    .replace(/=/g, '&#61;');
+}
+
+function isInsideTagOrWikilink(textBefore: string): boolean {
+  const lastOpenTag = textBefore.lastIndexOf('<');
+  const lastCloseTag = textBefore.lastIndexOf('>');
+  if (lastOpenTag > lastCloseTag) return true;
+
+  const lastOpenLink = textBefore.lastIndexOf('[[');
+  const lastCloseLink = textBefore.lastIndexOf(']]');
+  if (lastOpenLink > lastCloseLink) return true;
+
+  return false;
+}
+
+function buildInvalidBraceHtml(
+  snippet: string,
+  issueType: Extract<TemplateDiagnosticType, 'unclosed_braces' | 'unmatched_closing' | 'invalid_name'>,
+  message: string,
+  diagId?: string
+): string {
+  const safeSnippet = escapeDiagnosticText(snippet);
+  const safeMsg = escapeDiagnosticText(message);
+  const idAttr = diagId ? ` id="${escapeHtmlAttr(diagId)}" data-template-diagnostic-id="${escapeHtmlAttr(diagId)}"` : '';
+  return `<span${idAttr} class="wiki-template-debug wiki-template-invalid-braces inline-flex items-baseline gap-1 px-1 py-0.5 rounded border border-rose-300 dark:border-rose-700/80 bg-rose-50/90 dark:bg-rose-950/45 text-rose-800 dark:text-rose-200 underline decoration-wavy decoration-rose-500 font-mono text-[0.88em]" data-template-issue="${issueType}" title="${safeMsg}"><span aria-hidden="true" class="select-none text-[0.85em] font-bold">✕</span>${safeSnippet}</span>`;
+}
+
+function buildMissingParamHtml(
+  label: string,
+  missingParams: string[],
+  issueType: Extract<TemplateDiagnosticType, 'unresolved_param' | 'missing_required_param'>,
+  message: string,
+  diagId?: string,
+  inlineMode = true
+): string {
+  const safeLabel = escapeDiagnosticText(label);
+  const safeMsg = escapeDiagnosticText(message);
+  const safeParams = escapeHtmlAttr(missingParams.join(', '));
+  const idAttr = diagId ? ` id="${escapeHtmlAttr(diagId)}" data-template-diagnostic-id="${escapeHtmlAttr(diagId)}"` : '';
+  const layoutClass = inlineMode
+    ? 'inline-flex items-baseline gap-1 px-1.5 py-0.5'
+    : 'mt-2 inline-flex flex-wrap items-center gap-1.5 px-2 py-0.5';
+  return `<span${idAttr} class="wiki-template-debug wiki-template-missing-param ${layoutClass} rounded border border-amber-300 dark:border-amber-700/80 bg-amber-50/90 dark:bg-amber-950/45 text-amber-900 dark:text-amber-200 underline decoration-wavy decoration-amber-500 font-mono text-[11px] not-italic" data-template-issue="${issueType}" data-missing-param="${safeParams}" title="${safeMsg}"><span aria-hidden="true" class="select-none font-bold">⚠</span>${safeLabel}</span>`;
 }
 
 function sanitizeImageSrc(src: string): string {
@@ -222,12 +285,18 @@ export function parseTemplateCallBody(rawBody: string): ParsedTemplateCall {
   return { name, positional, named, params, rawBody };
 }
 
+export interface SubstituteParamsOptions {
+  highlightUnresolved?: boolean;
+  onUnresolvedParam?: (paramName: string, rawSnippet: string) => string | void;
+}
+
 /**
  * Replaces {{{param|default}}} placeholders cleanly, supporting nested {{{...}}} and {{...}}.
  */
 export function substituteTemplateParameters(
   templateWikitext: string,
-  params: Record<string, string>
+  params: Record<string, string>,
+  options?: SubstituteParamsOptions
 ): string {
   let output = '';
   let i = 0;
@@ -280,11 +349,24 @@ export function substituteTemplateParameters(
         if (directMatch !== undefined && directMatch !== '') {
           output += directMatch;
         } else if (hasDefault) {
-          output += substituteTemplateParameters(defaultRaw, params);
+          output += substituteTemplateParameters(defaultRaw, params, options);
         } else if (directMatch !== undefined) {
           output += '';
         } else {
-          output += `{{{${rawKey}}}}`;
+          const rawPlaceholder = `{{{${rawKey}}}}`;
+          const diagId = options?.onUnresolvedParam?.(rawKey, rawPlaceholder);
+          if (options?.highlightUnresolved && !isInsideTagOrWikilink(output)) {
+            output += buildMissingParamHtml(
+              rawPlaceholder,
+              [rawKey],
+              'unresolved_param',
+              `Parâmetro ausente sem valor padrão: ${rawPlaceholder}`,
+              typeof diagId === 'string' ? diagId : undefined,
+              true
+            );
+          } else {
+            output += rawPlaceholder;
+          }
         }
         i = j;
         continue;
@@ -377,7 +459,9 @@ function getParam(call: ParsedTemplateCall, keys: string[], fallback = ''): stri
 function renderBuiltinTemplate(
   call: ParsedTemplateCall,
   normalizedKey: string,
-  pageTitle: string
+  pageTitle: string,
+  registerMissingRequired?: (templateLabel: string, missingParams: string[]) => string | undefined,
+  highlightDiagnostics = true
 ): string | null {
   // Never intercept {{Infobox <subtype>}} (e.g. {{Infobox software}} / {{Infobox user}}); ClientParsoidService handles those natively.
   if (/^infobox\s+/i.test(call.name.trim())) {
@@ -387,8 +471,12 @@ function renderBuiltinTemplate(
   // 1. {{Aviso}} / {{Ambox}} / {{Alerta}}
   if (['aviso', 'ambox', 'caixa de aviso', 'alerta'].includes(normalizedKey)) {
     const tipoRaw = getParam(call, ['tipo', 'type', '1'], 'info').toLowerCase();
-    const titulo = getParam(call, ['título', 'titulo', 'title', 'cabeçalho'], 'Aviso Editorial');
-    const texto = getParam(call, ['texto', 'text', 'mensagem', '2'], 'Este artigo possui uma sinalização editorial da comunidade.');
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', 'cabeçalho'], '');
+    const rawTexto = getParam(call, ['texto', 'text', 'mensagem', '2'], '');
+    const missingParams = [!rawTitulo ? 'título' : '', !rawTexto ? 'texto' : ''].filter(Boolean);
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Aviso', missingParams) : undefined;
+    const titulo = rawTitulo || 'Aviso Editorial';
+    const texto = rawTexto || 'Este artigo possui uma sinalização editorial da comunidade.';
 
     let toneClass = 'bg-sky-50/85 dark:bg-sky-950/35 border-sky-200 dark:border-sky-800/80 text-sky-950 dark:text-sky-100';
     let badgeClass = 'text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800 bg-white/80 dark:bg-sky-900/40';
@@ -417,8 +505,20 @@ function renderBuiltinTemplate(
       iconChar = '⚙';
     }
 
+    const missingHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml(
+            `Parâmetro(s) obrigatório(s) ausente(s) em {{Aviso}}: ${missingParams.join(', ')}`,
+            missingParams,
+            'missing_required_param',
+            `Preencha ${missingParams.map(p => `${p}=...`).join(' e ')} em {{Aviso}}`,
+            diagId,
+            false
+          )
+        : '';
+
     return compactHtmlBlock(
-      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border p-4 ${toneClass}" role="note" data-template="Aviso">
+      `<div class="wiki-template wiki-template-ambox ${missingParams.length > 0 ? 'wiki-template-has-missing-params ring-1 ring-amber-400/70 dark:ring-amber-600/70' : ''} not-prose my-4 rounded-lg border p-4 ${toneClass}" role="note" data-template="Aviso">
         <div class="flex items-start gap-3">
           <span class="shrink-0 w-7 h-7 rounded-md border flex items-center justify-center text-sm font-bold ${badgeClass}" aria-hidden="true">${iconChar}</span>
           <div class="min-w-0 flex-1 font-sans">
@@ -427,6 +527,7 @@ function renderBuiltinTemplate(
               <span class="text-xs font-bold">${titulo}</span>
             </div>
             <div class="text-xs leading-relaxed opacity-90">${texto}</div>
+            ${missingHtml}
           </div>
         </div>
       </div>`
@@ -575,7 +676,20 @@ function renderBuiltinTemplate(
       .map(t => t.trim())
       .filter(Boolean);
 
-    if (targets.length === 0) return '';
+    if (targets.length === 0) {
+      const diagId = registerMissingRequired?.('Artigo principal', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-hatnote not-prose my-2" data-template="Artigo principal">${buildMissingParamHtml(
+          '{{Artigo principal}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe o título do artigo principal, ex: {{Artigo principal|MediaWiki}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
     const linksHtml = targets
       .map(t => `<a href="#/wiki/${encodeURIComponent(t.replace(/\s+/g, '_'))}" class="wiki-link font-semibold text-blue-700 dark:text-blue-400 hover:underline">${t}</a>`)
       .join(', ');
@@ -590,7 +704,20 @@ function renderBuiltinTemplate(
   // 8. {{Veja também}} / {{Ver também}}
   if (['veja também', 'veja tambem', 'ver também', 'ver tambem', 'see also'].includes(normalizedKey)) {
     const targets = call.positional.map(t => t.trim()).filter(Boolean);
-    if (targets.length === 0) return '';
+    if (targets.length === 0) {
+      const diagId = registerMissingRequired?.('Veja também', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-hatnote not-prose my-2" data-template="Veja também">${buildMissingParamHtml(
+          '{{Veja também}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe ao menos um artigo recomendado, ex: {{Veja também|Parsoid}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
     const linksHtml = targets
       .map(t => `<a href="#/wiki/${encodeURIComponent(t.replace(/\s+/g, '_'))}" class="wiki-link font-semibold text-blue-700 dark:text-blue-400 hover:underline">${t}</a>`)
       .join(', ');
@@ -616,7 +743,21 @@ function renderBuiltinTemplate(
 
   // 8c. {{Predefinição|Nome|p1|p2}} / {{Tl|Nome}}
   if (['predefinição', 'predefinicao', 'predef', 'tl', 'template link'].includes(normalizedKey)) {
-    const targetName = getParam(call, ['1', 'nome'], 'Aviso').replace(/^(?:Predefinição|Predef|Template):/i, '').trim();
+    const rawTargetName = getParam(call, ['1', 'nome'], '').replace(/^(?:Predefinição|Predef|Template):/i, '').trim();
+    if (!rawTargetName) {
+      const diagId = registerMissingRequired?.('Predefinição', ['1']);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml(
+          '{{Predefinição}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe o nome da pré-definição, ex: {{Predefinição|Aviso}}',
+          diagId,
+          true
+        );
+      }
+    }
+    const targetName = rawTargetName || 'Aviso';
     const targetSlug = `Predefinição:${targetName.replace(/\s+/g, '_')}`;
     const extraParams = call.positional.slice(1).map(p => p.trim()).filter(Boolean);
     const paramsSuffix = extraParams.length > 0 ? `|${extraParams.join('|')}` : '';
@@ -642,7 +783,20 @@ function renderBuiltinTemplate(
     const texto = getParam(call, ['texto', '1', 'quote'], '');
     const autor = getParam(call, ['autor', '2', 'author'], '');
     const fonte = getParam(call, ['fonte', '3', 'source'], '');
-    if (!texto) return '';
+    if (!texto) {
+      const diagId = registerMissingRequired?.('Citação', ['texto']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-quote my-4" data-template="Citação">${buildMissingParamHtml(
+          '{{Citação}}: parâmetro obrigatório ausente (texto)',
+          ['texto'],
+          'missing_required_param',
+          'Informe texto=... em {{Citação}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
     const attribution = [autor ? `<strong>${autor}</strong>` : '', fonte ? `<em>${fonte}</em>` : '']
       .filter(Boolean)
       .join(', ');
@@ -660,7 +814,20 @@ function renderBuiltinTemplate(
     const tipo = getParam(call, ['tipo', 'type'], 'info').toLowerCase();
     const titulo = getParam(call, ['título', 'titulo', 'title'], 'Nota');
     const texto = getParam(call, ['texto', 'text', '1'], '');
-    if (!texto) return '';
+    if (!texto) {
+      const diagId = registerMissingRequired?.('Nota', ['texto']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-note not-prose my-4" data-template="Nota">${buildMissingParamHtml(
+          '{{Nota}}: parâmetro obrigatório ausente (texto)',
+          ['texto'],
+          'missing_required_param',
+          'Informe texto=... em {{Nota}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
 
     let colorClass = 'border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 text-slate-800 dark:text-slate-200';
     if (tipo === 'dica' || tipo === 'tip') {
@@ -693,7 +860,10 @@ function renderBuiltinTemplate(
 
   // 14. {{Infocaixa}} / {{Ficha técnica}} / bare {{Infobox|...}}
   if (['infocaixa', 'infobox genérica', 'infobox generica', 'ficha técnica', 'ficha tecnica', 'infobox'].includes(normalizedKey)) {
-    const titulo = getParam(call, ['título', 'titulo', 'title', 'nome', 'name'], pageTitle);
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', 'nome', 'name'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa', missingParams) : undefined;
+    const titulo = rawTitulo || pageTitle;
     const subtitulo = getParam(call, ['subtítulo', 'subtitulo', 'subtitle'], '');
     const rawImg = getParam(call, ['imagem', 'image', 'logo'], '');
     const safeImg = sanitizeImageSrc(rawImg);
@@ -745,11 +915,24 @@ function renderBuiltinTemplate(
       )
       .join('');
 
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml(
+            `Parâmetro ausente em {{Infocaixa}}: ${missingParams.join(', ')}`,
+            missingParams,
+            'missing_required_param',
+            'Informe título=... na {{Infocaixa}}',
+            diagId,
+            false
+          )
+        : '';
+
     return compactHtmlBlock(
-      `<aside class="wiki-template infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa">
+      `<aside class="wiki-template infobox ${missingParams.length > 0 ? 'wiki-template-has-missing-params ring-1 ring-amber-400/70 dark:ring-amber-600/70' : ''} float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa">
         <div class="text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800">
           <div class="font-bold text-base text-slate-900 dark:text-slate-100">${titulo}</div>
           ${subtitulo ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${subtitulo}</div>` : ''}
+          ${missingWarnHtml}
         </div>
         ${imgBlock}
         ${rowsHtml ? `<table class="w-full text-xs border-collapse">${rowsHtml}</table>` : ''}
@@ -759,7 +942,10 @@ function renderBuiltinTemplate(
 
   // 14b. {{Infocaixa pessoa}} / {{Infobox pessoa}} / {{Infobox biografia}}
   if (['infocaixa pessoa', 'infobox pessoa', 'infobox biografia'].includes(normalizedKey)) {
-    const nome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], pageTitle);
+    const rawNome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], '');
+    const missingParams = !rawNome ? ['nome'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa pessoa', missingParams) : undefined;
+    const nome = rawNome || pageTitle;
     const subtitulo = getParam(call, ['subtítulo', 'subtitulo', 'subtitle'], '');
     const rawImg = getParam(call, ['imagem', 'image', 'foto'], '');
     const safeImg = sanitizeImageSrc(rawImg);
@@ -786,11 +972,24 @@ function renderBuiltinTemplate(
       )
       .join('');
 
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml(
+            `Parâmetro ausente em {{Infocaixa pessoa}}: ${missingParams.join(', ')}`,
+            missingParams,
+            'missing_required_param',
+            'Informe nome=... em {{Infocaixa pessoa}}',
+            diagId,
+            false
+          )
+        : '';
+
     return compactHtmlBlock(
-      `<aside class="wiki-template infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa pessoa">
+      `<aside class="wiki-template infobox ${missingParams.length > 0 ? 'wiki-template-has-missing-params ring-1 ring-amber-400/70 dark:ring-amber-600/70' : ''} float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa pessoa">
         <div class="text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800">
           <div class="font-bold text-base text-slate-900 dark:text-slate-100">${nome}</div>
           ${subtitulo ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${subtitulo}</div>` : ''}
+          ${missingWarnHtml}
         </div>
         ${imgHtml}
         ${rowsHtml ? `<table class="w-full text-xs border-collapse">${rowsHtml}</table>` : ''}
@@ -800,7 +999,10 @@ function renderBuiltinTemplate(
 
   // 14c. {{Infocaixa organização}} / {{Infobox empresa}}
   if (['infocaixa organização', 'infocaixa organizacao', 'infobox organização', 'infobox organizacao', 'infobox empresa'].includes(normalizedKey)) {
-    const nome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], pageTitle);
+    const rawNome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], '');
+    const missingParams = !rawNome ? ['nome'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa organização', missingParams) : undefined;
+    const nome = rawNome || pageTitle;
     const subtitulo = getParam(call, ['subtítulo', 'subtitulo', 'tipo', 'type'], '');
     const rawImg = getParam(call, ['imagem', 'image', 'logo'], '');
     const safeImg = sanitizeImageSrc(rawImg);
@@ -827,11 +1029,24 @@ function renderBuiltinTemplate(
       )
       .join('');
 
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml(
+            `Parâmetro ausente em {{Infocaixa organização}}: ${missingParams.join(', ')}`,
+            missingParams,
+            'missing_required_param',
+            'Informe nome=... em {{Infocaixa organização}}',
+            diagId,
+            false
+          )
+        : '';
+
     return compactHtmlBlock(
-      `<aside class="wiki-template infobox float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa organização">
+      `<aside class="wiki-template infobox ${missingParams.length > 0 ? 'wiki-template-has-missing-params ring-1 ring-amber-400/70 dark:ring-amber-600/70' : ''} float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="Infocaixa organização">
         <div class="text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800">
           <div class="font-bold text-base text-slate-900 dark:text-slate-100">${nome}</div>
           ${subtitulo ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${subtitulo}</div>` : ''}
+          ${missingWarnHtml}
         </div>
         ${imgHtml}
         ${rowsHtml ? `<table class="w-full text-xs border-collapse">${rowsHtml}</table>` : ''}
@@ -841,7 +1056,10 @@ function renderBuiltinTemplate(
 
   // 15. {{Navbox}} / {{Caixa de navegação}}
   if (['navbox', 'navegação', 'navegacao', 'caixa de navegação', 'caixa de navegacao'].includes(normalizedKey)) {
-    const titulo = getParam(call, ['título', 'titulo', 'title'], 'Navegação');
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Navbox', missingParams) : undefined;
+    const titulo = rawTitulo || 'Navegação';
     const groups: Array<{ label: string; list: string }> = [];
 
     for (let idx = 1; idx <= 8; idx++) {
@@ -862,12 +1080,25 @@ function renderBuiltinTemplate(
       )
       .join('');
 
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? `<div class="px-3 py-2 border-t border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30">${buildMissingParamHtml(
+            `Parâmetro ausente em {{Navbox}}: ${missingParams.join(', ')}`,
+            missingParams,
+            'missing_required_param',
+            'Informe título=... na {{Navbox}}',
+            diagId,
+            true
+          )}</div>`
+        : '';
+
     return compactHtmlBlock(
-      `<div class="wiki-template wiki-template-navbox my-6 rounded-lg border border-slate-300 dark:border-slate-700 overflow-hidden font-sans text-xs shadow-2xs" role="navigation" aria-label="${escapeHtmlAttr(titulo)}" data-template="Navbox">
+      `<div class="wiki-template wiki-template-navbox ${missingParams.length > 0 ? 'wiki-template-has-missing-params ring-1 ring-amber-400/70 dark:ring-amber-600/70' : ''} my-6 rounded-lg border border-slate-300 dark:border-slate-700 overflow-hidden font-sans text-xs shadow-2xs" role="navigation" aria-label="${escapeHtmlAttr(titulo)}" data-template="Navbox">
         <div class="bg-slate-200/80 dark:bg-slate-800 px-4 py-2 font-bold text-center text-slate-900 dark:text-slate-100 tracking-wide">
           ${titulo}
         </div>
         ${rowsHtml ? `<table class="w-full border-collapse">${rowsHtml}</table>` : ''}
+        ${missingWarnHtml}
       </div>`
     );
   }
@@ -884,6 +1115,19 @@ function renderBuiltinTemplate(
   if (['tecla', 'kbd', 'teclado'].includes(normalizedKey)) {
     const keys = call.positional.map(k => k.trim()).filter(Boolean);
     const singleNamed = getParam(call, ['tecla', 'key'], '');
+    if (keys.length === 0 && !singleNamed) {
+      const diagId = registerMissingRequired?.('Tecla', ['1']);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml(
+          '{{Tecla}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe ao menos uma tecla, ex: {{Tecla|Ctrl|K}}',
+          diagId,
+          true
+        );
+      }
+    }
     const effectiveKeys = keys.length > 0 ? keys : singleNamed ? [singleNamed] : ['Enter'];
     const renderedKeys = effectiveKeys
       .map(
@@ -896,16 +1140,30 @@ function renderBuiltinTemplate(
 
   // 18. {{Citar web}} / {{Cite web}} (inline formatted bibliographic citation)
   if (['citar web', 'cite web', 'referência web', 'referencia web'].includes(normalizedKey)) {
-    const titulo = getParam(call, ['título', 'titulo', 'title', '1'], 'Documento Web');
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', '1'], '');
     const url = getParam(call, ['url', 'link', '2'], '');
     const autor = getParam(call, ['autor', 'author'], '');
     const publicado = getParam(call, ['publicado', 'publisher', 'obra', 'work'], '');
     const data = getParam(call, ['data', 'ano', 'date', 'year'], '');
+    const missingParams = [!rawTitulo ? 'título' : '', !url ? 'url' : ''].filter(Boolean);
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Citar web', missingParams) : undefined;
+    const titulo = rawTitulo || 'Documento Web';
     const safeHref = /^https?:\/\//i.test(url) ? escapeHtmlAttr(url) : '';
     const titlePart = safeHref
       ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-blue-700 dark:text-blue-400 hover:underline font-medium">«${titulo}»</a>`
       : `<span>«${titulo}»</span>`;
-    const meta = [autor ? `${autor}.` : '', titlePart, publicado ? `<em>${publicado}</em>` : '', data ? `(${data})` : '']
+    const missingBadge =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml(
+            `parâmetro ausente: ${missingParams.join(', ')}`,
+            missingParams,
+            'missing_required_param',
+            `Preencha ${missingParams.map(p => `${p}=...`).join(' e ')} em {{Citar web}}`,
+            diagId,
+            true
+          )
+        : '';
+    const meta = [autor ? `${autor}.` : '', titlePart, publicado ? `<em>${publicado}</em>` : '', data ? `(${data})` : '', missingBadge]
       .filter(Boolean)
       .join(' ');
     return `<cite class="wiki-template-citation not-italic text-xs font-sans text-slate-700 dark:text-slate-300" data-template="Citar web">${meta}</cite>`;
@@ -916,7 +1174,20 @@ function renderBuiltinTemplate(
     const colCountRaw = Number(getParam(call, ['colunas', 'cols', '2'], '2'));
     const colClass = colCountRaw === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
     const rawContent = getParam(call, ['1', 'conteúdo', 'conteudo', 'content'], '');
-    if (!rawContent) return '';
+    if (!rawContent) {
+      const diagId = registerMissingRequired?.('Colunas', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-columns my-4" data-template="Colunas">${buildMissingParamHtml(
+          '{{Colunas}}: parâmetro obrigatório ausente (1 / conteúdo)',
+          ['1'],
+          'missing_required_param',
+          'Informe itens separados por · ou quebra de linha em {{Colunas}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
     const items = rawContent
       .split(/\s*·\s*|\n+/)
       .map(s => s.replace(/^\*\s*/, '').trim())
@@ -950,15 +1221,27 @@ export function expandWikitextTemplates(
   rawWikitext: string,
   options: TemplateExpansionOptions = {},
   _depth = 0,
-  _stack: Set<string> = new Set()
+  _stack: Set<string> = new Set(),
+  _diagCounter: { count: number } = { count: 0 }
 ): TemplateExpansionResult {
   const pageTitle = options.pageTitle || 'Artigo';
   const siteName = options.siteName || 'NotMediaWiki';
   const maxDepth = options.maxDepth ?? MAX_RECURSION_DEPTH;
+  const highlightDiagnostics = options.highlightDiagnostics !== false;
 
   const usedTemplates = new Set<string>();
   const missingTemplates = new Set<string>();
   const errors: string[] = [];
+  const diagnostics: TemplateDiagnostic[] = [];
+
+  const pushDiagnostic = (
+    item: Omit<TemplateDiagnostic, 'id'>
+  ): string => {
+    _diagCounter.count += 1;
+    const id = `tpl-diag-${_diagCounter.count}`;
+    diagnostics.push({ id, ...item });
+    return id;
+  };
 
   // Map custom Namespace 10 articles by normalized base title
   const customMap = new Map<string, Article>();
@@ -995,17 +1278,126 @@ export function expandWikitextTemplates(
   let i = 0;
 
   while (i < source.length) {
-    // Skip wikitable syntax `{|`
+    // Preserve wikitable syntax `{| ... |}` without triggering template or brace diagnostics
     if (source.startsWith('{|', i)) {
       result += '{|';
       i += 2;
       continue;
     }
 
-    // Ignore parameter triple braces `{{{...}}}` when scanning page top-level
+    if (source.startsWith('|}', i)) {
+      result += '|}';
+      i += 2;
+      continue;
+    }
+
+    // Handle top-level triple-brace parameters `{{{...}}}`
     if (source.startsWith('{{{', i)) {
-      result += '{{{';
-      i += 3;
+      const stack: number[] = [3];
+      let j = i + 3;
+
+      while (j < source.length && stack.length > 0) {
+        // Parameter placeholders {{{...}}} cannot cross blank paragraph breaks
+        if (source.startsWith('\n\n', j) || source.startsWith('\r\n\r\n', j)) {
+          break;
+        }
+        if (source[j] === '{') {
+          let openCount = 0;
+          while (source[j + openCount] === '{') openCount++;
+          let rem = openCount;
+          while (rem >= 2) {
+            if (rem === 3 || (rem >= 5 && rem % 2 === 1)) {
+              stack.push(3);
+              rem -= 3;
+            } else {
+              stack.push(2);
+              rem -= 2;
+            }
+          }
+          j += openCount;
+          continue;
+        }
+        if (source[j] === '}') {
+          let closeCount = 0;
+          while (source[j + closeCount] === '}') closeCount++;
+          let consumed = 0;
+          while (stack.length > 0 && closeCount - consumed >= stack[stack.length - 1]) {
+            const top = stack.pop()!;
+            consumed += top;
+          }
+          j += consumed > 0 ? consumed : closeCount;
+          continue;
+        }
+        j++;
+      }
+
+      if (stack.length === 0) {
+        const rawWhole = source.slice(i, j);
+        const inner = source.slice(i + 3, j - 3);
+        const parts = splitTopLevelPipes(inner);
+        const rawKey = (parts[0] || '').trim() || 'parametro';
+
+        if (!options.isTemplatePage && highlightDiagnostics) {
+          const msg = `Chave de parâmetro "{{{${rawKey}}}}" sem valor definido neste contexto.`;
+          const diagId = pushDiagnostic({
+            type: 'unresolved_param',
+            severity: 'warning',
+            templateName: pageTitle,
+            snippet: rawWhole,
+            missingParams: [rawKey],
+            message: msg,
+          });
+          if (!isInsideTagOrWikilink(result)) {
+            result += buildMissingParamHtml(rawWhole, [rawKey], 'unresolved_param', msg, diagId, true);
+          } else {
+            result += rawWhole;
+          }
+        } else {
+          result += rawWhole;
+        }
+        i = j;
+        continue;
+      }
+
+      // Unclosed triple braces `{{{...`
+      const lineEnd = source.indexOf('\n', i);
+      const snippetEnd = lineEnd === -1 ? Math.min(source.length, i + 100) : Math.min(lineEnd, i + 100);
+      const unclosedSnippet = source.slice(i, snippetEnd);
+      const msg = `Chave de parâmetro "${unclosedSnippet}" não foi fechada com "}}}".`;
+      errors.push(msg);
+      const diagId = pushDiagnostic({
+        type: 'unclosed_braces',
+        severity: 'error',
+        templateName: pageTitle,
+        snippet: unclosedSnippet,
+        message: msg,
+      });
+      result +=
+        highlightDiagnostics && !isInsideTagOrWikilink(result)
+          ? buildInvalidBraceHtml(unclosedSnippet, 'unclosed_braces', msg, diagId)
+          : unclosedSnippet;
+      i = snippetEnd;
+      continue;
+    }
+
+    // Handle unmatched closing `}}}` or `}}` at top level (outside valid templates & wikitables)
+    if (source.startsWith('}}', i)) {
+      const len = source.startsWith('}}}', i) ? 3 : 2;
+      const stray = source.slice(i, i + len);
+      const msg = `Chaves de fechamento "${stray}" sem abertura "{{${len === 3 ? '{' : ''}" correspondente.`;
+      errors.push(msg);
+      const diagId = pushDiagnostic({
+        type: 'unmatched_closing',
+        severity: 'error',
+        templateName: pageTitle,
+        snippet: stray,
+        message: msg,
+      });
+      result +=
+        highlightDiagnostics && !isInsideTagOrWikilink(result)
+          ? buildInvalidBraceHtml(stray, 'unmatched_closing', msg, diagId)
+          : stray;
+      i += len;
       continue;
     }
 
@@ -1016,6 +1408,10 @@ export function expandWikitextTemplates(
 
       while (j < source.length && stack.length > 0) {
         if (source.startsWith('{|', j)) {
+          j += 2;
+          continue;
+        }
+        if (source.startsWith('|}', j)) {
           j += 2;
           continue;
         }
@@ -1050,9 +1446,31 @@ export function expandWikitextTemplates(
       }
 
       if (stack.length === 0) {
+        const rawWhole = source.slice(i, j);
         const rawInner = source.slice(i + 2, j - 2);
         const call = parseTemplateCallBody(rawInner);
         const rawCallName = call.name;
+
+        // 0. Invalid / empty template name or forbidden title delimiters
+        if (!rawCallName || /[#<>[\]{}\n]/.test(rawCallName)) {
+          const msg = !rawCallName
+            ? `Chave de pré-definição vazia ou sem nome: "${rawWhole}".`
+            : `Nome de pré-definição inválido ("${rawCallName}") contém caracteres proibidos (#, <, >, [, ], {, }).`;
+          errors.push(msg);
+          const diagId = pushDiagnostic({
+            type: 'invalid_name',
+            severity: 'error',
+            templateName: rawCallName || '(vazio)',
+            snippet: rawWhole,
+            message: msg,
+          });
+          result +=
+            highlightDiagnostics && !isInsideTagOrWikilink(result)
+              ? buildInvalidBraceHtml(rawWhole, 'invalid_name', msg, diagId)
+              : rawWhole;
+          i = j;
+          continue;
+        }
 
         // 1. Magic words
         const magicVal = resolveMagicWord(rawCallName, pageTitle, siteName);
@@ -1064,7 +1482,7 @@ export function expandWikitextTemplates(
 
         // 2. Preserve {{Infobox <subtype>}} for ClientParsoidService native Infobox handler
         if (/^infobox\s+/i.test(rawCallName)) {
-          result += source.slice(i, j);
+          result += rawWhole;
           i = j;
           continue;
         }
@@ -1073,10 +1491,17 @@ export function expandWikitextTemplates(
         const expandValue = (val: string): string => {
           if (!val || !val.includes('{{')) return val;
           if (_depth + 1 > maxDepth) return val;
-          const nested = expandWikitextTemplates(val, { ...options, isTemplatePage: false }, _depth + 1, _stack);
+          const nested = expandWikitextTemplates(
+            val,
+            { ...options, isTemplatePage: false },
+            _depth + 1,
+            _stack,
+            _diagCounter
+          );
           nested.usedTemplates.forEach(t => usedTemplates.add(t));
           nested.missingTemplates.forEach(t => missingTemplates.add(t));
           errors.push(...nested.errors);
+          diagnostics.push(...nested.diagnostics);
           return nested.wikitext;
         };
 
@@ -1096,7 +1521,14 @@ export function expandWikitextTemplates(
           if (_depth >= maxDepth || _stack.has(normKey)) {
             const cycleMsg = `Ciclo ou profundidade máxima de predefinição detectada: Predefinição:${rawCallName}`;
             errors.push(cycleMsg);
-            result += `<span class="wiki-template-error inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">${escapeHtmlAttr(cycleMsg)}</span>`;
+            const diagId = pushDiagnostic({
+              type: 'recursion_cycle',
+              severity: 'error',
+              templateName: rawCallName,
+              snippet: rawWhole,
+              message: cycleMsg,
+            });
+            result += `<span id="${escapeHtmlAttr(diagId)}" data-template-diagnostic-id="${escapeHtmlAttr(diagId)}" data-template-issue="recursion_cycle" class="wiki-template-error wiki-template-debug inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 underline decoration-wavy decoration-rose-500">${escapeHtmlAttr(cycleMsg)}</span>`;
             i = j;
             continue;
           }
@@ -1105,24 +1537,53 @@ export function expandWikitextTemplates(
           nextStack.add(normKey);
 
           const rawBody = applyIncludeDirectives(customTemplate.wikitext || '', true).trim();
-          const substituted = substituteTemplateParameters(rawBody, expandedCall.params);
+          const substituted = substituteTemplateParameters(rawBody, expandedCall.params, {
+            highlightUnresolved: highlightDiagnostics && !options.isTemplatePage,
+            onUnresolvedParam: (paramName, rawPlaceholder) => {
+              const msg = `Parâmetro "{{{${paramName}}}}" ausente na chamada de {{${rawCallName}}}.`;
+              return pushDiagnostic({
+                type: 'unresolved_param',
+                severity: 'warning',
+                templateName: rawCallName,
+                snippet: rawPlaceholder,
+                missingParams: [paramName],
+                message: msg,
+              });
+            },
+          });
           const expandedNested = expandWikitextTemplates(
             substituted,
             { ...options, isTemplatePage: false },
             _depth + 1,
-            nextStack
+            nextStack,
+            _diagCounter
           );
           expandedNested.usedTemplates.forEach(t => usedTemplates.add(t));
           expandedNested.missingTemplates.forEach(t => missingTemplates.add(t));
           errors.push(...expandedNested.errors);
+          diagnostics.push(...expandedNested.diagnostics);
 
           result += expandedNested.wikitext;
           i = j;
           continue;
         }
 
-        // 4. Built-in MediaWiki standard templates
-        const builtinHtml = renderBuiltinTemplate(expandedCall, normKey, pageTitle);
+        // 4. Built-in MediaWiki standard templates (validate required params too)
+        const builtinHtml = renderBuiltinTemplate(
+          expandedCall,
+          normKey,
+          pageTitle,
+          (templateLabel, missingParams) =>
+            pushDiagnostic({
+              type: 'missing_required_param',
+              severity: 'warning',
+              templateName: templateLabel,
+              snippet: rawWhole,
+              missingParams,
+              message: `Pré-definição {{${templateLabel}}} sem parâmetro(s) obrigatório(s): ${missingParams.join(', ')}.`,
+            }),
+          highlightDiagnostics
+        );
         if (builtinHtml !== null) {
           result += builtinHtml;
           i = j;
@@ -1135,11 +1596,43 @@ export function expandWikitextTemplates(
           ? displayName.replace(/^(?:predefinição|predef|template):/i, 'Predefinição:')
           : `Predefinição:${displayName}`;
         missingTemplates.add(canonicalTarget);
+        const missingMsg = `Pré-definição inexistente: ${canonicalTarget} (clique para criar no Namespace 10).`;
+        const diagId = pushDiagnostic({
+          type: 'missing_template',
+          severity: 'error',
+          templateName: canonicalTarget,
+          snippet: rawWhole,
+          message: missingMsg,
+        });
         const editHref = `#/edit/${encodeURIComponent(canonicalTarget.replace(/\s+/g, '_'))}`;
-        result += `<a href="${editHref}" class="wiki-redlink text-rose-700 dark:text-rose-400 underline decoration-dotted hover:text-rose-900 dark:hover:text-rose-300 font-medium" title="Predefinição inexistente (${escapeHtmlAttr(canonicalTarget)}) — clique para criar">${canonicalTarget}</a>`;
+        result += `<a id="${escapeHtmlAttr(diagId)}" data-template-diagnostic-id="${escapeHtmlAttr(diagId)}" data-template-issue="missing_template" href="${editHref}" class="wiki-redlink wiki-template-debug text-rose-700 dark:text-rose-400 underline decoration-dotted hover:text-rose-900 dark:hover:text-rose-300 font-medium bg-rose-50/75 dark:bg-rose-950/35 px-1 rounded border border-rose-200/80 dark:border-rose-800/70" title="${escapeDiagnosticText(missingMsg)}">${escapeDiagnosticText(canonicalTarget)}</a>`;
         i = j;
         continue;
       }
+
+      // 6. Unclosed opening `{{...` (stack.length > 0)
+      const lineEnd = source.indexOf('\n', i);
+      const snippetEnd = lineEnd === -1 ? Math.min(source.length, i + 120) : Math.min(lineEnd, i + 120);
+      const unclosedSnippet = source.slice(i, snippetEnd);
+      const rawNameGuess = unclosedSnippet
+        .slice(2)
+        .split('|')[0]
+        .trim();
+      const msg = `Chave de pré-definição não fechada ("}}" ausente): ${unclosedSnippet}`;
+      errors.push(msg);
+      const diagId = pushDiagnostic({
+        type: 'unclosed_braces',
+        severity: 'error',
+        templateName: rawNameGuess || '(sem fechamento)',
+        snippet: unclosedSnippet,
+        message: msg,
+      });
+      result +=
+        highlightDiagnostics && !isInsideTagOrWikilink(result)
+          ? buildInvalidBraceHtml(unclosedSnippet, 'unclosed_braces', msg, diagId)
+          : unclosedSnippet;
+      i = snippetEnd;
+      continue;
     }
 
     result += source[i];
@@ -1157,6 +1650,7 @@ export function expandWikitextTemplates(
     usedTemplates: Array.from(usedTemplates),
     missingTemplates: Array.from(missingTemplates),
     errors,
+    diagnostics,
   };
 }
 

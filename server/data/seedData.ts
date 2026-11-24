@@ -119,7 +119,7 @@ export const INITIAL_ARTICLES: Article[] = [
     updatedAt: '2026-03-15T08:22:10Z',
     categories: ['Free software', 'Wiki software', 'Wikimedia Foundation', 'Node.js software', 'Software architecture'],
     views: 45210,
-    isProtected: true,
+    isProtected: false,
     wikitext: `{{Infobox software
 | name = MediaWiki
 | developer = Wikimedia Foundation & Open Source Contributors
@@ -294,7 +294,7 @@ Modern high-scale information platforms such as [[Wikipedia]] rely on distribute
     updatedAt: '2026-03-08T22:15:00Z',
     categories: ['JavaScript', 'Server software', 'Runtimes', 'Node.js software', 'Software architecture'],
     views: 89300,
-    isProtected: true,
+    isProtected: false,
     wikitext: `{{Infobox software
 | name = Node.js
 | developer = OpenJS Foundation

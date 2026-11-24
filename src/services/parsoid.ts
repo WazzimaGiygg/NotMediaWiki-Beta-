@@ -6,6 +6,8 @@ import {
 } from './templateService';
 import { isRuntimeExtensionEnabled } from '../extensions';
 
+import { TemplateDiagnostic } from '../types';
+
 export interface ParsoidParseOptions extends ServiceTemplateExpansionOptions {
   skipTemplateExpansion?: boolean;
   parsoidEnabled?: boolean;
@@ -16,6 +18,7 @@ export interface ParsoidParseOptions extends ServiceTemplateExpansionOptions {
   preExpandedTemplates?: {
     usedTemplates: string[];
     missingTemplates: string[];
+    diagnostics?: TemplateDiagnostic[];
   };
 }
 
@@ -35,6 +38,7 @@ export interface ParseResult {
   references: string[];
   usedTemplates?: string[];
   missingTemplates?: string[];
+  templateDiagnostics?: TemplateDiagnostic[];
   ast: any[];
   parseTimeMs: number;
 }
@@ -68,6 +72,7 @@ export class ClientParsoidService {
         references: [],
         usedTemplates: [],
         missingTemplates: [],
+        templateDiagnostics: [],
         ast: [],
         parseTimeMs,
       };
@@ -158,6 +163,7 @@ export class ClientParsoidService {
           usedTemplates: options?.preExpandedTemplates?.usedTemplates || [],
           missingTemplates: options?.preExpandedTemplates?.missingTemplates || [],
           errors: [],
+          diagnostics: options?.preExpandedTemplates?.diagnostics || [],
         }
       : templateService.expandTemplates(processed, {
           ...options,
@@ -423,6 +429,7 @@ export class ClientParsoidService {
       references,
       usedTemplates: templateExpanded.usedTemplates,
       missingTemplates: templateExpanded.missingTemplates,
+      templateDiagnostics: templateExpanded.diagnostics,
       ast,
       parseTimeMs,
     };

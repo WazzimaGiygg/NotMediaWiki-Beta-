@@ -183,6 +183,23 @@ export const WIKI_THEMES_REGISTRY: WikiThemeDefinition[] = [
       border: '#808080',
     },
   },
+  {
+    id: 'windows-95',
+    name: 'Windows 95 (Explorer Clássico)',
+    shortLabel: 'Windows 95',
+    description:
+      'Interface clássica 32-bit inspirada no Windows 95 Explorer, com área de trabalho verde-petróleo, barra de título em degradê azul e janelas cinza biseladas em relevo 3D.',
+    colorScheme: 'light',
+    addedInVersion: '1.6.0',
+    author: 'Retro Computing UI WazzimaGiygg',
+    preview: {
+      canvas: '#008080',
+      surface: '#c0c0c0',
+      text: '#000000',
+      accent: '#000080',
+      border: '#808080',
+    },
+  },
 ];
 
 export const USER_THEME_STORAGE_KEY = 'notmediawiki_wiki_theme';

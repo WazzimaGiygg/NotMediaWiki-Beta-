@@ -372,20 +372,28 @@ gatewayRouter.post(
 );
 
 gatewayRouter.post('/auth/users/upsert', (req: Request, res: Response) => {
-  const { id, username } = req.body;
+  const { id, username } = req.body || {};
   if (!id || !username || typeof id !== 'string' || typeof username !== 'string') {
     return res.status(400).json({ error: 'id e username são obrigatórios' });
   }
 
-  const email = req.user?.email || req.body?.email;
-  const isCallerAdmin =
-    isSuperAdmin(email) || ['sysop', 'bureaucrat'].includes(req.user?.role || req.body?.role || '');
+  const isCallerAdmin = Boolean(
+    req.user &&
+      (isSuperAdmin(req.user.email) || ['sysop', 'bureaucrat'].includes(req.user.role || ''))
+  );
+
+  if (req.user && !isCallerAdmin && req.user.id !== id) {
+    return res.status(403).json({ error: 'Você só pode sincronizar o seu próprio perfil' });
+  }
 
   try {
-    const user = centralAuthService.upsertUser(req.body, isCallerAdmin);
+    const user = centralAuthService.upsertUser(
+      { ...req.body, id, username },
+      isCallerAdmin
+    );
     res.json({ success: true, user });
   } catch (err: any) {
-    res.status(200).json({ success: true, user: req.body });
+    res.status(400).json({ error: err?.message || 'Falha ao sincronizar usuário' });
   }
 });
 

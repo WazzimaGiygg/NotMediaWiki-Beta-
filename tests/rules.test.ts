@@ -56,4 +56,37 @@ describe('Firestore Security Rules Static Analysis & Invariants', () => {
     expect(rulesContent).toContain('match /fcm_tokens/{tokenId}');
     expect(rulesContent).toContain('resource.data.userId == request.auth.uid');
   });
+
+  it('Allows non-banned editors to collaborate on unprotected articles/pages and create events while blocking readers', () => {
+    expect(rulesContent).toContain('function hasExplicitReaderRole()');
+    expect(rulesContent).toContain('function isModerator()');
+    expect(rulesContent).toContain('function matchesRequestAuthor()');
+    expect(rulesContent).toContain('return isRegistered() && !hasExplicitReaderRole();');
+    expect(rulesContent).not.toContain(".get(['author', 'id'], '')");
+
+    const articlesBlock = rulesContent.substring(
+      rulesContent.indexOf('match /articles/{articleId}'),
+      rulesContent.indexOf('match /revisions/{revisionId}')
+    );
+    expect(articlesBlock).toContain('allow create: if (isEditor() || isAdmin() || isBot())');
+    expect(articlesBlock).toContain('allow update: if (isEditor() || isAdmin() || isBot())');
+    expect(articlesBlock).toContain('!isPageProtected(resource.data)');
+    expect(articlesBlock).toContain('!isPageProtected(request.resource.data)');
+
+    const eventsBlock = rulesContent.substring(
+      rulesContent.indexOf('match /wiki_events/{eventId}'),
+      rulesContent.indexOf('match /bot_agents_config/{botId}')
+    );
+    expect(eventsBlock).toContain('allow create: if isEditor() || isAdmin() || isBot();');
+  });
+
+  it('Splits /user_pages rules cleanly for profile creation and collaborative talkPosts', () => {
+    const userPagesBlock = rulesContent.substring(
+      rulesContent.indexOf('match /user_pages/{pageId}'),
+      rulesContent.indexOf('match /bannedusers/{userId}')
+    );
+    expect(userPagesBlock).toContain('allow create: if isAdmin()');
+    expect(userPagesBlock).toContain('request.resource.data.userId == request.auth.uid');
+    expect(userPagesBlock).toContain("affectedKeys().hasOnly(['talkPosts', 'updatedAt'])");
+  });
 });

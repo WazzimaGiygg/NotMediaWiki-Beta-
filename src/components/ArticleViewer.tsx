@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Article, UserSession } from '../types';
 import { auth } from '../firebase';
 import { clientParsoid } from '../services/parsoid';
@@ -8,6 +8,10 @@ import { parseTitle } from '../utils/namespaces';
 import { ArticleFootnotes } from './ArticleFootnotes';
 import { WikiReader } from './WikiReader';
 import { useExtensions } from '../context/ExtensionsContext';
+import {
+  TemplateDebugInspector,
+  jumpToTemplateDiagnosticElement,
+} from './TemplateDebugInspector';
 
 export interface ArticleViewerProps {
   /** Slug do artigo (modo leitor completo conectado ao WikiReader + Firestore) */
@@ -33,6 +37,8 @@ export interface ArticleViewerProps {
   onSearch?: (query: string) => void;
   isZenMode?: boolean;
   onZenModeChange?: (enabled: boolean) => void;
+  /** Destaca visualmente chaves de pré-definições inválidas ou com parâmetros ausentes (padrão: true) */
+  highlightTemplateDiagnostics?: boolean;
   className?: string;
 }
 
@@ -65,6 +71,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
   onSearch,
   isZenMode,
   onZenModeChange,
+  highlightTemplateDiagnostics = true,
   className = '',
 }) => {
   const { isExtensionEnabled } = useExtensions();
@@ -72,6 +79,11 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
   const isTemplatesEnabled = isExtensionEnabled ? isExtensionEnabled('MediaWikiTemplates', true) : true;
   const isCiteEnabled = isExtensionEnabled ? isExtensionEnabled('Cite', true) : true;
   const isInfoboxEnabled = isExtensionEnabled ? isExtensionEnabled('InfoboxBuilder', true) : true;
+
+  const [highlightDebugEnabled, setHighlightDebugEnabled] = useState<boolean>(
+    highlightTemplateDiagnostics
+  );
+  const articleContainerRef = useRef<HTMLElement>(null);
 
   const [liveTemplates, setLiveTemplates] = useState<Article[]>(() =>
     customTemplates && customTemplates.length > 0
@@ -130,18 +142,21 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
 
     const isTemplatePage = parseTitle(title).namespaceId === 10;
     const expanded = isTemplatesEnabled
-      ? templateService.expandTemplates(wikitext, {
-          customTemplates: customTemplates || liveTemplates,
-          pageTitle: title,
-          siteName,
-          isTemplatePage,
-          dynamicParams,
-        })
-      : {
-          wikitext,
-          usedTemplates: [],
-          missingTemplates: [],
-        };
+        ? templateService.expandTemplates(wikitext, {
+            customTemplates: customTemplates || liveTemplates,
+            pageTitle: title,
+            siteName,
+            isTemplatePage,
+            dynamicParams,
+            highlightDiagnostics: true,
+          })
+        : {
+            wikitext,
+            usedTemplates: [],
+            missingTemplates: [],
+            errors: [],
+            diagnostics: [],
+          };
 
     const parsed = clientParsoid.parse(expanded.wikitext, title, {
       customTemplates: customTemplates || liveTemplates,
@@ -155,6 +170,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
       preExpandedTemplates: {
         usedTemplates: expanded.usedTemplates,
         missingTemplates: expanded.missingTemplates,
+        diagnostics: expanded.diagnostics,
       },
     });
 
@@ -166,6 +182,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
       ...parsed,
       usedTemplates: expanded.usedTemplates,
       missingTemplates: expanded.missingTemplates,
+      templateDiagnostics: expanded.diagnostics,
       html: htmlWithFootnotes,
     };
   }, [
@@ -220,8 +237,23 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
 
   return (
     <div data-testid="article-viewer" className={`article-viewer ${className}`.trim()}>
+      {isParsoidEnabled &&
+        isTemplatesEnabled &&
+        (directParsed?.templateDiagnostics?.length ?? 0) > 0 && (
+          <TemplateDebugInspector
+            diagnostics={directParsed?.templateDiagnostics || []}
+            highlightEnabled={highlightDebugEnabled}
+            onToggleHighlight={() => setHighlightDebugEnabled(prev => !prev)}
+            onJumpToDiagnostic={diagId =>
+              jumpToTemplateDiagnosticElement(articleContainerRef.current, diagId)
+            }
+          />
+        )}
       <article
-        className="wiki-content prose max-w-none text-slate-800 dark:text-slate-200 font-serif text-base leading-relaxed"
+        ref={articleContainerRef}
+        className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 font-serif text-base leading-relaxed ${
+          !highlightDebugEnabled ? 'hide-template-debug-highlights' : ''
+        }`.trim()}
         onClick={handleContentClick}
         dangerouslySetInnerHTML={{ __html: directParsed?.html || '' }}
       />

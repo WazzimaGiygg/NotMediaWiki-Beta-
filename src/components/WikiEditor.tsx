@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle } from 'lucide-react';
 import { Article, ArticleDraft, AutoSaveStatus, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
@@ -13,12 +13,21 @@ import {
   hasMeaningfulDraftChanges,
   formatDraftTimestamp,
 } from '../services/draftService';
+import {
+  templateService,
+  applyTemplateSuggestionFix,
+  applyAllTemplateSuggestionFixes,
+  appendTemplateParameterSnippet,
+  TemplateCorrectionSuggestion,
+  ExpectedTemplateParamInfo,
+} from '../services/templateService';
 import { enhanceCodeBlocks } from '../utils/syntaxHighlighter';
 import { INFOBOX_SOFTWARE_FIELDS, buildInfoboxSoftwareWikitext } from '../utils/infoboxSoftware';
 import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
 import { ArticleFootnotes } from './ArticleFootnotes';
 import { ReferenceManagerModal } from './ReferenceManagerModal';
 import { TemplateManagerModal } from './TemplateManagerModal';
+import { TemplateFixAssistantPanel } from './TemplateFixAssistantPanel';
 import { buildDefaultTemplatePageSkeleton } from '../data/defaultTemplates';
 import { parseTitle } from '../utils/namespaces';
 import { useExtensions } from '../context/ExtensionsContext';
@@ -83,8 +92,10 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   // Bibliographic Reference Manager Modal state
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
 
-  // MediaWiki Template Manager Modal & Custom Namespace 10 Templates state
+  // MediaWiki Template Manager Modal, Auto-Fix Assistant & Custom Namespace 10 Templates state
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isTemplateFixPanelOpen, setIsTemplateFixPanelOpen] = useState(false);
+  const [cursorOffset, setCursorOffset] = useState<number>(0);
   const [customTemplates, setCustomTemplates] = useState<Article[]>([]);
 
   // Firestore Auto-Save state
@@ -328,7 +339,64 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+      setCursorOffset(start + before.length + selected.length);
     }, 0);
+  };
+
+  const isTemplatePage = parseTitle(title).namespaceId === 10;
+
+  const templateFixAnalysis = useMemo(() => {
+    if (!isTemplatesEnabled) {
+      return { suggestions: [], activeCursorTemplate: null };
+    }
+    return templateService.analyzeTemplateSyntaxSuggestions(wikitext, {
+      customTemplates,
+      cursorOffset,
+      isTemplatePage,
+    });
+  }, [isTemplatesEnabled, wikitext, customTemplates, cursorOffset, isTemplatePage]);
+
+  const syncCursorFromTextarea = (el?: HTMLTextAreaElement | null) => {
+    const target = el || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+    if (target && typeof target.selectionStart === 'number') {
+      setCursorOffset(target.selectionStart);
+    }
+  };
+
+  const focusAndSelectTextareaRange = (selStart: number, selEnd: number) => {
+    if (activeTab === 'preview' && isVisualEditorEnabled) {
+      setActiveTab('split');
+    }
+    setTimeout(() => {
+      const textarea = document.getElementById('wikitext-input') as HTMLTextAreaElement | null;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(selStart, selEnd);
+      setCursorOffset(selStart);
+    }, 0);
+  };
+
+  const handleApplyTemplateFix = (suggestion: TemplateCorrectionSuggestion) => {
+    if (suggestion.suggestedSnippet === undefined) return;
+    const updated = applyTemplateSuggestionFix(wikitext, suggestion);
+    setWikitext(updated);
+    const fixedEnd = suggestion.start + suggestion.suggestedSnippet.length;
+    focusAndSelectTextareaRange(suggestion.start, fixedEnd);
+  };
+
+  const handleApplyAllTemplateFixes = () => {
+    const updated = applyAllTemplateSuggestionFixes(wikitext, templateFixAnalysis.suggestions);
+    setWikitext(updated);
+    focusAndSelectTextareaRange(0, 0);
+  };
+
+  const handleInsertExpectedTemplateParam = (
+    range: { start: number; end: number; isUnclosed?: boolean },
+    param: ExpectedTemplateParamInfo
+  ) => {
+    const result = appendTemplateParameterSnippet(wikitext, range, param);
+    setWikitext(result.nextWikitext);
+    focusAndSelectTextareaRange(result.selectionStart, result.selectionEnd);
   };
 
   const handleCheckCitationsInline = async () => {
@@ -364,8 +432,31 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     try {
       let activeUser = currentUser;
       if (!auth.currentUser) {
-        setErrorMessage('Para salvar alterações ou criar artigos, conecte-se com sua conta Google...');
-        activeUser = await loginWithGoogle();
+        try {
+          activeUser = await loginWithGoogle();
+        } catch (loginErr: any) {
+          setErrorMessage(
+            loginErr?.code === 'auth/popup-closed-by-user'
+              ? 'Login com Google cancelado. Autentique-se com sua conta Google para salvar alterações.'
+              : `Falha ao autenticar com Google: ${loginErr?.message || 'Tente novamente.'}`
+          );
+          setSaving(false);
+          return;
+        }
+      } else if (!activeUser) {
+        activeUser = await api.getCurrentUser();
+      }
+
+      if (activeUser?.isBanned) {
+        setErrorMessage('Sua conta está banida e não possui permissão para editar páginas.');
+        setSaving(false);
+        return;
+      }
+
+      if (activeUser?.role === 'reader') {
+        setErrorMessage('Contas com papel de leitor (reader) não possuem permissão de edição.');
+        setSaving(false);
+        return;
       }
 
       const cleanSlug = title.trim().replace(/\s+/g, '_');
@@ -652,6 +743,18 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         </div>
       )}
 
+      {!currentUser?.isBanned && currentUser?.role === 'reader' && (
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded-lg flex items-start gap-3 shadow-2xs">
+          <ShieldAlert className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-bold text-amber-900 text-sm">Conta em Modo Leitor (Somente Leitura)</div>
+            <div>
+              Seu perfil está configurado com o papel <code className="font-mono font-semibold">reader</code>. Solicite promoção para <code className="font-mono font-semibold">editor</code> a um burocrata ou administrador para publicar edições.
+            </div>
+          </div>
+        </div>
+      )}
+
       {!currentUser && (
         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs rounded-lg flex items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2">
@@ -752,16 +855,42 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             </>
           )}
           {isTemplatesEnabled && (
-            <button
-              type="button"
-              onClick={() => setIsTemplateModalOpen(true)}
-              data-testid="open-template-manager-btn"
-              className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded text-indigo-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-              title="Inserir predefinição MediaWiki ({{Aviso}}, {{Esboço}}, {{Navbox}}, {{Infocaixa}}, {{Predefinição:...}})"
-            >
-              <Blocks className="w-3 h-3 text-indigo-600" />
-              <span>{'{{ Predefinição }}'}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setIsTemplateModalOpen(true)}
+                data-testid="open-template-manager-btn"
+                className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded text-indigo-800 dark:text-indigo-200 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                title="Inserir predefinição MediaWiki ({{Aviso}}, {{Esboço}}, {{Navbox}}, {{Infocaixa}}, {{Predefinição:...}})"
+              >
+                <Blocks className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                <span>{'{{ Predefinição }}'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsTemplateFixPanelOpen(prev => !prev)}
+                aria-expanded={isTemplateFixPanelOpen}
+                data-testid="toggle-template-fix-assistant-btn"
+                className={`px-2.5 py-1 border rounded font-semibold text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                  templateFixAnalysis.suggestions.length > 0
+                    ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+                }`}
+                title="Sugerir correções para chaves {{...}} mal formadas e listar parâmetros esperados do templateService.ts"
+              >
+                {templateFixAnalysis.suggestions.length > 0 ? (
+                  <AlertTriangle className="w-3 h-3 text-amber-700 dark:text-amber-300 shrink-0" />
+                ) : (
+                  <Wand2 className="w-3 h-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                )}
+                <span>
+                  {templateFixAnalysis.suggestions.length > 0
+                    ? `Corrigir {{}} (${templateFixAnalysis.suggestions.length})`
+                    : 'Parâmetros {{}}'}
+                </span>
+              </button>
+            </>
           )}
           {isInfoboxEnabled && (
             <button
@@ -844,6 +973,20 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         </div>
         )}
 
+        {/* Template Key Correction Suggestion & Expected Parameters Assistant */}
+        {isTemplatesEnabled && isTemplateFixPanelOpen && (
+          <TemplateFixAssistantPanel
+            suggestions={templateFixAnalysis.suggestions}
+            activeCursorTemplate={templateFixAnalysis.activeCursorTemplate}
+            onApplyFix={handleApplyTemplateFix}
+            onApplyAllFixes={handleApplyAllTemplateFixes}
+            onInsertParam={handleInsertExpectedTemplateParam}
+            onLocateRange={focusAndSelectTextareaRange}
+            onOpenTemplateManager={() => setIsTemplateModalOpen(true)}
+            onClose={() => setIsTemplateFixPanelOpen(false)}
+          />
+        )}
+
         {/* Editor Main Content Area */}
         <div className={`grid border border-slate-200 bg-white ${
           activeTab === 'split' && isVisualEditorEnabled ? 'grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200' : 'grid-cols-1'
@@ -854,7 +997,13 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               <textarea
                 id="wikitext-input"
                 value={wikitext}
-                onChange={e => setWikitext(e.target.value)}
+                onChange={e => {
+                  setWikitext(e.target.value);
+                  setCursorOffset(e.target.selectionStart ?? 0);
+                }}
+                onClick={e => syncCursorFromTextarea(e.currentTarget)}
+                onKeyUp={e => syncCursorFromTextarea(e.currentTarget)}
+                onSelect={e => syncCursorFromTextarea(e.currentTarget)}
                 rows={22}
                 className="w-full h-full min-h-[460px] p-3 font-mono text-xs text-slate-800 leading-relaxed outline-none resize-y placeholder:text-slate-400"
                 placeholder="Type MediaWiki markup here..."
@@ -935,12 +1084,14 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={saving || currentUser?.isBanned}
+                disabled={saving || currentUser?.isBanned || currentUser?.role === 'reader'}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
                 {currentUser?.isBanned
                   ? 'Bloqueado (Usuário Banido)'
+                  : currentUser?.role === 'reader'
+                  ? 'Somente Leitura (Reader)'
                   : saving
                   ? 'Committing Revision...'
                   : 'Save Changes'}

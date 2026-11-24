@@ -30,9 +30,14 @@ service cloud.firestore {
     }
 
     function getUserData() {
-      return exists(/databases/$(database)/documents/userpage/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/userpage/$(request.auth.uid)).data
-        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : get(/databases/$(database)/documents/userpage/$(request.auth.uid)).data;
+    }
+
+    function hasExplicitReaderRole() {
+      return userDocExists() &&
+        getUserData().get('role', '') == 'reader';
     }
 
     function isSuperAdmin() {
@@ -68,8 +73,18 @@ service cloud.firestore {
       );
     }
 
+    function isModerator() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        (isNotBanned() && userDocExists() && (
+          getUserData().get('group', '') in ['moderator', 'moderador', 'admin', 'administrador', 'superadmin', 'sysop', 'bureaucrat'] ||
+          getUserData().get('role', '') in ['moderator', 'moderador', 'admin', 'administrador', 'superadmin', 'sysop', 'bureaucrat']
+        ))
+      );
+    }
+
     function isEditor() {
-      return isRegistered();
+      return isRegistered() && !hasExplicitReaderRole();
     }
 
     function isBot() {
@@ -81,6 +96,20 @@ service cloud.firestore {
          getUserData().get('role', '') == 'bot');
     }
 
+    function isPageProtected(data) {
+      return data.get('isProtected', false) == true ||
+        data.get('protectionLevel', '') in ['semi', 'full', 'sysop'];
+    }
+
+    function matchesRequestAuthor() {
+      return request.resource.data.get('authorUid', '') == request.auth.uid ||
+        ('author' in request.resource.data &&
+         request.resource.data.author is map && (
+           request.resource.data.author.get('id', '') == request.auth.uid ||
+           request.resource.data.author.get('uid', '') == request.auth.uid
+         ));
+    }
+
     // ==========================================
     // PÁGINAS E HISTÓRICO (CORREÇÃO CRÍTICA)
     // ==========================================
@@ -89,27 +118,24 @@ service cloud.firestore {
       // Leitura pública
       allow read: if true;
 
-      // Criar página: apenas usuários registrados
-      allow create: if isRegistered()
+      // Criar página: editores, bots e administradores
+      allow create: if (isEditor() || isAdmin() || isBot())
         && request.resource.data.keys().hasAll(['title', 'content', 'createdAt', 'authorUid'])
         && (request.resource.data.authorUid == request.auth.uid || isAdmin() || isBot())
+        && (!isPageProtected(request.resource.data) || isModerator() || isBot())
         && (request.resource.data.createdAt is timestamp || request.resource.data.createdAt is string);
 
-      // Atualizar página: apenas se não estiver protegida + campos de auditoria preservados
-      allow update: if isRegistered()
+      // Atualizar página: qualquer editor em páginas desprotegidas + campos de auditoria preservados
+      allow update: if (isEditor() || isAdmin() || isBot())
         && (
-          // Não pode alterar campos de auditoria
           !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['createdAt', 'authorUid', 'pageId'])
         )
-        && (
-          // Se a página estiver protegida, só admin/editor
-          !(resource.data.get('protectionLevel', '') in ['semi', 'full', 'sysop']) 
-          || isEditor()
-        );
+        && (!isPageProtected(resource.data) || isModerator() || isBot())
+        && (!isPageProtected(request.resource.data) || isModerator() || isBot());
 
-      // Deletar: só admin
-      allow delete: if isAdmin();
+      // Deletar: admin ou moderador
+      allow delete: if isAdmin() || isModerator();
 
       // ========== HISTÓRICO (VERSIONS) - IMUTÁVEL ==========
       match /versions/{versionId} {
@@ -117,7 +143,7 @@ service cloud.firestore {
         allow read: if true;
 
         // Só pode CRIAR uma nova versão (nunca atualizar ou deletar)
-        allow create: if isRegistered()
+        allow create: if (isEditor() || isAdmin() || isBot())
           && request.resource.data.keys().hasAll([
             'content', 'authorUid', 'timestamp', 'versionNumber', 'pageId'
           ])
@@ -131,59 +157,44 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ARTICLES (mesma lógica de imutabilidade)
+    // ARTICLES (colaboração livre para editores em páginas desprotegidas)
     // ==========================================
     match /articles/{articleId} {
       allow read: if true;
 
-      allow create: if isRegistered()
+      allow create: if (isEditor() || isAdmin() || isBot())
         && (
-          request.resource.data.get('authorUid', request.auth.uid) == request.auth.uid ||
-          request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
-          request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
+          !('authorUid' in request.resource.data) ||
+          request.resource.data.authorUid == request.auth.uid ||
+          matchesRequestAuthor() ||
           isAdmin() ||
           isBot()
         )
+        && (!isPageProtected(request.resource.data) || isModerator() || isBot())
         && (
           !('createdAt' in request.resource.data) ||
           request.resource.data.createdAt is timestamp ||
           request.resource.data.createdAt is string
         );
 
-      allow update: if isRegistered()
-        && (
-          !(resource.data.get('protectionLevel', '') in ['semi', 'full', 'sysop']) &&
-          resource.data.get('isProtected', false) != true
-          || isEditor()
-          || isAdmin()
-        );
+      allow update: if (isEditor() || isAdmin() || isBot())
+        && (!isPageProtected(resource.data) || isModerator() || isBot())
+        && (!isPageProtected(request.resource.data) || isModerator() || isBot());
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isModerator();
 
       // Subcoleções de histórico em articles (imutáveis)
       match /revisions/{revisionId} {
         allow read: if true;
-        allow create: if isRegistered()
-          && (
-            request.resource.data.get('authorUid', '') == request.auth.uid ||
-            request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
-            request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
-            isAdmin() ||
-            isBot()
-          );
+        allow create: if (isEditor() || isAdmin() || isBot())
+          && (matchesRequestAuthor() || isAdmin() || isBot());
         allow update, delete: if false;
       }
 
       match /versions/{versionId} {
         allow read: if true;
-        allow create: if isRegistered()
-          && (
-            request.resource.data.get('authorUid', '') == request.auth.uid ||
-            request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
-            request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
-            isAdmin() ||
-            isBot()
-          );
+        allow create: if (isEditor() || isAdmin() || isBot())
+          && (matchesRequestAuthor() || isAdmin() || isBot());
         allow update, delete: if false;
       }
     }
@@ -193,27 +204,15 @@ service cloud.firestore {
     // ==========================================
     match /revisions/{revisionId} {
       allow read: if true;
-      allow create: if isRegistered()
-        && (
-          request.resource.data.get('authorUid', '') == request.auth.uid ||
-          request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
-          request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
-          isAdmin() ||
-          isBot()
-        );
+      allow create: if (isEditor() || isAdmin() || isBot())
+        && (matchesRequestAuthor() || isAdmin() || isBot());
       allow update, delete: if false;
     }
 
     match /versions/{versionId} {
       allow read: if true;
-      allow create: if isRegistered()
-        && (
-          request.resource.data.get('authorUid', '') == request.auth.uid ||
-          request.resource.data.get(['author', 'id'], '') == request.auth.uid ||
-          request.resource.data.get(['author', 'uid'], '') == request.auth.uid ||
-          isAdmin() ||
-          isBot()
-        );
+      allow create: if (isEditor() || isAdmin() || isBot())
+        && (matchesRequestAuthor() || isAdmin() || isBot());
       allow update, delete: if false;
     }
 
@@ -308,11 +307,13 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAuthenticated() && request.auth.uid == userId
         && (!('isBanned' in request.resource.data) || request.resource.data.isBanned == false)
+        && (!('isBot' in request.resource.data) || request.resource.data.isBot == false || isAdmin())
+        && (!('group' in request.resource.data) || isAdmin())
         && (!('role' in request.resource.data) || request.resource.data.role == 'editor' || isAdmin());
       allow update: if isAuthenticated() && (
         isAdmin() || (
           isOwner(userId) && isNotBanned() &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isBanned', 'isBot'])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isBanned', 'isBot', 'group'])
         )
       );
       allow delete: if isAdmin();
@@ -325,7 +326,18 @@ service cloud.firestore {
 
     match /user_pages/{pageId} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && isNotBanned() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (
+        isRegistered() &&
+        request.resource.data.userId == request.auth.uid
+      );
+      allow update: if isAdmin() || (
+        isEditor() && (
+          (resource.data.userId == request.auth.uid &&
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId', 'role'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['talkPosts', 'updatedAt'])
+        )
+      );
+      allow delete: if isAdmin() || (isRegistered() && resource.data.userId == request.auth.uid);
     }
 
     match /bannedusers/{userId} {
@@ -345,7 +357,7 @@ service cloud.firestore {
 
     match /wiki_events/{eventId} {
       allow read: if true;
-      allow create: if isRegistered();
+      allow create: if isEditor() || isAdmin() || isBot();
       allow update, delete: if false;
     }
 
@@ -431,12 +443,24 @@ service cloud.firestore {
 
     match /user_daily_checklists/{checklistId} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (isRegistered() && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || (
+        isRegistered() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId
+      );
+      allow delete: if isAdmin();
     }
 
     match /user_monthly_points/{ledgerId} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (isRegistered() && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || (
+        isRegistered() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId
+      );
+      allow delete: if isAdmin();
     }
 
     match /article_ratings/{ratingId} {
@@ -447,9 +471,8 @@ service cloud.firestore {
 
     match /article_votes/{voteId} {
       allow read: if true;
-      allow create, update: if isAuthenticated() && (
-        request.resource.data.userId == request.auth.uid
-      );
+      allow create: if isRegistered() && request.resource.data.userId == request.auth.uid;
+      allow update: if isRegistered() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
@@ -459,7 +482,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow create: if isRegistered() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
@@ -480,7 +503,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow create: if isRegistered() && request.resource.data.userId == request.auth.uid;
+      allow update: if isRegistered() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
@@ -505,10 +529,10 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource == null || resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create: if isAuthenticated()
+      allow create: if isRegistered()
         && isValidArticleDraft(request.resource.data)
         && request.resource.data.id == draftId;
-      allow update: if isAuthenticated()
+      allow update: if isRegistered()
         && resource.data.userId == request.auth.uid
         && isValidArticleDraft(request.resource.data)
         && request.resource.data.id == draftId

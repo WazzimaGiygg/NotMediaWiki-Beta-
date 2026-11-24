@@ -76,6 +76,7 @@ import {
   fetchTopKarmaEditorsFromFirestore,
   calculateKarmaRank,
   ensureUserPageInFirestore,
+  resolveCurrentFirestoreUser,
   auth,
 } from './firebase';
 
@@ -299,6 +300,7 @@ export const api = {
       references: parsed.references,
       usedTemplates: parsed.usedTemplates,
       missingTemplates: parsed.missingTemplates,
+      templateDiagnostics: parsed.templateDiagnostics,
       ast: parsed.ast,
       parseTimeMs: parsed.parseTimeMs,
       cached: false,
@@ -635,35 +637,7 @@ export const api = {
 
   async getCurrentUser(): Promise<UserSession | null> {
     if (auth.currentUser) {
-      try {
-        const cloudUsers = await fetchUsersFromFirestore();
-        const found = cloudUsers.find(u => u.id === auth.currentUser?.uid);
-        if (found) {
-          return found;
-        }
-      } catch (e) {
-        console.warn('Notice: Error resolving user from Firestore:', e);
-      }
-
-      const email = auth.currentUser.email || '';
-      const emailLower = email.toLowerCase().trim();
-      const isBureaucrat =
-        emailLower === 'mafersao1100@gmail.com' ||
-        emailLower === 'pedrohenriquecardonaperes@gmail.com' ||
-        emailLower === 'pedrohenriquecaronaperes@gmail.com';
-      const username = auth.currentUser.displayName || email.split('@')[0] || 'Wikipedian';
-
-      return {
-        id: auth.currentUser.uid,
-        username,
-        role: isBureaucrat ? 'bureaucrat' : 'editor',
-        editCount: 1,
-        avatar: username.substring(0, 2).toUpperCase(),
-        email: email || undefined,
-        isGoogleUser: true,
-        photoURL: auth.currentUser.photoURL || undefined,
-        provider: 'google.com',
-      };
+      return resolveCurrentFirestoreUser(auth.currentUser);
     }
 
     return null;

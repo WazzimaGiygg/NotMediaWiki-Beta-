@@ -21,6 +21,10 @@ import { ArticleFeedbackWidget } from './ArticleFeedbackWidget';
 import { buildArticleReportData } from '../utils/reportGenerator';
 import { MEDIAWIKI_NAMESPACES, parseTitle, getSubpageBreadcrumbs } from '../utils/namespaces';
 import { extractTemplateDeclaredParams } from '../utils/templateEngine';
+import {
+  TemplateDebugInspector,
+  jumpToTemplateDiagnosticElement,
+} from './TemplateDebugInspector';
 import { parseSemanticFacts } from '../utils/semanticParser';
 import { SemanticFactbox } from './SemanticFactbox';
 import { CategoryTreeView } from './CategoryTreeView';
@@ -192,6 +196,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
 
   const [readerFontSize, setReaderFontSize] = useState<'base' | 'lg' | 'xl'>('lg');
   const [readerFontFamily, setReaderFontFamily] = useState<'serif' | 'sans'>('serif');
+  const [highlightTemplateDebug, setHighlightTemplateDebug] = useState<boolean>(true);
 
   // Ensure Focus / Zen / Reader Modes reset if FocusReadingMode extension is disabled or on unmount
   useEffect(() => {
@@ -1177,13 +1182,30 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             </div>
           )}
 
+          {/* Template Debug Inspector (Reading Mode) */}
+          {!(isZenActive || isFocusMode) &&
+            isParsoidEnabled &&
+            isTemplatesEnabled &&
+            (data?.templateDiagnostics?.length ?? 0) > 0 && (
+              <TemplateDebugInspector
+                diagnostics={data?.templateDiagnostics || []}
+                highlightEnabled={highlightTemplateDebug}
+                onToggleHighlight={() => setHighlightTemplateDebug(prev => !prev)}
+                onJumpToDiagnostic={diagId =>
+                  jumpToTemplateDiagnosticElement(contentRef.current, diagId)
+                }
+                onEdit={onEdit}
+                editTargetSlug={slug}
+              />
+            )}
+
           {/* Rendered HTML Container */}
           <article
             id="wiki-article-container"
             ref={contentRef}
             className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 ${
               isZenActive || isFocusMode ? 'zen-mode-article' : ''
-            } ${
+            } ${!highlightTemplateDebug ? 'hide-template-debug-highlights' : ''} ${
               readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
             } ${
               readerFontSize === 'base'

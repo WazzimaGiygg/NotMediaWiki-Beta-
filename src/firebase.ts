@@ -155,11 +155,13 @@ export async function syncFirebaseUserToSession(fbUser: FirebaseUser): Promise<U
     userEmailLower === 'pedrohenriquecardonaperes@gmail.com' ||
     userEmailLower === 'pedrohenriquecaronaperes@gmail.com';
 
+  let hasExistingDoc = false;
   try {
     const existingSnap = await getDoc(userRef);
     if (existingSnap.exists()) {
+      hasExistingDoc = true;
       const existingData = existingSnap.data();
-      role = isBureaucrat ? 'bureaucrat' : 'editor';
+      role = isBureaucrat ? 'bureaucrat' : ((existingData.role as UserRole) || 'editor');
       editCount = existingData.editCount || 1;
       isBanned = !!existingData.isBanned;
       banReason = existingData.banReason || '';
@@ -214,9 +216,10 @@ export async function syncFirebaseUserToSession(fbUser: FirebaseUser): Promise<U
     syncedToCloudAt: new Date().toISOString(),
   };
 
-  // Sync/persist user profile to Firestore /users/{uid}
+  // Sync/persist user profile to Firestore /users/{uid}.
+  // On existing docs for non-admins, omit protected fields (role, isBanned, isBot) so Firestore update rules stay satisfied.
   try {
-    await setDoc(userRef, {
+    const profilePayload: Record<string, any> = {
       uid: fbUser.uid,
       displayName: userProfile.username,
       userTag: userProfile.userTag,
@@ -224,16 +227,21 @@ export async function syncFirebaseUserToSession(fbUser: FirebaseUser): Promise<U
       userPageSlug: userProfile.userPageSlug,
       email: fbUser.email || '',
       photoURL: fbUser.photoURL || '',
-      role: userProfile.role,
       editCount: userProfile.editCount,
-      isBanned: userProfile.isBanned,
-      banReason: userProfile.banReason || '',
-      bannedAt: userProfile.bannedAt || '',
       provider: 'google.com',
       isGoogleUser: true,
       lastLoginAt: userProfile.lastLoginAt,
       syncedToCloudAt: userProfile.syncedToCloudAt,
-    }, { merge: true });
+    };
+    if (!hasExistingDoc || isBureaucrat) {
+      profilePayload.role = userProfile.role;
+      profilePayload.isBanned = userProfile.isBanned;
+      if (!hasExistingDoc) {
+        profilePayload.banReason = userProfile.banReason || '';
+        profilePayload.bannedAt = userProfile.bannedAt || '';
+      }
+    }
+    await setDoc(userRef, profilePayload, { merge: true });
   } catch (dbErr) {
     console.warn('User profile sync to Firestore error:', dbErr);
   }
@@ -257,6 +265,82 @@ export async function syncFirebaseUserToSession(fbUser: FirebaseUser): Promise<U
   } catch {}
 
   return userProfile;
+}
+
+/**
+ * Resolves the active authenticated Firebase user directly from /users/{uid}.
+ * If the Firestore profile does not exist yet, creates it via syncFirebaseUserToSession.
+ */
+export async function resolveCurrentFirestoreUser(fbUser: FirebaseUser): Promise<UserSession> {
+  const email = fbUser.email || '';
+  const emailLower = email.toLowerCase().trim();
+  const isBureaucrat =
+    emailLower === 'mafersao1100@gmail.com' ||
+    emailLower === 'pedrohenriquecardonaperes@gmail.com' ||
+    emailLower === 'pedrohenriquecaronaperes@gmail.com';
+
+  try {
+    const userRef = doc(db, 'users', fbUser.uid);
+    const snap = await getDoc(userRef);
+
+    if (snap.exists()) {
+      const data = snap.data();
+      const username = data.displayName || data.username || fbUser.displayName || email.split('@')[0] || 'Wikipedian';
+      const userTag =
+        data.userTag ||
+        `#${Math.abs(fbUser.uid.split('').reduce((acc, c) => acc * 31 + c.charCodeAt(0), 0) % 9999 + 1)
+          .toString()
+          .padStart(4, '0')}`;
+      const resolvedRole: UserRole = isBureaucrat ? 'bureaucrat' : ((data.role as UserRole) || 'editor');
+
+      // Upgrade bureaucrat doc if needed (bureaucrat passes isAdmin rule)
+      if (isBureaucrat && data.role !== 'bureaucrat') {
+        await setDoc(userRef, { role: 'bureaucrat', syncedToCloudAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
+
+      return {
+        id: data.uid || fbUser.uid,
+        username,
+        userTag,
+        discriminator: data.discriminator || userTag.replace('#', ''),
+        userPageSlug: data.userPageSlug || `Usuário:${username}${userTag}`,
+        role: resolvedRole,
+        editCount: data.editCount || 0,
+        karma: data.karma !== undefined ? data.karma : (data.editCount || 0) * 5 + 10,
+        positiveVotesReceived: data.positiveVotesReceived || 0,
+        negativeVotesReceived: data.negativeVotesReceived || 0,
+        avatar: (username || 'U').substring(0, 2).toUpperCase(),
+        email: data.email || email || undefined,
+        bio: data.bio || undefined,
+        location: data.location || undefined,
+        isBanned: !!data.isBanned,
+        banReason: data.banReason || undefined,
+        bannedAt: data.bannedAt || undefined,
+        isGoogleUser: true,
+        photoURL: data.photoURL || fbUser.photoURL || undefined,
+        provider: data.provider || 'google.com',
+        lastLoginAt: data.lastLoginAt || undefined,
+        syncedToCloudAt: data.syncedToCloudAt || undefined,
+      };
+    }
+
+    // Profile document does not exist yet: provision /users/{uid} and /user_pages
+    return await syncFirebaseUserToSession(fbUser);
+  } catch (err) {
+    console.warn('Notice: Could not resolve user from Firestore, attempting session sync fallback:', err);
+    const username = fbUser.displayName || email.split('@')[0] || 'Wikipedian';
+    return {
+      id: fbUser.uid,
+      username,
+      role: isBureaucrat ? 'bureaucrat' : 'editor',
+      editCount: 1,
+      avatar: username.substring(0, 2).toUpperCase(),
+      email: email || undefined,
+      isGoogleUser: true,
+      photoURL: fbUser.photoURL || undefined,
+      provider: 'google.com',
+    };
+  }
 }
 
 /**
@@ -1017,6 +1101,33 @@ export async function saveArticleToFirestore(payload: {
     throw new Error('Você precisa fazer login com sua conta Google para criar ou editar artigos.');
   }
 
+  let effectiveRole: UserRole = payload.authorUser?.role || 'editor';
+  let effectiveBanned = !!payload.authorUser?.isBanned;
+  const authEmailLower = (auth.currentUser.email || '').toLowerCase().trim();
+  const isAuthBureaucrat =
+    authEmailLower === 'mafersao1100@gmail.com' ||
+    authEmailLower === 'pedrohenriquecardonaperes@gmail.com' ||
+    authEmailLower === 'pedrohenriquecaronaperes@gmail.com';
+  if (isAuthBureaucrat) {
+    effectiveRole = 'bureaucrat';
+  }
+
+  if (effectiveBanned) {
+    throw new Error('Sua conta está suspensa e não possui permissão para editar páginas.');
+  }
+
+  if (effectiveRole === 'reader') {
+    throw new Error('Contas com papel de leitor (reader) não possuem permissão de edição.');
+  }
+
+  const existingProtectionLevel = (existingArticle as any)?.protectionLevel;
+  const isProtectedArticle =
+    Boolean(existingArticle?.isProtected) ||
+    ['semi', 'full', 'sysop'].includes(String(existingProtectionLevel || ''));
+  if (isProtectedArticle && !['bureaucrat', 'sysop', 'moderator', 'bot'].includes(effectiveRole)) {
+    throw new Error('Esta página está protegida. Apenas moderadores e administradores podem editá-la.');
+  }
+
   const parsedTitleMeta = parseTitle(payload.title || cleanSlug);
   const articleDocData = {
     id: existingArticle?.id || `art-${cleanSlug.toLowerCase()}`,
@@ -1032,7 +1143,8 @@ export async function saveArticleToFirestore(payload: {
     isProtected: existingArticle?.isProtected || false,
     wikitext: payload.wikitext || '',
     lastEditedBy: authorName,
-    authorUid: currentUid || (existingArticle as any)?.authorUid || authorId,
+    lastEditedByUid: authorId,
+    authorUid: (existingArticle as any)?.authorUid || currentUid || authorId,
     syncedToCloudAt: timestamp,
   };
 
@@ -1096,27 +1208,32 @@ export async function saveArticleToFirestore(payload: {
     throw new Error(`Erro ao salvar no Firestore: ${err.message || 'Falha de comunicação com o banco'}`);
   }
 
-  // 6. Update user's editCount and profile in Firestore
+  // 6. Update user's editCount and profile in Firestore (without touching protected role/ban fields on existing docs)
   const targetUserId = currentUid || payload.authorUser?.id;
   if (targetUserId) {
     try {
       const userRef = doc(db, pathUsers, targetUserId);
       const userSnap = await getDoc(userRef);
-      const prevCount = userSnap.exists()
+      const userExists = userSnap.exists();
+      const prevCount = userExists
         ? (userSnap.data().editCount || 0)
         : (payload.authorUser?.editCount || 0);
 
-      await setDoc(userRef, {
+      const userUpdatePayload: Record<string, any> = {
         uid: targetUserId,
         displayName: authorName,
-        role: payload.authorUser?.role || 'editor',
         editCount: prevCount + 1,
         avatar: payload.authorUser?.avatar || authorName.substring(0, 2).toUpperCase(),
         email: auth.currentUser?.email || payload.authorUser?.email || '',
         isGoogleUser: !!auth.currentUser || !!payload.authorUser?.isGoogleUser,
         provider: auth.currentUser ? 'google.com' : (payload.authorUser?.provider || 'local'),
         syncedToCloudAt: timestamp,
-      }, { merge: true });
+      };
+      if (!userExists) {
+        userUpdatePayload.role = effectiveRole;
+        userUpdatePayload.isBanned = false;
+      }
+      await setDoc(userRef, userUpdatePayload, { merge: true });
     } catch (err) {
       console.warn('Could not increment user edit count:', err);
     }
@@ -2463,10 +2580,15 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
   let userPage: UserPage;
   const roleTitle = user.role === 'bureaucrat' ? 'Burocrata' : user.role === 'sysop' ? 'Administrador' : user.role === 'moderator' ? 'Moderador' : 'Editor Comunitário';
 
+  const canWriteTargetUserPage =
+    !auth.currentUser ||
+    auth.currentUser.uid === user.id ||
+    hasBureaucratPrivileges(null, auth.currentUser.email);
+
   if (snap.exists()) {
     userPage = snap.data() as UserPage;
-    // ensure slug/tag matches
-    if (!userPage.userTag || userPage.userTag !== tag) {
+    // ensure slug/tag matches (only write if viewer owns page or is bureaucrat)
+    if (canWriteTargetUserPage && (!userPage.userTag || userPage.userTag !== tag)) {
       userPage.userTag = tag;
       userPage.slug = slug;
       userPage.displayName = `${user.username}${tag}`;
@@ -2511,7 +2633,9 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
       updatedAt: new Date().toISOString(),
     };
 
-    await setDoc(pageRef, userPage);
+    if (canWriteTargetUserPage) {
+      await setDoc(pageRef, userPage);
+    }
   }
 
   const updatedUser: UserSession = {
@@ -2521,14 +2645,16 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
     userPageSlug: slug,
   };
 
-  try {
-    await setDoc(doc(db, 'users', user.id), {
-      userTag: tag,
-      discriminator: tag.replace('#', ''),
-      userPageSlug: slug,
-    }, { merge: true });
-  } catch (e) {
-    console.warn('Silent notice: could not write userTag to users doc:', e);
+  if (canWriteTargetUserPage) {
+    try {
+      await setDoc(doc(db, 'users', user.id), {
+        userTag: tag,
+        discriminator: tag.replace('#', ''),
+        userPageSlug: slug,
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Silent notice: could not write userTag to users doc:', e);
+    }
   }
 
   return { user: updatedUser, userPage };

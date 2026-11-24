@@ -112,6 +112,7 @@ describe('ThemeAppearance Extension ($wgDefaultTheme & Incremental Themes Regist
       'high-contrast-dark',
       'wikidiota',
       'windows-31',
+      'windows-95',
     ]);
 
     const extraJson = JSON.stringify([
@@ -232,12 +233,20 @@ describe('ThemeAppearance Extension ($wgDefaultTheme & Incremental Themes Regist
     expect(html).toContain('Alto Contraste (OLED)');
     expect(html).toContain('Wikidiota (Edição Paródia)');
     expect(html).toContain('Windows 3.1 (Program Manager)');
+    expect(html).toContain('Windows 95 (Explorer Clássico)');
     expect(html).toContain('Padrão do Wiki');
 
     const win31 = resolveWikiTheme('windows-31', unlockedCfg.availableThemes);
     expect(win31.id).toBe('windows-31');
     expect(win31.preview.canvas).toBe('#008080');
     expect(win31.preview.accent).toBe('#000080');
+
+    const win95 = resolveWikiTheme('windows-95', unlockedCfg.availableThemes);
+    expect(win95.id).toBe('windows-95');
+    expect(win95.colorScheme).toBe('light');
+    expect(win95.preview.canvas).toBe('#008080');
+    expect(win95.preview.surface).toBe('#c0c0c0');
+    expect(win95.preview.accent).toBe('#000080');
   });
 
   it('renders Wikidiota parody theme banner with satirical foundation and regime chronicles only when active', () => {

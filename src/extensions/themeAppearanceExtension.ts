@@ -21,7 +21,7 @@ export const themeAppearanceExtension: WikiExtension = {
   category: 'ui',
   author: 'NotMediaWiki UI & Design Architecture',
   description:
-    'Permite alterar a aparência visual do Wiki-site entre os temas disponíveis cadastrados no sistema (Vector Claro, Vector Noturno, Pergaminho Editorial, Monobook Clássico, Alto Contraste, Wikidiota [Paródia], Windows 3.1 e futuros temas inseridos gradualmente). O burocrata define o tema padrão e se leitores podem escolher temas pessoais.',
+    'Permite alterar a aparência visual do Wiki-site entre os temas disponíveis cadastrados no sistema (Vector Claro, Vector Noturno, Pergaminho Editorial, Monobook Clássico, Alto Contraste, Wikidiota [Paródia], Windows 3.1, Windows 95 e futuros temas inseridos gradualmente). O burocrata define o tema padrão e se leitores podem escolher temas pessoais.',
   enabled: true,
   type: 'skin',
   url: 'https://www.mediawiki.org/wiki/Manual:Skins',
@@ -45,7 +45,7 @@ export const themeAppearanceExtension: WikiExtension = {
       value: DEFAULT_WIKI_THEME_ID,
       defaultValue: DEFAULT_WIKI_THEME_ID,
       description:
-        'ID do tema padrão aplicado na abertura do Wiki-site (ex.: vector-light, vector-dark, archival-sepia, monobook-classic, high-contrast-dark, wikidiota, windows-31).',
+        'ID do tema padrão aplicado na abertura do Wiki-site (ex.: vector-light, vector-dark, archival-sepia, monobook-classic, high-contrast-dark, wikidiota, windows-31, windows-95).',
     },
     {
       key: '$wgAllowUserThemeSwitch',

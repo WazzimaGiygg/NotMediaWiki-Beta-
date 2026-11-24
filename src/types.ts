@@ -13,6 +13,25 @@ export interface Article {
   isProtected?: boolean;
 }
 
+export type TemplateDiagnosticType =
+  | 'unclosed_braces'
+  | 'unmatched_closing'
+  | 'invalid_name'
+  | 'missing_template'
+  | 'unresolved_param'
+  | 'missing_required_param'
+  | 'recursion_cycle';
+
+export interface TemplateDiagnostic {
+  id: string;
+  type: TemplateDiagnosticType;
+  severity: 'error' | 'warning';
+  templateName: string;
+  snippet: string;
+  missingParams?: string[];
+  message: string;
+}
+
 export interface RenderedArticleResponse {
   article: Article;
   html: string;
@@ -24,6 +43,7 @@ export interface RenderedArticleResponse {
   references?: string[];
   usedTemplates?: string[];
   missingTemplates?: string[];
+  templateDiagnostics?: TemplateDiagnostic[];
   ast?: any[];
   cached?: boolean;
 }
