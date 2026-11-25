@@ -188,24 +188,34 @@ export class CentralAuthService {
     user: Partial<UserSession> & { id: string; username: string },
     isRequesterAdmin: boolean = false
   ): UserSession {
-    const existing = this.users.get(user.id);
+    const safeId = String(user.id || '').trim();
+    const safeUsername = String(user.username || safeId || 'Wikipedian').trim() || 'Wikipedian';
+    const safeAvatar =
+      typeof user.avatar === 'string' && user.avatar.trim()
+        ? user.avatar.trim().slice(0, 16)
+        : safeUsername.substring(0, 2).toUpperCase();
+
+    const existing = this.users.get(safeId);
     if (existing) {
-      if (user.username) existing.username = user.username;
-      if (user.email !== undefined) existing.email = user.email;
-      if (user.avatar) existing.avatar = user.avatar;
-      if (user.isGoogleUser !== undefined) existing.isGoogleUser = user.isGoogleUser;
-      if (user.photoURL !== undefined) existing.photoURL = user.photoURL;
-      if (user.provider !== undefined) existing.provider = user.provider;
-      if (user.lastLoginAt !== undefined) existing.lastLoginAt = user.lastLoginAt;
-      if (user.syncedToCloudAt !== undefined) existing.syncedToCloudAt = user.syncedToCloudAt;
+      existing.username = safeUsername;
+      if (typeof user.email === 'string') existing.email = user.email;
+      existing.avatar = safeAvatar;
+      if (typeof user.userTag === 'string') existing.userTag = user.userTag;
+      if (typeof user.discriminator === 'string') existing.discriminator = user.discriminator;
+      if (typeof user.userPageSlug === 'string') existing.userPageSlug = user.userPageSlug;
+      if (user.isGoogleUser !== undefined) existing.isGoogleUser = Boolean(user.isGoogleUser);
+      if (typeof user.photoURL === 'string') existing.photoURL = user.photoURL;
+      if (typeof user.provider === 'string') existing.provider = user.provider;
+      if (typeof user.lastLoginAt === 'string') existing.lastLoginAt = user.lastLoginAt;
+      if (typeof user.syncedToCloudAt === 'string') existing.syncedToCloudAt = user.syncedToCloudAt;
 
       // Only admins can alter role or ban flags
       if (isRequesterAdmin) {
         if (user.role) existing.role = user.role;
-        if (user.isBanned !== undefined) existing.isBanned = user.isBanned;
+        if (user.isBanned !== undefined) existing.isBanned = Boolean(user.isBanned);
         if (user.banReason !== undefined) existing.banReason = user.banReason;
         if (user.bannedAt !== undefined) existing.bannedAt = user.bannedAt;
-        if (user.editCount !== undefined) existing.editCount = user.editCount;
+        if (typeof user.editCount === 'number') existing.editCount = user.editCount;
       }
 
       try {
@@ -215,7 +225,7 @@ export class CentralAuthService {
           for (const [k, v] of Object.entries(existing)) {
             if (v !== undefined) cleanExisting[k] = v;
           }
-          db.collection('users').doc(user.id).set(cleanExisting, { merge: true }).catch(() => {});
+          Promise.resolve(db.collection('users').doc(safeId).set(cleanExisting, { merge: true })).catch(() => {});
         }
       } catch {
         // Safe fallback when Firebase Admin service account is unconfigured
@@ -225,20 +235,23 @@ export class CentralAuthService {
     } else {
       const assignedRole: UserRole = isRequesterAdmin && user.role ? user.role : 'editor';
       const newUser: UserSession = {
-        id: user.id,
-        username: user.username,
+        id: safeId,
+        username: safeUsername,
         role: assignedRole,
-        editCount: 0,
-        avatar: user.avatar || user.username.substring(0, 2).toUpperCase(),
-        email: user.email,
+        editCount: isRequesterAdmin && typeof user.editCount === 'number' ? user.editCount : 0,
+        avatar: safeAvatar,
+        userTag: typeof user.userTag === 'string' ? user.userTag : undefined,
+        discriminator: typeof user.discriminator === 'string' ? user.discriminator : undefined,
+        userPageSlug: typeof user.userPageSlug === 'string' ? user.userPageSlug : undefined,
+        email: typeof user.email === 'string' ? user.email : undefined,
         isBanned: false,
         isGoogleUser: !!user.isGoogleUser,
-        photoURL: user.photoURL,
-        provider: user.provider,
-        lastLoginAt: user.lastLoginAt || new Date().toISOString(),
-        syncedToCloudAt: user.syncedToCloudAt || new Date().toISOString(),
+        photoURL: typeof user.photoURL === 'string' ? user.photoURL : undefined,
+        provider: typeof user.provider === 'string' ? user.provider : undefined,
+        lastLoginAt: typeof user.lastLoginAt === 'string' ? user.lastLoginAt : new Date().toISOString(),
+        syncedToCloudAt: typeof user.syncedToCloudAt === 'string' ? user.syncedToCloudAt : new Date().toISOString(),
       };
-      this.users.set(user.id, newUser);
+      this.users.set(safeId, newUser);
 
       try {
         const { db } = getFirebaseAdmin();
@@ -247,7 +260,7 @@ export class CentralAuthService {
           for (const [k, v] of Object.entries(newUser)) {
             if (v !== undefined) cleanNew[k] = v;
           }
-          db.collection('users').doc(user.id).set(cleanNew).catch(() => {});
+          Promise.resolve(db.collection('users').doc(safeId).set(cleanNew)).catch(() => {});
         }
       } catch {
         // Safe fallback when Firebase Admin service account is unconfigured

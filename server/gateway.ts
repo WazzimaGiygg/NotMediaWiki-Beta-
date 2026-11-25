@@ -372,28 +372,30 @@ gatewayRouter.post(
 );
 
 gatewayRouter.post('/auth/users/upsert', (req: Request, res: Response) => {
-  const { id, username } = req.body || {};
-  if (!id || !username || typeof id !== 'string' || typeof username !== 'string') {
-    return res.status(400).json({ error: 'id e username são obrigatórios' });
-  }
-
-  const isCallerAdmin = Boolean(
-    req.user &&
-      (isSuperAdmin(req.user.email) || ['sysop', 'bureaucrat'].includes(req.user.role || ''))
-  );
-
-  if (req.user && !isCallerAdmin && req.user.id !== id) {
-    return res.status(403).json({ error: 'Você só pode sincronizar o seu próprio perfil' });
-  }
-
   try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const rawId = typeof body.id === 'string' ? body.id.trim() : '';
+    const rawUsername = typeof body.username === 'string' ? body.username.trim() : '';
+    if (!rawId || !rawUsername) {
+      return res.status(400).json({ error: 'id e username são obrigatórios' });
+    }
+
+    const isCallerAdmin = Boolean(
+      req.user &&
+        (isSuperAdmin(req.user.email) || ['sysop', 'bureaucrat'].includes(req.user.role || ''))
+    );
+
+    if (req.user && !isCallerAdmin && req.user.id !== rawId) {
+      return res.status(403).json({ error: 'Você só pode sincronizar o seu próprio perfil' });
+    }
+
     const user = centralAuthService.upsertUser(
-      { ...req.body, id, username },
+      { ...body, id: rawId, username: rawUsername },
       isCallerAdmin
     );
-    res.json({ success: true, user });
+    return res.json({ success: true, user });
   } catch (err: any) {
-    res.status(400).json({ error: err?.message || 'Falha ao sincronizar usuário' });
+    return res.status(400).json({ error: err?.message || 'Falha ao sincronizar usuário' });
   }
 });
 

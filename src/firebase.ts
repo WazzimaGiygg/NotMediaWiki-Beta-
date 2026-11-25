@@ -299,7 +299,7 @@ export async function resolveCurrentFirestoreUser(fbUser: FirebaseUser): Promise
       }
 
       return {
-        id: data.uid || fbUser.uid,
+        id: fbUser.uid,
         username,
         userTag,
         discriminator: data.discriminator || userTag.replace('#', ''),
@@ -387,7 +387,7 @@ export async function fetchUsersFromFirestore(): Promise<UserSession[]> {
       const username = data.displayName || data.username || docSnap.id;
       const userTag = data.userTag || `#${Math.abs(docSnap.id.split('').reduce((acc: number, c: string) => acc * 31 + c.charCodeAt(0), 0) % 9999 + 1).toString().padStart(4, '0')}`;
       users.push({
-        id: data.uid || docSnap.id,
+        id: docSnap.id,
         username,
         userTag,
         discriminator: data.discriminator || userTag.replace('#', ''),
@@ -2865,8 +2865,10 @@ export function subscribeToBlpEthicsCasesFromFirestore(callback: (cases: BlpEthi
 
 export async function fetchUserChatsFromFirestore(userId: string): Promise<DirectChat[]> {
   const path = 'direct_chats';
+  const effectiveUid = auth.currentUser?.uid || userId;
+  if (!effectiveUid) return [];
   try {
-    const q = query(collection(db, path), where('participants', 'array-contains', userId), limit(50));
+    const q = query(collection(db, path), where('participants', 'array-contains', effectiveUid), limit(50));
     const snap = await getDocs(q);
     const list: DirectChat[] = [];
     snap.forEach(d => list.push(d.data() as DirectChat));
@@ -2877,9 +2879,18 @@ export async function fetchUserChatsFromFirestore(userId: string): Promise<Direc
   }
 }
 
-export function subscribeToUserChats(userId: string, callback: (chats: DirectChat[]) => void) {
+export function subscribeToUserChats(
+  userId: string,
+  callback: (chats: DirectChat[]) => void,
+  onError?: (err: Error) => void
+) {
   const path = 'direct_chats';
-  const q = query(collection(db, path), where('participants', 'array-contains', userId), limit(50));
+  const effectiveUid = auth.currentUser?.uid || userId;
+  if (!effectiveUid) {
+    callback([]);
+    return () => {};
+  }
+  const q = query(collection(db, path), where('participants', 'array-contains', effectiveUid), limit(50));
   return onSnapshot(
     q,
     snap => {
@@ -2890,51 +2901,75 @@ export function subscribeToUserChats(userId: string, callback: (chats: DirectCha
     err => {
       console.warn('Notice: User chats subscription error:', err);
       callback([]);
+      onError?.(err instanceof Error ? err : new Error(String(err)));
     }
   );
 }
 
 export async function createOrGetDirectChat(currentUser: UserSession, targetUser: UserSession): Promise<DirectChat> {
+  if (!auth.currentUser) {
+    throw new Error('É necessário estar autenticado com sua conta para iniciar um chat.');
+  }
+
   const path = 'direct_chats';
-  const sortedIds = [currentUser.id, targetUser.id].sort();
+  const myId = auth.currentUser.uid;
+  const targetId = targetUser.id;
+  const sortedIds = [myId, targetId].sort();
   const chatId = `chat_${sortedIds[0]}_${sortedIds[1]}`;
   const chatRef = doc(db, path, chatId);
-  const snap = await getDoc(chatRef);
 
-  if (snap.exists()) {
-    return snap.data() as DirectChat;
+  try {
+    const snap = await getDoc(chatRef);
+    if (snap.exists()) {
+      return snap.data() as DirectChat;
+    }
+  } catch (err) {
+    // If doc read failed only because it does not exist or rules evaluated, proceed to creation attempt
+    console.warn('Notice: Direct chat pre-check notice:', err);
   }
+
+  const participants = myId === targetId ? [myId] : [myId, targetId];
+  const nowIso = new Date().toISOString();
+  const myName = `${currentUser.username || 'Usuário'}${currentUser.userTag || ''}`;
+  const targetName = `${targetUser.username || 'Usuário'}${targetUser.userTag || ''}`;
+  const myAvatar = String(currentUser.avatar || currentUser.username?.substring(0, 2) || 'U').toUpperCase().slice(0, 8);
+  const targetAvatar = String(targetUser.avatar || targetUser.username?.substring(0, 2) || 'U').toUpperCase().slice(0, 8);
 
   const newChat: DirectChat = {
     id: chatId,
-    participants: [currentUser.id, targetUser.id],
+    participants,
     participantNames: {
-      [currentUser.id]: `${currentUser.username}${currentUser.userTag || ''}`,
-      [targetUser.id]: `${targetUser.username}${targetUser.userTag || ''}`,
+      [myId]: myName,
+      [targetId]: targetName,
     },
     participantAvatars: {
-      [currentUser.id]: currentUser.avatar,
-      [targetUser.id]: targetUser.avatar,
+      [myId]: myAvatar,
+      [targetId]: targetAvatar,
     },
     participantTags: {
-      [currentUser.id]: currentUser.userTag || '',
-      [targetUser.id]: targetUser.userTag || '',
+      [myId]: currentUser.userTag || '',
+      [targetId]: targetUser.userTag || '',
     },
     lastMessage: 'Chat iniciado.',
-    lastMessageAt: new Date().toISOString(),
-    lastMessageSenderId: currentUser.id,
+    lastMessageAt: nowIso,
+    lastMessageSenderId: myId,
     unreadCount: {
-      [currentUser.id]: 0,
-      [targetUser.id]: 0,
+      [myId]: 0,
+      [targetId]: 0,
     },
-    createdAt: new Date().toISOString(),
+    createdAt: nowIso,
   };
 
-  await setDoc(chatRef, newChat);
-  return newChat;
+  try {
+    await setDoc(chatRef, newChat);
+    return newChat;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${path}/${chatId}`);
+  }
 }
 
 export async function fetchChatMessagesFromFirestore(chatId: string): Promise<ChatMessage[]> {
+  if (!auth.currentUser || !chatId) return [];
   const path = `direct_chats/${chatId}/messages`;
   try {
     const q = query(collection(db, path), orderBy('timestamp', 'asc'), limit(150));
@@ -2948,7 +2983,15 @@ export async function fetchChatMessagesFromFirestore(chatId: string): Promise<Ch
   }
 }
 
-export function subscribeToChatMessages(chatId: string, callback: (messages: ChatMessage[]) => void) {
+export function subscribeToChatMessages(
+  chatId: string,
+  callback: (messages: ChatMessage[]) => void,
+  onError?: (err: Error) => void
+) {
+  if (!auth.currentUser || !chatId) {
+    callback([]);
+    return () => {};
+  }
   const path = `direct_chats/${chatId}/messages`;
   const q = query(collection(db, path), orderBy('timestamp', 'asc'), limit(150));
   return onSnapshot(
@@ -2959,8 +3002,19 @@ export function subscribeToChatMessages(chatId: string, callback: (messages: Cha
       callback(messages);
     },
     err => {
-      console.warn('Notice: Chat messages subscription error:', err);
+      const errInfo: FirestoreErrorInfo = {
+        error: err instanceof Error ? err.message : String(err),
+        authInfo: {
+          userId: auth.currentUser?.uid,
+          email: auth.currentUser?.email,
+          emailVerified: auth.currentUser?.emailVerified,
+        },
+        operationType: OperationType.LIST,
+        path,
+      };
+      console.warn('Notice: Chat messages subscription error:', err, JSON.stringify(errInfo));
       callback([]);
+      onError?.(err instanceof Error ? err : new Error(String(err)));
     }
   );
 }
@@ -2969,30 +3023,63 @@ export async function sendChatMessageToFirestore(
   chatId: string,
   message: Omit<ChatMessage, 'id' | 'timestamp'>
 ): Promise<ChatMessage> {
+  if (!auth.currentUser) {
+    throw new Error('É necessário estar autenticado com sua conta para enviar mensagens.');
+  }
+
+  const effectiveSenderId = auth.currentUser.uid;
+  const trimmedText = String(message.text || '').trim().slice(0, 4000);
+  if (!trimmedText) {
+    throw new Error('A mensagem não pode estar vazia.');
+  }
+
   const path = `direct_chats/${chatId}/messages`;
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const nowIso = new Date().toISOString();
   const fullMessage: ChatMessage = {
-    ...message,
     id: messageId,
-    timestamp: new Date().toISOString(),
+    chatId,
+    senderId: effectiveSenderId,
+    senderUsername: String(message.senderUsername || auth.currentUser.displayName || 'Usuário').trim().slice(0, 255) || 'Usuário',
+    senderTag: String(message.senderTag || '').slice(0, 32),
+    senderAvatar: String(message.senderAvatar || 'U').slice(0, 64),
+    senderRole: message.senderRole || 'editor',
+    text: trimmedText,
+    timestamp: nowIso,
+    read: Boolean(message.read),
   };
 
   try {
+    const chatRef = doc(db, 'direct_chats', chatId);
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+      await setDoc(chatRef, {
+        id: chatId,
+        participants: [effectiveSenderId],
+        participantNames: { [effectiveSenderId]: `${fullMessage.senderUsername}${fullMessage.senderTag}` },
+        participantAvatars: { [effectiveSenderId]: fullMessage.senderAvatar },
+        participantTags: { [effectiveSenderId]: fullMessage.senderTag },
+        lastMessage: trimmedText,
+        lastMessageAt: nowIso,
+        lastMessageSenderId: effectiveSenderId,
+        unreadCount: { [effectiveSenderId]: 0 },
+        createdAt: nowIso,
+      });
+    }
+
     await setDoc(doc(db, path, messageId), fullMessage);
-    // Update direct chat metadata
     await setDoc(
-      doc(db, 'direct_chats', chatId),
+      chatRef,
       {
-        lastMessage: message.text,
+        lastMessage: trimmedText,
         lastMessageAt: fullMessage.timestamp,
-        lastMessageSenderId: message.senderId,
+        lastMessageSenderId: effectiveSenderId,
       },
       { merge: true }
     );
     return fullMessage;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${path}/${messageId}`);
-    return fullMessage;
   }
 }
 

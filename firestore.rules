@@ -429,15 +429,104 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    function isValidChatId(id) {
+      return id is string && id.size() > 0 && id.size() <= 280 && id.matches('^[a-zA-Z0-9_.:\\-]+$');
+    }
+
+    function isValidDirectChat(data, chatId) {
+      return data.keys().hasOnly([
+          'id', 'participants', 'participantNames', 'participantAvatars',
+          'participantTags', 'lastMessage', 'lastMessageAt',
+          'lastMessageSenderId', 'unreadCount', 'createdAt'
+        ])
+        && data.keys().hasAll(['id', 'participants', 'createdAt'])
+        && data.id is string && data.id == chatId && data.id.size() > 0 && data.id.size() <= 280
+        && data.participants is list && data.participants.size() >= 1 && data.participants.size() <= 10
+        && data.participants[0] is string
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64
+        && (!('lastMessage' in data) || (data.lastMessage is string && data.lastMessage.size() <= 4000))
+        && (!('lastMessageAt' in data) || (data.lastMessageAt is string && data.lastMessageAt.size() <= 64))
+        && (!('lastMessageSenderId' in data) || (data.lastMessageSenderId is string && data.lastMessageSenderId.size() <= 128))
+        && (!('participantNames' in data) || data.participantNames is map)
+        && (!('participantAvatars' in data) || data.participantAvatars is map)
+        && (!('participantTags' in data) || data.participantTags is map)
+        && (!('unreadCount' in data) || data.unreadCount is map);
+    }
+
+    function isValidChatMessage(data, messageId, chatId) {
+      return data.keys().hasOnly([
+          'id', 'chatId', 'senderId', 'senderUsername', 'senderTag',
+          'senderAvatar', 'senderRole', 'text', 'timestamp', 'read'
+        ])
+        && data.keys().hasAll(['id', 'chatId', 'senderId', 'senderUsername', 'text', 'timestamp'])
+        && data.id is string && data.id == messageId && data.id.size() > 0 && data.id.size() <= 128
+        && data.chatId is string && data.chatId == chatId && data.chatId.size() > 0 && data.chatId.size() <= 280
+        && data.senderId is string && data.senderId == request.auth.uid && data.senderId.size() <= 128
+        && data.senderUsername is string && data.senderUsername.size() > 0 && data.senderUsername.size() <= 255
+        && (!('senderTag' in data) || (data.senderTag is string && data.senderTag.size() <= 32))
+        && (!('senderAvatar' in data) || (data.senderAvatar is string && data.senderAvatar.size() <= 64))
+        && (!('senderRole' in data) || (data.senderRole is string && data.senderRole.size() <= 64))
+        && data.text is string && data.text.size() > 0 && data.text.size() <= 4000
+        && data.timestamp is string && data.timestamp.size() > 0 && data.timestamp.size() <= 64
+        && (!('read' in data) || data.read is bool);
+    }
+
+    function isDirectChatParticipant(chatId) {
+      return exists(/databases/$(database)/documents/direct_chats/$(chatId)) &&
+        'participants' in get(/databases/$(database)/documents/direct_chats/$(chatId)).data &&
+        get(/databases/$(database)/documents/direct_chats/$(chatId)).data.participants is list &&
+        request.auth.uid in get(/databases/$(database)/documents/direct_chats/$(chatId)).data.participants;
+    }
+
     match /direct_chats/{chatId} {
-      allow read, write: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
-      allow create: if isRegistered() && request.auth.uid in request.resource.data.participants;
+      allow get: if isAuthenticated() && isValidChatId(chatId) && (
+        isAdmin() ||
+        resource == null ||
+        ('participants' in resource.data && resource.data.participants is list && request.auth.uid in resource.data.participants)
+      );
+      allow list: if isAuthenticated() && (
+        isAdmin() ||
+        request.auth.uid in resource.data.participants
+      );
+      allow create: if isRegistered() && isValidChatId(chatId)
+        && isValidDirectChat(request.resource.data, chatId)
+        && request.auth.uid in request.resource.data.participants;
+      allow update: if isRegistered() && isValidChatId(chatId) && (
+        isAdmin() || (
+          'participants' in resource.data &&
+          resource.data.participants is list &&
+          request.auth.uid in resource.data.participants &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastMessage', 'lastMessageAt', 'lastMessageSenderId',
+            'unreadCount', 'participantNames', 'participantAvatars', 'participantTags'
+          ]) &&
+          (!('lastMessage' in request.resource.data) || (request.resource.data.lastMessage is string && request.resource.data.lastMessage.size() <= 4000)) &&
+          (!('lastMessageAt' in request.resource.data) || (request.resource.data.lastMessageAt is string && request.resource.data.lastMessageAt.size() <= 64)) &&
+          (!('lastMessageSenderId' in request.resource.data) || (request.resource.data.lastMessageSenderId is string && request.resource.data.lastMessageSenderId == request.auth.uid))
+        )
+      );
+      allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read, write: if isAuthenticated() && (
-          request.auth.uid in get(/databases/$(database)/documents/direct_chats/$(chatId)).data.participants ||
-          isAdmin()
+        allow get: if isAuthenticated() && isValidChatId(chatId) && isValidChatId(messageId) && (
+          isAdmin() ||
+          isDirectChatParticipant(chatId)
         );
+        allow list: if isAuthenticated() && isValidChatId(chatId) && (
+          isAdmin() ||
+          isDirectChatParticipant(chatId)
+        );
+        allow create: if isRegistered() && isValidChatId(chatId) && isValidChatId(messageId)
+          && isValidChatMessage(request.resource.data, messageId, chatId)
+          && (isAdmin() || isDirectChatParticipant(chatId));
+        allow update: if isRegistered() && isValidChatId(chatId) && isValidChatId(messageId) && (
+          isAdmin() || (
+            isDirectChatParticipant(chatId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+            request.resource.data.read is bool
+          )
+        );
+        allow delete: if isAdmin();
       }
     }
 

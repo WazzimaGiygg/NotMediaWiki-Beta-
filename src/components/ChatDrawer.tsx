@@ -5,18 +5,13 @@ import {
   Send,
   Search,
   Users,
-  Circle,
-  Hash,
-  RefreshCw,
-  UserPlus,
-  Minimize2,
-  Maximize2,
+  AlertCircle,
 } from 'lucide-react';
 import { UserSession, DirectChat, ChatMessage } from '../types';
 import {
+  auth,
   fetchUserChatsFromFirestore,
   subscribeToUserChats,
-  fetchChatMessagesFromFirestore,
   subscribeToChatMessages,
   sendChatMessageToFirestore,
   createOrGetDirectChat,
@@ -43,20 +38,32 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessageText, setNewMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   // User Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [allRegisteredUsers, setAllRegisteredUsers] = useState<UserSession[]>([]);
-  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeUserId = auth.currentUser?.uid || currentUser?.id || '';
+
+  // Reset chat state when authenticated user changes
+  useEffect(() => {
+    setActiveChat(null);
+    setMessages([]);
+    setChats([]);
+    setChatError(null);
+  }, [currentUser?.id]);
 
   // 1. Load user chats from Firestore
   useEffect(() => {
-    if (!currentUser || !isOpen) return;
+    if (!currentUser || !auth.currentUser || !isOpen) return;
 
     let isMounted = true;
-    fetchUserChatsFromFirestore(currentUser.id)
+    const uid = auth.currentUser.uid;
+    setChatError(null);
+
+    fetchUserChatsFromFirestore(uid)
       .then(userChats => {
         if (!isMounted) return;
         setChats(userChats);
@@ -66,17 +73,25 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
       })
       .catch(console.warn);
 
-    const unsubChats = subscribeToUserChats(currentUser.id, updated => {
-      if (isMounted) {
-        setChats(updated);
+    const unsubChats = subscribeToUserChats(
+      uid,
+      updated => {
+        if (isMounted) {
+          setChats(updated);
+        }
+      },
+      () => {
+        if (isMounted) {
+          setChatError('Não foi possível sincronizar suas conversas agora.');
+        }
       }
-    });
+    );
 
     // Also load registered users for the search bar
     fetchUsersFromFirestore()
       .then(usersList => {
         if (!isMounted) return;
-        setAllRegisteredUsers(usersList.filter(u => u.id !== currentUser.id));
+        setAllRegisteredUsers(usersList.filter(u => u.id !== uid));
       })
       .catch(console.warn);
 
@@ -88,42 +103,49 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
 
   // 2. If targetUserForNewChat is passed, create or select that chat
   useEffect(() => {
-    if (!currentUser || !targetUserForNewChat || !isOpen) return;
+    if (!currentUser || !auth.currentUser || !targetUserForNewChat || !isOpen) return;
 
+    setChatError(null);
     createOrGetDirectChat(currentUser, targetUserForNewChat)
       .then(chat => {
         setActiveChat(chat);
         onClearTargetUser?.();
       })
-      .catch(console.error);
+      .catch(err => {
+        console.warn('Could not open direct chat:', err);
+        setChatError('Não foi possível abrir a conversa com este usuário.');
+      });
   }, [currentUser, targetUserForNewChat, isOpen]);
 
   // 3. Subscribe to active chat messages in real time
   useEffect(() => {
-    if (!activeChat) {
+    if (!activeChat || !currentUser || !auth.currentUser || !isOpen) {
       setMessages([]);
       return;
     }
 
     let isMounted = true;
-    fetchChatMessagesFromFirestore(activeChat.id).then(msgs => {
-      if (!isMounted) return;
-      setMessages(msgs);
-      scrollToBottom();
-    });
-
-    const unsubMessages = subscribeToChatMessages(activeChat.id, updatedMsgs => {
-      if (isMounted) {
-        setMessages(updatedMsgs);
-        scrollToBottom();
+    const unsubMessages = subscribeToChatMessages(
+      activeChat.id,
+      updatedMsgs => {
+        if (isMounted) {
+          setMessages(updatedMsgs);
+          setChatError(null);
+          scrollToBottom();
+        }
+      },
+      () => {
+        if (isMounted) {
+          setChatError('Permissão insuficiente ou falha ao carregar mensagens desta conversa.');
+        }
       }
-    });
+    );
 
     return () => {
       isMounted = false;
       unsubMessages();
     };
-  }, [activeChat?.id]);
+  }, [activeChat?.id, currentUser?.id, isOpen]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -134,15 +156,20 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChat || !currentUser || !newMessageText.trim()) return;
+    if (!auth.currentUser) {
+      setChatError('Faça login com sua conta Google para enviar mensagens.');
+      return;
+    }
 
     const text = newMessageText.trim();
     setNewMessageText('');
     setIsSending(true);
+    setChatError(null);
 
     try {
       await sendChatMessageToFirestore(activeChat.id, {
         chatId: activeChat.id,
-        senderId: currentUser.id,
+        senderId: auth.currentUser.uid,
         senderUsername: currentUser.username,
         senderTag: currentUser.userTag || '',
         senderAvatar: currentUser.avatar,
@@ -151,21 +178,26 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
         read: false,
       });
       scrollToBottom();
-    } catch (err: any) {
-      alert(`Falha ao enviar mensagem: ${err.message}`);
+    } catch {
+      setNewMessageText(text);
+      setChatError('Não foi possível enviar a mensagem. Tente novamente em instantes.');
     } finally {
       setIsSending(false);
     }
   };
 
   const handleStartChatWith = async (targetUser: UserSession) => {
-    if (!currentUser) return;
+    if (!currentUser || !auth.currentUser) {
+      setChatError('Faça login com sua conta Google para iniciar uma conversa.');
+      return;
+    }
+    setChatError(null);
     try {
       const chat = await createOrGetDirectChat(currentUser, targetUser);
       setActiveChat(chat);
       setSearchQuery('');
-    } catch (err: any) {
-      alert(`Erro ao criar chat: ${err.message}`);
+    } catch {
+      setChatError('Não foi possível iniciar a conversa com este usuário.');
     }
   };
 
@@ -185,7 +217,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
 
   const getRecipientInfo = (chat: DirectChat) => {
     if (!currentUser) return { name: 'Usuário', avatar: 'U', tag: '' };
-    const otherId = chat.participants.find(id => id !== currentUser.id) || chat.participants[0];
+    const otherId = chat.participants.find(id => id !== activeUserId) || chat.participants[0];
     const name = chat.participantNames?.[otherId] || 'Usuário';
     const avatar = chat.participantAvatars?.[otherId] || 'U';
     const tag = chat.participantTags?.[otherId] || '';
@@ -312,6 +344,22 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
 
         {/* Right Pane: Active Chat Messages Thread */}
         <div className="flex-1 flex flex-col bg-white dark:bg-slate-900">
+          {chatError && (
+            <div className="mx-3 mt-2 px-3 py-2 rounded-md bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-200 text-[11px] flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{chatError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChatError(null)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-100 shrink-0 cursor-pointer"
+                aria-label="Fechar aviso"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
           {activeChat ? (
             <>
               {/* Active Chat Header */}
@@ -340,7 +388,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
                   </div>
                 ) : (
                   messages.map(msg => {
-                    const isMe = msg.senderId === currentUser?.id;
+                    const isMe = msg.senderId === activeUserId;
                     return (
                       <div
                         key={msg.id}

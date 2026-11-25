@@ -37,6 +37,7 @@ export function createExpressApp() {
     helmet({
       contentSecurityPolicy: false, // Let Vite handle script tags in development/SPA
       crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
       frameguard: false, // Controlled via CSP frame-ancestors so Google AI Studio can embed the preview
     })
   );
@@ -86,11 +87,7 @@ export function createExpressApp() {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Muitas requisições enviadas. Tente novamente mais tarde.' },
-    validate: {
-      xForwardedForHeader: false,
-      forwardedHeader: false,
-      default: true,
-    },
+    validate: false,
   });
   app.use('/api/', apiLimiter);
 
