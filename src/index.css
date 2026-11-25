@@ -13,6 +13,54 @@
     color: #f1f5f9;
     background-color: #0f172a;
   }
+
+  /* Default justified alignment for article body text without explicit alignment */
+  .wiki-content {
+    text-align: justify;
+    text-justify: inter-word;
+  }
+
+  .wiki-content :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    pre,
+    table,
+    .wikitable,
+    .infobox,
+    .code-block-wrapper,
+    .wiki-template:not(.wiki-template-quote),
+    caption,
+    figcaption,
+    button
+  ) {
+    text-align: left;
+  }
+
+  .wiki-content :is(p, li, blockquote, .wiki-template-quote) {
+    text-align: inherit;
+  }
+
+  .wiki-content [align="left"] {
+    text-align: left;
+  }
+
+  .wiki-content [align="center"],
+  .wiki-content center {
+    text-align: center;
+  }
+
+  .wiki-content [align="right"] {
+    text-align: right;
+  }
+
+  .wiki-content [align="justify"] {
+    text-align: justify;
+    text-justify: inter-word;
+  }
 }
 
 /* Authentic MediaWiki & Wikipedia Content Typography */

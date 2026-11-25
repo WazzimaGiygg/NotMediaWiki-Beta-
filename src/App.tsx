@@ -483,7 +483,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans">
         <div className="max-w-md w-full bg-slate-900 border border-rose-800/60 rounded-xl p-6 text-center space-y-4 shadow-xl">
           <div className="text-xs font-mono uppercase tracking-wider text-rose-400">
-            Proteção Anti-Clickjacking (X-Frame-Options: DENY)
+            Proteção Anti-Clickjacking (CSP frame-ancestors)
           </div>
           <h1 className="text-xl font-serif font-bold text-white">
             Exibição em iframe não permitida

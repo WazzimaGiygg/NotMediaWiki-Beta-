@@ -282,7 +282,7 @@ export class ClientParsoidService {
 
     // 5. Headings: == H2 ==, === H3 ===, ==== H4 ====
     const sectionCounters = [0, 0, 0];
-    processed = processed.replace(/^(={2,4})\s*([^=]+?)\s*\1\s*$/gm, (_, levelMarks, headingText) => {
+    processed = processed.replace(/^(={2,4})\s*([^=]+?)\s*\1[ \t]*$/gm, (_, levelMarks, headingText) => {
       const level = levelMarks.length;
       const cleanTitle = headingText.trim();
       const slugId = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -394,17 +394,7 @@ export class ClientParsoidService {
     const htmlBlocks = paragraphs.map(p => {
       const trimmed = p.trim();
       if (!trimmed) return '';
-      if (
-        trimmed.startsWith('<h') ||
-        trimmed.startsWith('<aside') ||
-        trimmed.startsWith('<div') ||
-        trimmed.startsWith('<li') ||
-        trimmed.startsWith('<table') ||
-        trimmed.startsWith('<pre') ||
-        trimmed.startsWith('<blockquote') ||
-        trimmed.startsWith('<nav') ||
-        trimmed.startsWith('<section')
-      ) {
+      if (/^<(?:h[1-6]|p|aside|div|li|ul|ol|table|pre|blockquote|nav|section|center|figure|hr)(?:\s|>|\/)/i.test(trimmed)) {
         return trimmed;
       }
       return `<p class="leading-relaxed text-slate-800 dark:text-slate-300 mb-4 font-serif text-[16px]">${trimmed.replace(/\n/g, '<br/>')}</p>`;

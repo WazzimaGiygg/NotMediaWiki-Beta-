@@ -1024,7 +1024,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
                 <>
                   <div
                     ref={previewRef}
-                    className="wiki-content prose max-w-none text-slate-800 font-serif text-sm leading-relaxed"
+                    className="wiki-content text-justify prose max-w-none text-slate-800 font-serif text-sm leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-slate-400 italic">No content to render</p>' }}
                   />
                   {isParsoidEnabled && isCiteEnabled && (

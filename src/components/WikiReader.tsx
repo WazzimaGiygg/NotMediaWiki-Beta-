@@ -1203,7 +1203,7 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
           <article
             id="wiki-article-container"
             ref={contentRef}
-            className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 ${
+            className={`wiki-content text-justify prose max-w-none text-slate-800 dark:text-slate-200 ${
               isZenActive || isFocusMode ? 'zen-mode-article' : ''
             } ${!highlightTemplateDebug ? 'hide-template-debug-highlights' : ''} ${
               readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'

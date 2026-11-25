@@ -490,7 +490,7 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
               ) : (
                 <div className="space-y-4">
                   <div
-                    className="wiki-content max-w-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden"
+                    className="wiki-content text-justify max-w-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden"
                     dangerouslySetInnerHTML={{ __html: parsedHtml }}
                   />
                   <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/60 px-3.5 py-2.5 rounded-lg">

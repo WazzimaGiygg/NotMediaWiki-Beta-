@@ -489,7 +489,7 @@ export const ArticleHistory: React.FC<ArticleHistoryProps> = ({
               </div>
             ) : (
               <article
-                className="wiki-content prose max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif text-sm"
+                className="wiki-content text-justify prose max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif text-sm"
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
             )}

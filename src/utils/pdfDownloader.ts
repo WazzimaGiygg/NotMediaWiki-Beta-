@@ -56,11 +56,16 @@ export function getPrintStyles(): string {
       font-size: 11.5pt !important;
       line-height: 1.6 !important;
       color: #0f172a !important;
+      text-align: justify;
+      text-justify: inter-word;
     }
 
     .notmediawiki-pdf-body p {
       margin-bottom: 1.15rem !important;
-      text-align: justify !important;
+    }
+
+    .notmediawiki-pdf-body p:not([align]):not([style*="text-align"]):not(.text-left):not(.text-center):not(.text-right):not(.text-start):not(.text-end) {
+      text-align: inherit;
     }
 
     .notmediawiki-pdf-body h1,

@@ -32,18 +32,21 @@ export function createExpressApp() {
     next();
   });
 
-  // 2. Security Headers via Helmet + Strict Anti-Iframe (Clickjacking Protection)
+  // 2. Security Headers via Helmet + CSP frame-ancestors allowing Google AI Studio
   app.use(
     helmet({
       contentSecurityPolicy: false, // Let Vite handle script tags in development/SPA
       crossOriginEmbedderPolicy: false,
-      frameguard: { action: 'deny' },
+      frameguard: false, // Controlled via CSP frame-ancestors so Google AI Studio can embed the preview
     })
   );
 
   app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+    res.removeHeader('X-Frame-Options');
+    res.setHeader(
+      'Content-Security-Policy',
+      "frame-ancestors 'self' https://aistudio.google.com https://*.aistudio.google.com https://*.google.com https://*.googleusercontent.com https://*.usercontent.goog https://*.gstatic.com https://*.withgoogle.com https://*.run.app http://localhost:* http://127.0.0.1:*"
+    );
     next();
   });
 

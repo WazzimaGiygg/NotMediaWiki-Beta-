@@ -251,7 +251,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({
         )}
       <article
         ref={articleContainerRef}
-        className={`wiki-content prose max-w-none text-slate-800 dark:text-slate-200 font-serif text-base leading-relaxed ${
+        className={`wiki-content text-justify prose max-w-none text-slate-800 dark:text-slate-200 font-serif text-base leading-relaxed ${
           !highlightDebugEnabled ? 'hide-template-debug-highlights' : ''
         }`.trim()}
         onClick={handleContentClick}

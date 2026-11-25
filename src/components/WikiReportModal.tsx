@@ -291,7 +291,7 @@ export const WikiReportModal: React.FC<WikiReportModalProps> = ({
 
                 {/* Conteúdo Renderizado do Artigo */}
                 <div
-                  className="prose prose-slate max-w-none text-slate-800 text-sm leading-relaxed font-serif"
+                  className="wiki-content text-justify prose prose-slate max-w-none text-slate-800 text-sm leading-relaxed font-serif"
                   dangerouslySetInnerHTML={{ __html: htmlContent || article.wikitext }}
                 />
 

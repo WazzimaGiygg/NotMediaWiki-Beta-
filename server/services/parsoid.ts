@@ -3,16 +3,21 @@ import sanitizeHtml from 'sanitize-html';
 export const PARSOID_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'p', 'a', 'span', 'div', 'b', 'i', 'strong', 'em', 'strike', 'code', 'pre',
+    'p', 'a', 'span', 'div', 'center', 'b', 'i', 'strong', 'em', 'strike', 'code', 'pre',
     'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
     'blockquote', 'cite', 'sub', 'sup', 'br', 'hr', 'img', 'section',
   ],
   allowedAttributes: {
-    '*': ['class', 'id', 'title', 'data-*'],
+    '*': ['class', 'id', 'title', 'align', 'style', 'data-*'],
     a: ['href', 'name', 'target', 'rel'],
     img: ['src', 'alt', 'width', 'height'],
     td: ['colspan', 'rowspan'],
     th: ['colspan', 'rowspan', 'scope'],
+  },
+  allowedStyles: {
+    '*': {
+      'text-align': [/^(?:left|right|center|justify|start|end)$/i],
+    },
   },
   allowedSchemes: ['http', 'https', 'mailto'],
 };
@@ -283,7 +288,7 @@ export class ParsoidService {
 
     // 5. Headings: == H2 ==, === H3 ===, ==== H4 ====
     let sectionCounters = [0, 0, 0];
-    processed = processed.replace(/^(={2,4})\s*([^=]+?)\s*\1\s*$/gm, (_, levelMarks, headingText) => {
+    processed = processed.replace(/^(={2,4})\s*([^=]+?)\s*\1[ \t]*$/gm, (_, levelMarks, headingText) => {
       const level = levelMarks.length; // 2, 3, or 4
       const cleanTitle = headingText.trim();
       const slugId = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -382,14 +387,7 @@ export class ParsoidService {
     const htmlBlocks = paragraphs.map(p => {
       const trimmed = p.trim();
       if (!trimmed) return '';
-      if (
-        trimmed.startsWith('<h') ||
-        trimmed.startsWith('<aside') ||
-        trimmed.startsWith('<div') ||
-        trimmed.startsWith('<li') ||
-        trimmed.startsWith('<table') ||
-        trimmed.startsWith('<pre')
-      ) {
+      if (/^<(?:h[1-6]|p|aside|div|li|ul|ol|table|pre|blockquote|nav|section|center|figure|hr)(?:\s|>|\/)/i.test(trimmed)) {
         return trimmed;
       }
       return `<p class="leading-relaxed text-slate-800 dark:text-slate-300 mb-4 font-serif text-[16px]">${trimmed.replace(/\n/g, '<br/>')}</p>`;
