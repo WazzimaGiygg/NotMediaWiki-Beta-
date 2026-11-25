@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, HelpCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle, FileText, PanelRight, Plus, ChevronDown } from 'lucide-react';
 import { Article, ArticleDraft, AutoSaveStatus, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
-import { syncMediaWikiToFirestore, recordDailyChecklistAction, loginWithGoogle, auth } from '../firebase';
+import { loginWithGoogle, auth, recordDailyChecklistAction } from '../firebase';
 import {
   AUTOSAVE_INACTIVITY_MS,
   AUTOSAVE_PERIODIC_MS,
@@ -28,15 +28,22 @@ import { ArticleFootnotes } from './ArticleFootnotes';
 import { ReferenceManagerModal } from './ReferenceManagerModal';
 import { TemplateManagerModal } from './TemplateManagerModal';
 import { TemplateFixAssistantPanel } from './TemplateFixAssistantPanel';
+import { RichFormattedEditor } from './RichFormattedEditor';
+import { FORMATTED_INSERT_OPTIONS } from '../utils/wikitextRichConverter';
 import { buildDefaultTemplatePageSkeleton } from '../data/defaultTemplates';
 import { parseTitle } from '../utils/namespaces';
 import { useExtensions } from '../context/ExtensionsContext';
+
+export type EditorViewMode = 'split-formatted' | 'formatted' | 'split' | 'edit' | 'preview';
 
 interface WikiEditorProps {
   slug: string;
   currentUser: UserSession | null;
   onSaved: (slug: string) => void;
   onCancel: () => void;
+  initialWikitext?: string;
+  initialTitle?: string;
+  initialMode?: EditorViewMode;
 }
 
 export const WikiEditor: React.FC<WikiEditorProps> = ({
@@ -44,6 +51,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   currentUser,
   onSaved,
   onCancel,
+  initialWikitext: initialWikitextProp,
+  initialTitle: initialTitleProp,
+  initialMode,
 }) => {
   const [title, setTitle] = useState(slug.replace(/_/g, ' '));
   const [wikitext, setWikitext] = useState('');
@@ -70,10 +80,11 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const isAbuseFilterEnabled = isExtensionEnabled ? isExtensionEnabled('AbuseFilter', true) : true;
   const isParsoidEnabled = isExtensionEnabled ? isExtensionEnabled('ParsoidCompiler', true) : true;
 
-  // Live Parsoid Preview state
-  const [activeTab, setActiveTab] = useState<'split' | 'edit' | 'preview'>(
-    isVisualEditorEnabled ? 'split' : 'edit'
+  // Live Parsoid Preview & Formatted Editor state
+  const [activeTab, setActiveTab] = useState<EditorViewMode>(
+    isVisualEditorEnabled ? (initialMode || 'split-formatted') : 'edit'
   );
+  const [isToolbarFormattedMenuOpen, setIsToolbarFormattedMenuOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewTimeMs, setPreviewTimeMs] = useState<number>(0);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -83,6 +94,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       setActiveTab('edit');
     }
   }, [isVisualEditorEnabled, activeTab]);
+
+  useEffect(() => {
+    if (isVisualEditorEnabled && initialMode) {
+      setActiveTab(initialMode);
+    }
+  }, [initialMode, isVisualEditorEnabled]);
 
   // Infobox Software Builder Modal state
   const [isInfoboxModalOpen, setIsInfoboxModalOpen] = useState(false);
@@ -191,10 +208,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       .catch(() => {
         // New article or new Predefinição template
         if (isMounted) {
-          const defaultTitle = slug.replace(/_/g, ' ');
+          const defaultTitle = initialTitleProp?.trim() || slug.replace(/_/g, ' ');
           const parsedNewTitle = parseTitle(defaultTitle);
           const template =
-            parsedNewTitle.namespaceId === 10
+            initialWikitextProp !== undefined && initialWikitextProp.trim().length > 0
+              ? initialWikitextProp
+              : parsedNewTitle.namespaceId === 10
               ? buildDefaultTemplatePageSkeleton(parsedNewTitle.baseTitle || defaultTitle)
               : `'''${defaultTitle}''' é um artigo no NotMediaWiki, parte do desenvolvimento de projetos WazzimaGiygg (wazzimagiygg.com).\n\n== Visão Geral ==\nEscreva o conteúdo aqui...\n\n== Referências ==\n<ref>[https://wazzimagiygg.com Portal WazzimaGiygg]</ref>\n`;
           setTitle(defaultTitle);
@@ -208,7 +227,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       });
 
     return () => { isMounted = false; };
-  }, [slug, effectiveUserId, isDraftAutosaveEnabled, isTemplatesEnabled]);
+  }, [slug, effectiveUserId, isDraftAutosaveEnabled, isTemplatesEnabled, initialWikitextProp, initialTitleProp]);
 
   const persistDraftNow = useCallback(async () => {
     if (!isDraftAutosaveEnabled || loading || saving || currentUser?.isBanned || recoverableDraft) return;
@@ -325,8 +344,16 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   }, [previewHtml, activeTab, isSyntaxEnabled, isParsoidEnabled]);
 
   const insertMarkup = (before: string, after: string = '', defaultText: string = '') => {
-    const textarea = document.getElementById('wikitext-input') as HTMLTextAreaElement;
-    if (!textarea) return;
+    const textarea = document.getElementById('wikitext-input') as HTMLTextAreaElement | null;
+    if (!textarea) {
+      const inserted = `${before}${defaultText}${after}`;
+      setWikitext(prev => {
+        if (!prev.trim()) return inserted.trimStart();
+        const needsBreak = !prev.endsWith('\n') && !inserted.startsWith('\n');
+        return `${prev}${needsBreak ? '\n\n' : ''}${inserted}`;
+      });
+      return;
+    }
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
@@ -655,22 +682,58 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           )}
 
           {/* View Layout Tabs */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded">
+          <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded">
             {isVisualEditorEnabled && (
-              <button
-                onClick={() => setActiveTab('split')}
-                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                  activeTab === 'split' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Columns className="w-3 h-3" />
-                Dual Split
-              </button>
+              <>
+                <button
+                  type="button"
+                  data-testid="tab-split-formatted"
+                  onClick={() => setActiveTab('split-formatted')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'split-formatted'
+                      ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-2xs font-semibold'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Editar em código Wikitexto e Edição Formatada lado a lado com sincronização em tempo real"
+                >
+                  <PanelRight className="w-3 h-3" />
+                  Código + Formatado
+                </button>
+                <button
+                  type="button"
+                  data-testid="tab-formatted"
+                  onClick={() => setActiveTab('formatted')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'formatted'
+                      ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-2xs font-semibold'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Edição visual formatada em tela cheia"
+                >
+                  <FileText className="w-3 h-3" />
+                  Edição Formatada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('split')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'split'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Columns className="w-3 h-3" />
+                  Dual Split
+                </button>
+              </>
             )}
             <button
+              type="button"
               onClick={() => setActiveTab('edit')}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                activeTab === 'edit' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'edit'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Code className="w-3 h-3" />
@@ -678,9 +741,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             </button>
             {isVisualEditorEnabled && (
               <button
+                type="button"
                 onClick={() => setActiveTab('preview')}
-                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                  activeTab === 'preview' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'preview'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Eye className="w-3 h-3" />
@@ -824,6 +890,44 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-2">Markup:</span>
           {isVisualEditorEnabled && (
             <>
+              <div className="relative">
+                <button
+                  type="button"
+                  data-testid="toolbar-insert-formatted-btn"
+                  onClick={() => setIsToolbarFormattedMenuOpen(prev => !prev)}
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0 shadow-2xs"
+                  title="Inserir bloco ou opção formatada diretamente no artigo (funciona em código e edição formatada)"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Inserir Formatado</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {isToolbarFormattedMenuOpen && (
+                  <div
+                    data-testid="toolbar-insert-formatted-menu"
+                    className="absolute left-0 top-full mt-1 z-40 w-72 max-h-80 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1.5 space-y-1"
+                  >
+                    {FORMATTED_INSERT_OPTIONS.map(opt => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          insertMarkup(opt.wikitextSnippet);
+                          setIsToolbarFormattedMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer block"
+                      >
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                          {opt.label}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {opt.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => insertMarkup('== ', ' ==', 'Section heading')}
@@ -988,25 +1092,63 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
         )}
 
         {/* Editor Main Content Area */}
-        <div className={`grid border border-slate-200 bg-white ${
-          activeTab === 'split' && isVisualEditorEnabled ? 'grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200' : 'grid-cols-1'
-        }`}>
-          {/* Source Input */}
-          {(activeTab === 'split' || activeTab === 'edit' || !isVisualEditorEnabled) && (
-            <div className="p-2">
-              <textarea
-                id="wikitext-input"
-                value={wikitext}
-                onChange={e => {
-                  setWikitext(e.target.value);
-                  setCursorOffset(e.target.selectionStart ?? 0);
-                }}
-                onClick={e => syncCursorFromTextarea(e.currentTarget)}
-                onKeyUp={e => syncCursorFromTextarea(e.currentTarget)}
-                onSelect={e => syncCursorFromTextarea(e.currentTarget)}
-                rows={22}
-                className="w-full h-full min-h-[460px] p-3 font-mono text-xs text-slate-800 leading-relaxed outline-none resize-y placeholder:text-slate-400"
-                placeholder="Type MediaWiki markup here..."
+        <div
+          className={`grid border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 ${
+            (activeTab === 'split' || activeTab === 'split-formatted') && isVisualEditorEnabled
+              ? 'grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800'
+              : 'grid-cols-1'
+          }`}
+        >
+          {/* Source Input (Wikitext Code) */}
+          {(activeTab === 'split' || activeTab === 'split-formatted' || activeTab === 'edit' || !isVisualEditorEnabled) && (
+            <div className="flex flex-col">
+              {activeTab === 'split-formatted' && isVisualEditorEnabled && (
+                <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/90 flex items-center justify-between text-[11px]">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Code className="w-3.5 h-3.5 text-slate-500" />
+                    Código Wikitexto
+                  </span>
+                  <span className="font-mono text-slate-400">Sincronizado lado a lado</span>
+                </div>
+              )}
+              <div className="p-2 flex-1">
+                <textarea
+                  id="wikitext-input"
+                  value={wikitext}
+                  onChange={e => {
+                    setWikitext(e.target.value);
+                    setCursorOffset(e.target.selectionStart ?? 0);
+                  }}
+                  onClick={e => syncCursorFromTextarea(e.currentTarget)}
+                  onKeyUp={e => syncCursorFromTextarea(e.currentTarget)}
+                  onSelect={e => syncCursorFromTextarea(e.currentTarget)}
+                  rows={22}
+                  className="w-full h-full min-h-[460px] p-3 font-mono text-xs text-slate-800 dark:text-slate-100 bg-transparent leading-relaxed outline-none resize-y placeholder:text-slate-400"
+                  placeholder="Type MediaWiki markup here..."
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Interactive Formatted WYSIWYG Editor (Standalone or Side-by-Side) */}
+          {isVisualEditorEnabled && (activeTab === 'split-formatted' || activeTab === 'formatted') && (
+            <div className="flex flex-col min-w-0">
+              <div className="px-3 py-1.5 border-b border-emerald-200/70 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 flex items-center justify-between text-[11px]">
+                <span className="font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Edição Formatada (Visual)
+                </span>
+                <span className="font-mono text-emerald-700/80 dark:text-emerald-400/80">
+                  WYSIWYG ↔ Wikitexto
+                </span>
+              </div>
+              <RichFormattedEditor
+                wikitext={wikitext}
+                onChange={next => setWikitext(next)}
+                disabled={Boolean(currentUser?.isBanned || currentUser?.role === 'reader')}
+                onOpenTemplateManager={isTemplatesEnabled ? () => setIsTemplateModalOpen(true) : undefined}
+                onOpenInfoboxBuilder={isInfoboxEnabled ? openInfoboxBuilder : undefined}
+                onOpenReferenceManager={isCiteEnabled ? () => setIsRefModalOpen(true) : undefined}
               />
             </div>
           )}

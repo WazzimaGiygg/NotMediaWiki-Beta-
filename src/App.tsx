@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { HomeScreen } from './components/HomeScreen';
 import { ArticleViewer } from './components/ArticleViewer';
-import { WikiEditor } from './components/WikiEditor';
+import { WikiEditor, EditorViewMode } from './components/WikiEditor';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DevAdminDashboard } from './components/DevAdminDashboard';
 import { ArticleHistory } from './components/ArticleHistory';
@@ -82,6 +82,13 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const [activePortal, setActivePortal] = useState<'livros' | 'universitario' | 'jornal'>('livros');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
+  const [pendingNewArticle, setPendingNewArticle] = useState<{
+    slug: string;
+    title: string;
+    wikitext: string;
+    namespace: number;
+    editorMode?: EditorViewMode;
+  } | null>(null);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isAppModalOpen, setIsAppModalOpen] = useState(false);
   const { deviceMode, setDeviceMode } = useAppPlatformMode();
@@ -454,6 +461,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       window.location.hash = `#/special/${encodeURIComponent(spName)}`;
       return;
     }
+    setPendingNewArticle(null);
     setActiveArticleSlug(slug);
     setCurrentView('reader');
     setReadingProgress(0);
@@ -461,6 +469,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   };
 
   const handleOpenEdit = (slug: string) => {
+    setPendingNewArticle(null);
     setActiveArticleSlug(slug);
     setCurrentView('editor');
     window.location.hash = `#/edit/${encodeURIComponent(slug)}`;
@@ -780,12 +789,17 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           <WikiEditor
             slug={activeArticleSlug}
             currentUser={currentUser}
+            initialWikitext={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.wikitext : undefined}
+            initialTitle={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.title : undefined}
+            initialMode={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.editorMode : undefined}
             onSaved={slug => {
+              setPendingNewArticle(null);
               setActiveArticleSlug(slug);
               setCurrentView('reader');
               window.location.hash = `#/wiki/${encodeURIComponent(slug)}`;
             }}
             onCancel={() => {
+              setPendingNewArticle(null);
               setCurrentView('reader');
               window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
             }}
@@ -965,7 +979,14 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       <NewArticleModal
         isOpen={isNewArticleModalOpen}
         onClose={() => setIsNewArticleModalOpen(false)}
-        onCreate={(slug, _title, initialWikitext, _namespace) => {
+        onCreate={(slug, title, initialWikitext, namespace, editorMode) => {
+          setPendingNewArticle({
+            slug,
+            title,
+            wikitext: initialWikitext,
+            namespace,
+            editorMode,
+          });
           setActiveArticleSlug(slug);
           setCurrentView('editor');
           window.location.hash = `#/edit/${encodeURIComponent(slug)}`;
