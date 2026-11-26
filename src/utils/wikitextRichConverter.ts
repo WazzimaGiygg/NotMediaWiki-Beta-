@@ -8,29 +8,64 @@ export interface FormattedInsertOption {
 
 export const FORMATTED_INSERT_OPTIONS: FormattedInsertOption[] = [
   {
+    id: 'page-title',
+    label: 'Título da página (Ctrl+1)',
+    description: 'Título principal H1 (= Título =).',
+    category: 'estrutura',
+    wikitextSnippet: '\n\n= Título da Página =\n',
+  },
+  {
     id: 'section',
-    label: 'Seção Formatada (H2)',
-    description: 'Título de seção principal seguido de parágrafo justificado.',
+    label: 'Cabeçalho / Seção (Ctrl+2)',
+    description: 'Título de seção principal (== Seção ==) seguido de parágrafo justificado.',
     category: 'estrutura',
     wikitextSnippet: '\n\n== Nova Seção ==\nEscreva o conteúdo desta seção aqui.\n',
   },
   {
     id: 'subsection',
-    label: 'Subseção Formatada (H3)',
-    description: 'Subtítulo hierárquico com parágrafo explicativo.',
+    label: 'Subtítulo 1 (Ctrl+3)',
+    description: 'Subseção de nível 1 (=== Subtítulo ===) com parágrafo explicativo.',
     category: 'estrutura',
-    wikitextSnippet: '\n\n=== Nova Subseção ===\nDesenvolva os detalhes deste tópico aqui.\n',
+    wikitextSnippet: '\n\n=== Subtítulo 1 ===\nDesenvolva os detalhes deste tópico aqui.\n',
+  },
+  {
+    id: 'subsection-2',
+    label: 'Subtítulo 2 (Ctrl+4)',
+    description: 'Subseção de nível 2 (==== Subtítulo ====).',
+    category: 'estrutura',
+    wikitextSnippet: '\n\n==== Subtítulo 2 ====\nDetalhes adicionais deste subtópico.\n',
+  },
+  {
+    id: 'subsection-3',
+    label: 'Subtítulo 3 (Ctrl+5)',
+    description: 'Subseção de nível 3 (===== Subtítulo =====).',
+    category: 'estrutura',
+    wikitextSnippet: '\n\n===== Subtítulo 3 =====\nNotas específicas do tópico.\n',
+  },
+  {
+    id: 'subsection-4',
+    label: 'Subtítulo 4 (Ctrl+6)',
+    description: 'Subseção de nível 4 (====== Subtítulo ======).',
+    category: 'estrutura',
+    wikitextSnippet: '\n\n====== Subtítulo 4 ======\nDetalhe granular da seção.\n',
+  },
+  {
+    id: 'preformatted',
+    label: 'Pré-formatado (Ctrl+7)',
+    description: 'Bloco monoespaçado preservando espaços e quebras de linha.',
+    category: 'estrutura',
+    wikitextSnippet: '\n\n<pre>\nTexto pré-formatado com espaçamento preservado.\n</pre>\n',
   },
   {
     id: 'blockquote',
-    label: 'Bloco de Citação Simples',
+    label: 'Bloco de citação (Ctrl+8)',
     description: 'Trecho recuado formatado em citação editorial.',
     category: 'estrutura',
     wikitextSnippet: '\n\n<blockquote>Texto citado em destaque no corpo do artigo.</blockquote>\n',
   },
   {
     id: 'justified-paragraph',
-    label: 'Parágrafo Justificado (Padrão)',
+    label: 'Parágrafo Justificado (Ctrl+0)',
     description: 'Parágrafo padrão com alinhamento justificado automático.',
     category: 'alinhamento',
     wikitextSnippet: '\n\nNovo parágrafo com alinhamento justificado automático para leitura enciclopédica.\n',
@@ -52,16 +87,30 @@ export const FORMATTED_INSERT_OPTIONS: FormattedInsertOption[] = [
   {
     id: 'bullet-list',
     label: 'Lista com Marcadores',
-    description: 'Tópicos organizados com marcadores.',
+    description: 'Tópicos organizados com marcadores (*).',
     category: 'listas',
     wikitextSnippet: '\n\n* Primeiro item formatado\n* Segundo item formatado\n* Terceiro item formatado\n',
   },
   {
     id: 'numbered-list',
     label: 'Lista Numerada',
-    description: 'Etapas ou itens em ordem numérica.',
+    description: 'Etapas ou itens em ordem numérica (#).',
     category: 'listas',
     wikitextSnippet: '\n\n# Primeira etapa\n# Segunda etapa\n# Terceira etapa\n',
+  },
+  {
+    id: 'image-media',
+    label: 'Imagens e mídia ([[File:...]])',
+    description: 'Incorporação de imagem ou mídia com legenda.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n[[File:Exemplo_imagem.png|thumb|Legenda descritiva da imagem.]]\n',
+  },
+  {
+    id: 'gallery',
+    label: 'Galeria (<gallery>)',
+    description: 'Conjunto organizado de múltiplas imagens com legendas.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n<gallery>\nFile:Imagem_1.png|Primeira figura\nFile:Imagem_2.png|Segunda figura\n</gallery>\n',
   },
   {
     id: 'wikitable',
@@ -73,8 +122,8 @@ export const FORMATTED_INSERT_OPTIONS: FormattedInsertOption[] = [
   },
   {
     id: 'notice-box',
-    label: 'Caixa de Aviso ({{Aviso}})',
-    description: 'Banner informativo formatado no estilo MediaWiki.',
+    label: 'Predefinição de Aviso ({{Aviso}})',
+    description: 'Banner informativo reutilizável no estilo MediaWiki.',
     category: 'blocos',
     wikitextSnippet:
       '\n\n{{Aviso|tipo=info|título=Aviso Editorial|texto=Descreva aqui uma informação importante sobre este artigo.}}\n',
@@ -97,18 +146,81 @@ export const FORMATTED_INSERT_OPTIONS: FormattedInsertOption[] = [
   },
   {
     id: 'code-block',
-    label: 'Bloco de Código',
-    description: 'Trecho de código com destaque de sintaxe.',
+    label: 'Bloco de Código (<syntaxhighlight>)',
+    description: 'Trecho de programação com destaque de sintaxe.',
     category: 'blocos',
     wikitextSnippet:
       '\n\n<syntaxhighlight lang="typescript">\n// Exemplo de código\nconst exemplo: string = "NotMediaWiki";\n</syntaxhighlight>\n',
   },
   {
+    id: 'comment',
+    label: 'Comentário Oculto (Ctrl+Alt+M)',
+    description: 'Nota interna visível apenas aos editores no código-fonte.',
+    category: 'blocos',
+    wikitextSnippet: '<!-- Comentário editorial oculto -->',
+  },
+  {
+    id: 'signature',
+    label: 'Assinatura (~~~~)',
+    description: 'Marcação automática de autoria e data.',
+    category: 'blocos',
+    wikitextSnippet: ' ~~~~',
+  },
+  {
+    id: 'math-formula',
+    label: 'Fórmula Matemática (<math>)',
+    description: 'Equação científica em notação LaTeX.',
+    category: 'blocos',
+    wikitextSnippet: '<math>E = mc^2 + \\frac{p^2}{2m}</math>',
+  },
+  {
+    id: 'chem-formula',
+    label: 'Fórmula Química (<chem>)',
+    description: 'Notação científica para compostos e reações.',
+    category: 'blocos',
+    wikitextSnippet: '<chem>2H2 + O2 -> 2H2O</chem>',
+  },
+  {
+    id: 'hiero',
+    label: 'Hieróglifos (<hiero>)',
+    description: 'Renderização de caracteres hieroglíficos egípcios.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n<hiero>A1-B1-D4-N35</hiero>\n',
+  },
+  {
+    id: 'score',
+    label: 'Partitura Musical (<score>)',
+    description: 'Notação musical no formato LilyPond.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n<score>\n\\relative c\' { c4 d e f g2 g }\n</score>\n',
+  },
+  {
+    id: 'mapframe',
+    label: 'Mapa (<mapframe>)',
+    description: 'Incorporação de mapa cartográfico com coordenadas.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n<mapframe latitude="-23.5505" longitude="-46.6333" zoom="12" text="Localização de referência" />\n',
+  },
+  {
+    id: 'graph',
+    label: 'Gráfico de Dados (<graph>)',
+    description: 'Bloco estruturado para gráfico de dados.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n<graph>\n{"title": "Evolução Anual", "data": [{"x": 2024, "y": 40}, {"x": 2026, "y": 95}]}\n</graph>\n',
+  },
+  {
     id: 'reference',
-    label: 'Referência (<ref>)',
+    label: 'Citar / Referência (<ref>)',
     description: 'Nota de rodapé bibliográfica numerada.',
     category: 'blocos',
     wikitextSnippet: '<ref>Autor ou Organização (2026). Título da fonte consultada.</ref>',
+  },
+  {
+    id: 'references-list',
+    label: 'Lista de Referências (<references />)',
+    description: 'Bloco automático reunindo todas as citações da página.',
+    category: 'blocos',
+    wikitextSnippet: '\n\n== Referências ==\n<references />\n',
   },
 ];
 
@@ -250,7 +362,7 @@ function convertInlineWikitext(line: string): string {
   // Preserve safe inline HTML tags before escaping raw characters
   const safeTags: string[] = [];
   text = text.replace(
-    /<(\/?(?:strong|b|em|i|u|code|sup|sub|br)\s*\/?)>/gi,
+    /<(\/?(?:strong|b|em|i|u|s|del|strike|code|sup|sub|br)\s*\/?)>/gi,
     (_, inner) => {
       safeTags.push(`<${inner}>`);
       return `@@WMRT_TAG_${safeTags.length - 1}@@`;
@@ -399,10 +511,45 @@ export function wikitextToEditableHtml(wikitext: string): string {
       )
     )
   );
-  working = working.replace(/<pre(?:\s+[^>]*)?>([\s\S]*?)<\/pre>/gi, (full, code) =>
+  working = working.replace(/<pre(?:\s+[^>]*)?>([\s\S]*?)<\/pre>/gi, (_full, code) =>
     pushBlock(
-      buildPreservedBlockHtml(full, 'Bloco <pre>', String(code || '').trim().split('\n')[0] || '(pre)')
+      `<pre data-pre-block="true" class="font-mono text-xs bg-slate-100 dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 overflow-x-auto">${escapeHtml(String(code || '').replace(/^\n+|\n+$/g, ''))}</pre>`
     )
+  );
+
+  // 2.5. Preserve editorial comments <!-- ... -->, magic words, <math>, <chem>, <hiero>, <score>, <gallery>, <mapframe>, <graph>, ~~~~, [[File:...]], and Interwiki links
+  working = working.replace(/<!--([\s\S]*?)-->/g, (full, inner) =>
+    pushInline(buildPreservedInlineHtml(full, `Comentário: ${String(inner || '').trim().slice(0, 28)}`, full))
+  );
+  working = working.replace(/<(?:chem|ce)>([\s\S]*?)<\/(?:chem|ce)>/gi, (full, inner) =>
+    pushInline(buildPreservedInlineHtml(full, `Química: ${String(inner || '').trim().slice(0, 24)}`, full))
+  );
+  working = working.replace(/<math(?:\s+[^>]*)?>([\s\S]*?)<\/math>/gi, (full, inner) =>
+    pushInline(buildPreservedInlineHtml(full, `Math: ${String(inner || '').trim().slice(0, 24)}`, full))
+  );
+  working = working.replace(/<hiero>([\s\S]*?)<\/hiero>/gi, (full, inner) =>
+    pushBlock(buildPreservedBlockHtml(full, 'Hieróglifos (<hiero>)', String(inner || '').trim()))
+  );
+  working = working.replace(/<score(?:\s+[^>]*)?>([\s\S]*?)<\/score>/gi, (full, inner) =>
+    pushBlock(buildPreservedBlockHtml(full, 'Partitura (<score>)', String(inner || '').trim().slice(0, 80)))
+  );
+  working = working.replace(/<gallery(?:\s+[^>]*)?>([\s\S]*?)<\/gallery>/gi, (full, inner) =>
+    pushBlock(buildPreservedBlockHtml(full, 'Galeria (<gallery>)', String(inner || '').trim().split('\n')[0] || 'galeria'))
+  );
+  working = working.replace(/<mapframe(?:\s+[^>]*)?(?:\/>|>[\s\S]*?<\/mapframe>)/gi, full =>
+    pushBlock(buildPreservedBlockHtml(full, 'Mapa (<mapframe>)', full))
+  );
+  working = working.replace(/<graph(?:\s+[^>]*)?>([\s\S]*?)<\/graph>/gi, (full, inner) =>
+    pushBlock(buildPreservedBlockHtml(full, 'Gráfico (<graph>)', String(inner || '').trim().slice(0, 80)))
+  );
+  working = working.replace(/~~~~/g, () =>
+    pushInline(buildPreservedInlineHtml('~~~~', 'Assinatura (~~~~)', 'Assinatura e data'))
+  );
+  working = working.replace(/__(?:NOTOC|FORCETOC|NOEDITSECTION|NOGALLERY|DISAMBIG|NOINDEX|INDEX)__/g, full =>
+    pushBlock(buildPreservedBlockHtml(full, `Configuração: ${full}`, full))
+  );
+  working = working.replace(/\[\[(?:File|Image|Arquivo|Imagem):([^\]]+)\]\]/gi, (full, target) =>
+    pushBlock(buildPreservedBlockHtml(full, `Mídia: ${target.split('|')[0].trim()}`, full))
   );
 
   // 3. Preserve <ref> citations inline & <references /> block
@@ -415,9 +562,12 @@ export function wikitextToEditableHtml(wikitext: string): string {
     pushBlock(buildPreservedBlockHtml(full, 'Lista de Referências (<references />)', '<references />'))
   );
 
-  // 4. Preserve Categories [[Category:...]] / [[Categoria:...]]
+  // 4. Preserve Categories [[Category:...]] / [[Categoria:...]] & Interlanguage links
   working = working.replace(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi, (full, catName) =>
     pushBlock(buildPreservedBlockHtml(full, `Categoria: ${catName.trim()}`, full))
+  );
+  working = working.replace(/\[\[(en|es|fr|de|it|pt|ja|zh|ru|ar|nl|pl|sv|uk):([^\]]+)\]\]/gi, (full, lang, targetTitle) =>
+    pushBlock(buildPreservedBlockHtml(full, `Idioma [${lang.toLowerCase()}]: ${targetTitle.trim()}`, full))
   );
 
   // 5. Convert or preserve Wikitables {| ... |}
@@ -519,8 +669,8 @@ export function wikitextToEditableHtml(wikitext: string): string {
       continue;
     }
 
-    // Headings == H2 ==, === H3 ===, ==== H4 ====
-    const headingMatch = trimmed.match(/^(={2,4})\s*([^=]+?)\s*\1$/);
+    // Headings = H1 = through ====== H6 ======
+    const headingMatch = trimmed.match(/^(={1,6})\s*([^=]+?)\s*\1$/);
     if (headingMatch) {
       flushParagraph();
       flushList();
@@ -726,6 +876,18 @@ function serializeInlineNode(node: SimpleDomNode): string {
     return inner ? `<u>${inner}</u>` : '';
   }
 
+  if (tag === 's' || tag === 'del' || tag === 'strike') {
+    return inner ? `<s>${inner}</s>` : '';
+  }
+
+  if (tag === 'sup') {
+    return inner ? `<sup>${inner}</sup>` : '';
+  }
+
+  if (tag === 'sub') {
+    return inner ? `<sub>${inner}</sub>` : '';
+  }
+
   if (tag === 'code') {
     return inner ? `\`${inner}\`` : '';
   }
@@ -853,7 +1015,12 @@ function serializeBlockNodes(nodes: SimpleDomNode[]): string[] {
       continue;
     }
 
-    if (tag === 'h1' || tag === 'h2') {
+    if (tag === 'h1') {
+      const content = serializeInlineChildren(node.children).replace(/\n+/g, ' ').trim();
+      if (content) blocks.push(`= ${content} =`);
+      continue;
+    }
+    if (tag === 'h2') {
       const content = serializeInlineChildren(node.children).replace(/\n+/g, ' ').trim();
       if (content) blocks.push(`== ${content} ==`);
       continue;
@@ -863,9 +1030,19 @@ function serializeBlockNodes(nodes: SimpleDomNode[]): string[] {
       if (content) blocks.push(`=== ${content} ===`);
       continue;
     }
-    if (tag === 'h4' || tag === 'h5' || tag === 'h6') {
+    if (tag === 'h4') {
       const content = serializeInlineChildren(node.children).replace(/\n+/g, ' ').trim();
       if (content) blocks.push(`==== ${content} ====`);
+      continue;
+    }
+    if (tag === 'h5') {
+      const content = serializeInlineChildren(node.children).replace(/\n+/g, ' ').trim();
+      if (content) blocks.push(`===== ${content} =====`);
+      continue;
+    }
+    if (tag === 'h6') {
+      const content = serializeInlineChildren(node.children).replace(/\n+/g, ' ').trim();
+      if (content) blocks.push(`====== ${content} ======`);
       continue;
     }
 
@@ -895,7 +1072,7 @@ function serializeBlockNodes(nodes: SimpleDomNode[]): string[] {
     if (tag === 'pre') {
       const rawText = serializeInlineChildren(node.children).replace(/^\n+|\n+$/g, '');
       if (rawText) {
-        blocks.push(`<syntaxhighlight lang="text">\n${rawText}\n</syntaxhighlight>`);
+        blocks.push(`<pre>\n${rawText}\n</pre>`);
       }
       continue;
     }

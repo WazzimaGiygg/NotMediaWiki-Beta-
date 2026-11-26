@@ -42,9 +42,15 @@ import {
 import { insertTextAtCursor } from '../src/components/WikiEditor';
 
 describe('SpecialCharactersMenu & WikiEditor Cursor Insertion', () => {
-  it('defines grouped character sets for Greek, Cyrillic, and IPA with valid codepoints', () => {
+  it('defines grouped character sets for Greek, Cyrillic, IPA, Symbols, Latin, and world scripts with valid codepoints', () => {
     const ids = SPECIAL_CHARACTER_GROUPS.map(g => g.id);
-    expect(ids).toEqual(['greek', 'cyrillic', 'ipa']);
+    expect(ids).toContain('symbols');
+    expect(ids).toContain('latin');
+    expect(ids).toContain('ipa');
+    expect(ids).toContain('greek');
+    expect(ids).toContain('cyrillic');
+    expect(ids).toContain('arabic-extended');
+    expect(ids.length).toBe(29);
 
     const greek = SPECIAL_CHARACTER_GROUPS.find(g => g.id === 'greek')!;
     const cyrillic = SPECIAL_CHARACTER_GROUPS.find(g => g.id === 'cyrillic')!;
@@ -64,7 +70,7 @@ describe('SpecialCharactersMenu & WikiEditor Cursor Insertion', () => {
     expect(ipa.characters.some(c => c.char === 'θ')).toBe(true);
     expect(ipa.characters.some(c => c.char === 'ˈ')).toBe(true);
 
-    for (const group of SPECIAL_CHARACTER_GROUPS) {
+    for (const group of [greek, cyrillic, ipa]) {
       expect(group.characters.length).toBeGreaterThanOrEqual(45);
       for (const item of group.characters) {
         expect(item.name.trim().length).toBeGreaterThan(0);

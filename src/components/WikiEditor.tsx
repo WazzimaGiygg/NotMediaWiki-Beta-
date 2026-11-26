@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle, FileText, PanelRight, Plus, ChevronDown, Languages } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle, FileText, PanelRight, Plus, ChevronDown, Languages, Undo2, Redo2, Search, Settings2, IndentDecrease, IndentIncrease, MessageSquareCode, PenLine } from 'lucide-react';
 import { Article, ArticleDraft, AutoSaveStatus, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
@@ -31,6 +31,7 @@ import { TemplateManagementPanel } from './TemplateManagementPanel';
 import { TemplateFixAssistantPanel } from './TemplateFixAssistantPanel';
 import { RichFormattedEditor, RichFormattedEditorHandle } from './RichFormattedEditor';
 import { SpecialCharactersMenu } from './SpecialCharactersMenu';
+import { PageMetadataModal } from './PageMetadataModal';
 import { FORMATTED_INSERT_OPTIONS } from '../utils/wikitextRichConverter';
 import { buildDefaultTemplatePageSkeleton } from '../data/defaultTemplates';
 import { parseTitle } from '../utils/namespaces';
@@ -49,6 +50,125 @@ export function insertTextAtCursor(
   const nextText = source.slice(0, safeStart) + insertedText + source.slice(safeEnd);
   const nextCursor = safeStart + insertedText.length;
   return { nextText, nextCursor };
+}
+
+export function applyLineIndentToWikitext(
+  source: string,
+  selectionStart: number,
+  selectionEnd: number,
+  direction: 'indent' | 'outdent'
+): { nextText: string; nextStart: number; nextEnd: number } {
+  const safeStart = Math.max(0, Math.min(selectionStart, source.length));
+  const safeEnd = Math.max(safeStart, Math.min(selectionEnd, source.length));
+  const lineStart = source.lastIndexOf('\n', Math.max(0, safeStart - 1)) + 1;
+  const lineEndIdx = source.indexOf('\n', safeEnd);
+  const lineEnd = lineEndIdx === -1 ? source.length : lineEndIdx;
+  const block = source.slice(lineStart, lineEnd);
+  const lines = block.split('\n');
+
+  const transformed = lines.map(line => {
+    if (direction === 'indent') {
+      if (/^\*{1,2}\s/.test(line)) return `*${line}`;
+      if (/^#{1,2}\s/.test(line)) return `#${line}`;
+      if (/^:{1,3}/.test(line)) return `:${line}`;
+      return `: ${line}`;
+    }
+    if (/^\*{2,3}\s/.test(line)) return line.slice(1);
+    if (/^#{2,3}\s/.test(line)) return line.slice(1);
+    if (/^:{1,4}\s?/.test(line)) return line.replace(/^:\s?/, '');
+    if (line.startsWith('  ')) return line.slice(2);
+    return line;
+  });
+
+  const nextBlock = transformed.join('\n');
+  const nextText = source.slice(0, lineStart) + nextBlock + source.slice(lineEnd);
+  const delta = nextBlock.length - block.length;
+  return {
+    nextText,
+    nextStart: Math.max(lineStart, safeStart + (lines.length === 1 ? delta : 0)),
+    nextEnd: Math.max(lineStart, safeEnd + delta),
+  };
+}
+
+export function toggleWikitextBlockHierarchy(
+  source: string,
+  selectionStart: number,
+  styleDigit: '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8'
+): { nextText: string; nextCursor: number } {
+  const safePos = Math.max(0, Math.min(selectionStart, source.length));
+  const lineStart = source.lastIndexOf('\n', Math.max(0, safePos - 1)) + 1;
+  const lineEndIdx = source.indexOf('\n', safePos);
+  const lineEnd = lineEndIdx === -1 ? source.length : lineEndIdx;
+  const rawLine = source.slice(lineStart, lineEnd);
+
+  // Strip existing heading / blockquote / pre wrappers cleanly
+  let cleanContent = rawLine
+    .replace(/^={1,6}\s*(.*?)\s*={1,6}$/, '$1')
+    .replace(/^<blockquote>([\s\S]*)<\/blockquote>$/i, '$1')
+    .replace(/^<pre>([\s\S]*)<\/pre>$/i, '$1')
+    .trim();
+
+  if (!cleanContent && styleDigit !== '0') {
+    cleanContent =
+      styleDigit === '7'
+        ? 'Texto pré-formatado'
+        : styleDigit === '8'
+        ? 'Texto citado'
+        : 'Título';
+  }
+
+  let formattedLine = cleanContent;
+  if (styleDigit >= '1' && styleDigit <= '6') {
+    const eq = '='.repeat(Number(styleDigit));
+    formattedLine = `${eq} ${cleanContent} ${eq}`;
+  } else if (styleDigit === '7') {
+    formattedLine = `<pre>${cleanContent}</pre>`;
+  } else if (styleDigit === '8') {
+    formattedLine = `<blockquote>${cleanContent}</blockquote>`;
+  }
+
+  const nextText = source.slice(0, lineStart) + formattedLine + source.slice(lineEnd);
+  return { nextText, nextCursor: lineStart + formattedLine.length };
+}
+
+export function applyFindAndReplace(
+  source: string,
+  findText: string,
+  replaceText: string,
+  options: { matchCase?: boolean; replaceAll?: boolean; fromIndex?: number } = {}
+): { nextText: string; count: number; matchStart: number; matchEnd: number } {
+  if (!findText) {
+    return { nextText: source, count: 0, matchStart: -1, matchEnd: -1 };
+  }
+  const { matchCase = false, replaceAll = false, fromIndex = 0 } = options;
+
+  if (replaceAll) {
+    const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, matchCase ? 'g' : 'gi');
+    let count = 0;
+    const nextText = source.replace(regex, () => {
+      count += 1;
+      return replaceText;
+    });
+    return { nextText, count, matchStart: -1, matchEnd: -1 };
+  }
+
+  const haystack = matchCase ? source : source.toLowerCase();
+  const needle = matchCase ? findText : findText.toLowerCase();
+  let idx = haystack.indexOf(needle, Math.max(0, fromIndex));
+  if (idx === -1 && fromIndex > 0) {
+    idx = haystack.indexOf(needle, 0);
+  }
+  if (idx === -1) {
+    return { nextText: source, count: 0, matchStart: -1, matchEnd: -1 };
+  }
+  const nextText = source.slice(0, idx) + replaceText + source.slice(idx + findText.length);
+  return {
+    nextText,
+    count: 1,
+    matchStart: idx,
+    matchEnd: idx + replaceText.length,
+  };
 }
 
 interface WikiEditorProps {
@@ -129,8 +249,21 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [isTemplateManagementOpen, setIsTemplateManagementOpen] = useState(false);
   const [isTemplateFixPanelOpen, setIsTemplateFixPanelOpen] = useState(false);
   const [isSpecialCharsOpen, setIsSpecialCharsOpen] = useState(false);
+  const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false);
+  const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [findMatchCase, setFindMatchCase] = useState(false);
+  const [findStatusMessage, setFindStatusMessage] = useState<string | null>(null);
   const [cursorOffset, setCursorOffset] = useState<number>(0);
   const [customTemplates, setCustomTemplates] = useState<Article[]>([]);
+
+  // Undo / Redo History stack state
+  const historyRef = useRef<{ stack: string[]; index: number }>({ stack: [''], index: 0 });
+  const [historyMeta, setHistoryMeta] = useState<{ canUndo: boolean; canRedo: boolean }>({
+    canUndo: false,
+    canRedo: false,
+  });
 
   // Firestore Auto-Save state
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
@@ -139,6 +272,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [recoverableDraft, setRecoverableDraft] = useState<ArticleDraft | null>(null);
 
   const wikitextTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const richEditorHandleRef = useRef<RichFormattedEditorHandle>(null);
   const selectionRangeRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const baselineRef = useRef<{ title: string; wikitext: string; summary: string }>({
@@ -219,6 +353,8 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           setTitle(art.title);
           setWikitext(art.wikitext);
           setInitialWikitext(art.wikitext);
+          historyRef.current = { stack: [art.wikitext], index: 0 };
+          setHistoryMeta({ canUndo: false, canRedo: false });
           baselineRef.current = { title: art.title, wikitext: art.wikitext, summary: '' };
           lastPersistedSnapshotRef.current = JSON.stringify([art.title, art.wikitext, '', false]);
           setLoading(false);
@@ -239,6 +375,8 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           setTitle(defaultTitle);
           setWikitext(template);
           setInitialWikitext('');
+          historyRef.current = { stack: [template], index: 0 };
+          setHistoryMeta({ canUndo: false, canRedo: false });
           baselineRef.current = { title: defaultTitle, wikitext: template, summary: '' };
           lastPersistedSnapshotRef.current = JSON.stringify([defaultTitle, template, '', false]);
           setLoading(false);
@@ -363,26 +501,72 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     enhanceCodeBlocks(previewRef.current);
   }, [previewHtml, activeTab, isSyntaxEnabled, isParsoidEnabled]);
 
+  const commitWikitextChange = useCallback((nextText: string, recordHistory = true) => {
+    latestEditorStateRef.current.wikitext = nextText;
+    setWikitext(nextText);
+    if (!recordHistory) return;
+
+    const hist = historyRef.current;
+    if (hist.stack[hist.index] === nextText) return;
+    const trimmed = hist.stack.slice(0, hist.index + 1);
+    trimmed.push(nextText);
+    if (trimmed.length > 100) {
+      trimmed.shift();
+    }
+    hist.stack = trimmed;
+    hist.index = trimmed.length - 1;
+    setHistoryMeta({
+      canUndo: hist.index > 0,
+      canRedo: hist.index < hist.stack.length - 1,
+    });
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    const hist = historyRef.current;
+    if (hist.index <= 0) return;
+    hist.index -= 1;
+    const target = hist.stack[hist.index];
+    latestEditorStateRef.current.wikitext = target;
+    setWikitext(target);
+    setHistoryMeta({
+      canUndo: hist.index > 0,
+      canRedo: hist.index < hist.stack.length - 1,
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    const hist = historyRef.current;
+    if (hist.index >= hist.stack.length - 1) return;
+    hist.index += 1;
+    const target = hist.stack[hist.index];
+    latestEditorStateRef.current.wikitext = target;
+    setWikitext(target);
+    setHistoryMeta({
+      canUndo: hist.index > 0,
+      canRedo: hist.index < hist.stack.length - 1,
+    });
+  }, []);
+
   const insertMarkup = (before: string, after: string = '', defaultText: string = '') => {
     const textarea = wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
     if (!textarea) {
       const inserted = `${before}${defaultText}${after}`;
-      setWikitext(prev => {
-        if (!prev.trim()) return inserted.trimStart();
-        const needsBreak = !prev.endsWith('\n') && !inserted.startsWith('\n');
-        return `${prev}${needsBreak ? '\n\n' : ''}${inserted}`;
-      });
+      const prev = latestEditorStateRef.current.wikitext;
+      const next = !prev.trim()
+        ? inserted.trimStart()
+        : `${prev}${!prev.endsWith('\n') && !inserted.startsWith('\n') ? '\n\n' : ''}${inserted}`;
+      commitWikitextChange(next);
       return;
     }
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selected = wikitext.substring(start, end) || defaultText;
+    const currentText = latestEditorStateRef.current.wikitext;
+    const selected = currentText.substring(start, end) || defaultText;
     const replacement = `${before}${selected}${after}`;
 
-    const updated = wikitext.substring(0, start) + replacement + wikitext.substring(end);
-    latestEditorStateRef.current.wikitext = updated;
-    setWikitext(updated);
+    const updated = currentText.substring(0, start) + replacement + currentText.substring(end);
+    commitWikitextChange(updated);
 
     const selStart = start + before.length;
     const selEnd = start + before.length + selected.length;
@@ -420,9 +604,8 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       : selectionRangeRef.current.end;
 
     const { nextText, nextCursor } = insertTextAtCursor(currentWikitext, char, start, end);
-    latestEditorStateRef.current.wikitext = nextText;
     selectionRangeRef.current = { start: nextCursor, end: nextCursor };
-    setWikitext(nextText);
+    commitWikitextChange(nextText);
     setCursorOffset(nextCursor);
 
     if (activeTab === 'preview' && isVisualEditorEnabled) {
@@ -437,6 +620,128 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
       target.focus();
       target.setSelectionRange(nextCursor, nextCursor);
     }, 0);
+  };
+
+  const handleApplyIndent = (direction: 'indent' | 'outdent') => {
+    const textarea = wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+    const start = textarea ? textarea.selectionStart : selectionRangeRef.current.start;
+    const end = textarea ? (textarea.selectionEnd ?? textarea.selectionStart) : selectionRangeRef.current.end;
+    const { nextText, nextStart, nextEnd } = applyLineIndentToWikitext(
+      latestEditorStateRef.current.wikitext,
+      start,
+      end,
+      direction
+    );
+    commitWikitextChange(nextText);
+    selectionRangeRef.current = { start: nextStart, end: nextEnd };
+    setTimeout(() => {
+      const target = wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+      if (!target) return;
+      target.focus();
+      target.setSelectionRange(nextStart, nextEnd);
+      setCursorOffset(nextStart);
+    }, 0);
+  };
+
+  const handleFindNext = () => {
+    if (!findQuery) {
+      setFindStatusMessage('Digite um termo para localizar.');
+      return;
+    }
+    const source = latestEditorStateRef.current.wikitext;
+    const haystack = findMatchCase ? source : source.toLowerCase();
+    const needle = findMatchCase ? findQuery : findQuery.toLowerCase();
+    const from = selectionRangeRef.current.end;
+    let idx = haystack.indexOf(needle, from);
+    if (idx === -1 && from > 0) idx = haystack.indexOf(needle, 0);
+    if (idx === -1) {
+      setFindStatusMessage('Nenhuma ocorrência encontrada.');
+      return;
+    }
+    const matchEnd = idx + findQuery.length;
+    setFindStatusMessage(`Ocorrência encontrada na posição ${idx}.`);
+    focusAndSelectTextareaRange(idx, matchEnd);
+  };
+
+  const handleReplaceCurrent = () => {
+    if (!findQuery) return;
+    const res = applyFindAndReplace(latestEditorStateRef.current.wikitext, findQuery, replaceQuery, {
+      matchCase: findMatchCase,
+      fromIndex: selectionRangeRef.current.start,
+    });
+    if (res.count === 0) {
+      setFindStatusMessage('Nenhuma ocorrência encontrada para substituir.');
+      return;
+    }
+    commitWikitextChange(res.nextText);
+    setFindStatusMessage('1 ocorrência substituída.');
+    focusAndSelectTextareaRange(res.matchStart, res.matchEnd);
+  };
+
+  const handleReplaceAll = () => {
+    if (!findQuery) return;
+    const res = applyFindAndReplace(latestEditorStateRef.current.wikitext, findQuery, replaceQuery, {
+      matchCase: findMatchCase,
+      replaceAll: true,
+    });
+    if (res.count === 0) {
+      setFindStatusMessage('Nenhuma ocorrência encontrada.');
+      return;
+    }
+    commitWikitextChange(res.nextText);
+    setFindStatusMessage(`${res.count} ocorrência(s) substituída(s).`);
+  };
+
+  const handleWikitextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      handleApplyIndent(e.shiftKey ? 'outdent' : 'indent');
+      return;
+    }
+
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+
+    if (e.altKey && e.key.toLowerCase() === 'm') {
+      e.preventDefault();
+      insertMarkup('<!-- ', ' -->', 'Comentário editorial oculto');
+      return;
+    }
+
+    if (['0', '1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) {
+      e.preventDefault();
+      const res = toggleWikitextBlockHierarchy(
+        latestEditorStateRef.current.wikitext,
+        textarea.selectionStart,
+        e.key as '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8'
+      );
+      commitWikitextChange(res.nextText);
+      focusAndSelectTextareaRange(res.nextCursor, res.nextCursor);
+      return;
+    }
+
+    const lower = e.key.toLowerCase();
+    if (lower === 'b') {
+      e.preventDefault();
+      insertMarkup("'''", "'''", 'negrito');
+    } else if (lower === 'i') {
+      e.preventDefault();
+      insertMarkup("''", "''", 'itálico');
+    } else if (lower === 'k') {
+      e.preventDefault();
+      insertMarkup('[[', ']]', 'Artigo destino');
+    } else if (lower === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      handleUndo();
+    } else if (lower === 'y' || (lower === 'z' && e.shiftKey)) {
+      e.preventDefault();
+      handleRedo();
+    } else if (lower === 'f') {
+      e.preventDefault();
+      setIsFindReplaceOpen(true);
+      setTimeout(() => findInputRef.current?.focus(), 0);
+    }
   };
 
   const isTemplatePage = parseTitle(title).namespaceId === 10;
@@ -1002,29 +1307,87 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               </div>
               <button
                 type="button"
+                onClick={handleUndo}
+                disabled={!historyMeta.canUndo}
+                data-testid="editor-undo-btn"
+                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 disabled:opacity-40 cursor-pointer"
+                title="Desfazer (Ctrl+Z)"
+                aria-label="Desfazer alteração"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={!historyMeta.canRedo}
+                data-testid="editor-redo-btn"
+                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 disabled:opacity-40 cursor-pointer"
+                title="Refazer (Ctrl+Y)"
+                aria-label="Refazer alteração"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
                 onClick={() => insertMarkup('== ', ' ==', 'Section heading')}
-                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-medium"
+                className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 font-medium"
+                title="Cabeçalho de Seção (Ctrl+2)"
               >
                 Heading
               </button>
               <button
                 type="button"
                 onClick={() => insertMarkup("'''", "'''", 'bold text')}
-                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 font-bold"
+                className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 font-bold"
+                title="Negrito (Ctrl+B)"
               >
                 Bold
               </button>
               <button
                 type="button"
                 onClick={() => insertMarkup("''", "''", 'italic text')}
-                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-700 italic"
+                className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 italic"
+                title="Itálico (Ctrl+I)"
               >
                 Italic
               </button>
               <button
                 type="button"
+                onClick={() => insertMarkup('<u>', '</u>', 'sublinhado')}
+                className="px-1.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 underline text-[11px]"
+                title="Sublinhado (<u>)"
+              >
+                U
+              </button>
+              <button
+                type="button"
+                onClick={() => insertMarkup('<s>', '</s>', 'tachado')}
+                className="px-1.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 line-through text-[11px]"
+                title="Tachado (<s>)"
+              >
+                S
+              </button>
+              <button
+                type="button"
+                onClick={() => insertMarkup('<sup>', '</sup>', '2')}
+                className="px-1.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 text-[11px]"
+                title="Sobrescrito (<sup>)"
+              >
+                x²
+              </button>
+              <button
+                type="button"
+                onClick={() => insertMarkup('<sub>', '</sub>', '2')}
+                className="px-1.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 text-[11px]"
+                title="Subscrito (<sub>)"
+              >
+                H₂
+              </button>
+              <button
+                type="button"
                 onClick={() => insertMarkup('[[', ']]', 'Article Title')}
-                className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded text-blue-700 font-medium"
+                className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-blue-700 dark:text-blue-400 font-medium"
+                title="Inserir link interno [[Artigo]] (Ctrl+K)"
               >
                 [[Wikilink]]
               </button>
@@ -1159,6 +1522,47 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           <button
             type="button"
             onMouseDown={e => e.preventDefault()}
+            onClick={() => handleApplyIndent('outdent')}
+            className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 cursor-pointer"
+            title="Diminuir recuo (Shift+Tab)"
+            aria-label="Diminuir recuo"
+          >
+            <IndentDecrease className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => handleApplyIndent('indent')}
+            className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 cursor-pointer"
+            title="Aumentar recuo (Tab)"
+            aria-label="Aumentar recuo"
+          >
+            <IndentIncrease className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => insertMarkup('<!-- ', ' -->', 'Comentário editorial oculto')}
+            className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 cursor-pointer"
+            title="Inserir comentário oculto (Ctrl+Alt+M)"
+            aria-label="Inserir comentário oculto"
+          >
+            <MessageSquareCode className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => insertMarkup(' ~~~~', '', '')}
+            className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 cursor-pointer"
+            title="Inserir assinatura editorial (~~~~)"
+            aria-label="Inserir assinatura"
+          >
+            <PenLine className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => setIsSpecialCharsOpen(prev => !prev)}
             aria-expanded={isSpecialCharsOpen}
             data-testid="toggle-special-characters-btn"
@@ -1167,10 +1571,43 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
                 ? 'bg-slate-900 dark:bg-slate-100 border-slate-900 dark:border-slate-100 text-white dark:text-slate-900'
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
             }`}
-            title="Inserir caracteres especiais (Grego, Cirílico, AFI/IPA) na posição do cursor"
+            title="Inserir caracteres especiais (Usados recentemente, Símbolos, Latino, AFI/IPA, Grego, Cirílico e sistemas de escrita mundiais)"
           >
             <Languages className="w-3 h-3 shrink-0" />
             <span>Ω Caracteres</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsFindReplaceOpen(prev => {
+                const next = !prev;
+                if (next) setTimeout(() => findInputRef.current?.focus(), 0);
+                return next;
+              });
+            }}
+            aria-expanded={isFindReplaceOpen}
+            data-testid="toggle-find-replace-btn"
+            className={`px-2 py-1 border rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+              isFindReplaceOpen
+                ? 'bg-slate-900 dark:bg-slate-100 border-slate-900 dark:border-slate-100 text-white dark:text-slate-900'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+            }`}
+            title="Localizar e substituir texto (Ctrl+F)"
+          >
+            <Search className="w-3 h-3 shrink-0" />
+            <span>Localizar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsMetadataModalOpen(true)}
+            data-testid="open-page-metadata-btn"
+            className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+            title="Metadados da Página: Categorias, Configurações da página, Configurações avançadas, Idiomas e Predefinições usadas"
+          >
+            <Settings2 className="w-3 h-3 shrink-0" />
+            <span>Metadados</span>
           </button>
 
           {isVisualEditorEnabled && (
@@ -1181,7 +1618,76 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           )}
         </div>
 
-        {/* Inline Special Characters Menu (Greek, Cyrillic, IPA) */}
+        {/* Inline Find & Replace Bar (Ctrl+F) */}
+        {isFindReplaceOpen && (
+          <div
+            data-testid="find-replace-bar"
+            className="px-3 py-2 border-x border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/95 flex flex-wrap items-center gap-2 text-xs"
+          >
+            <input
+              ref={findInputRef}
+              type="text"
+              value={findQuery}
+              onChange={e => setFindQuery(e.target.value)}
+              placeholder="Localizar..."
+              aria-label="Texto para localizar"
+              className="px-2.5 py-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-blue-600"
+            />
+            <input
+              type="text"
+              value={replaceQuery}
+              onChange={e => setReplaceQuery(e.target.value)}
+              placeholder="Substituir por..."
+              aria-label="Texto para substituir"
+              className="px-2.5 py-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-blue-600"
+            />
+            <label className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={findMatchCase}
+                onChange={e => setFindMatchCase(e.target.checked)}
+                className="rounded text-blue-600"
+              />
+              <span>Diferenciar maiúsc./minúsc.</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleFindNext}
+              className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded font-medium cursor-pointer"
+            >
+              Próximo
+            </button>
+            <button
+              type="button"
+              onClick={handleReplaceCurrent}
+              className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded font-medium cursor-pointer"
+            >
+              Substituir
+            </button>
+            <button
+              type="button"
+              onClick={handleReplaceAll}
+              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold cursor-pointer"
+            >
+              Substituir Tudo
+            </button>
+            {findStatusMessage && (
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                {findStatusMessage}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsFindReplaceOpen(false)}
+              aria-label="Fechar localizar e substituir"
+              className="ml-auto p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Inline Special Characters Menu (30 script/symbol groups) */}
         {isSpecialCharsOpen && (
           <SpecialCharactersMenu
             onSelectCharacter={handleInsertSpecialCharacter}
@@ -1243,9 +1749,10 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
                     const nextStart = e.target.selectionStart ?? 0;
                     const nextEnd = e.target.selectionEnd ?? nextStart;
                     selectionRangeRef.current = { start: nextStart, end: nextEnd };
-                    setWikitext(e.target.value);
+                    commitWikitextChange(e.target.value);
                     setCursorOffset(nextStart);
                   }}
+                  onKeyDown={handleWikitextKeyDown}
                   onClick={e => syncCursorFromTextarea(e.currentTarget)}
                   onKeyUp={e => syncCursorFromTextarea(e.currentTarget)}
                   onSelect={e => syncCursorFromTextarea(e.currentTarget)}
@@ -1273,11 +1780,17 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               <RichFormattedEditor
                 ref={richEditorHandleRef}
                 wikitext={wikitext}
-                onChange={next => setWikitext(next)}
+                onChange={next => commitWikitextChange(next)}
                 disabled={Boolean(currentUser?.isBanned || currentUser?.role === 'reader')}
                 onOpenTemplateManager={isTemplatesEnabled ? () => setIsTemplateModalOpen(true) : undefined}
                 onOpenInfoboxBuilder={isInfoboxEnabled ? openInfoboxBuilder : undefined}
                 onOpenReferenceManager={isCiteEnabled ? () => setIsRefModalOpen(true) : undefined}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                onToggleFindReplace={() => {
+                  setIsFindReplaceOpen(true);
+                  setTimeout(() => findInputRef.current?.focus(), 0);
+                }}
               />
             </div>
           )}
@@ -1535,6 +2048,15 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
           onTemplatesChanged={setCustomTemplates}
         />
       )}
+
+      {/* Page Metadata & Options Modal (Categories, Page Settings, Advanced, Languages, Used Templates) */}
+      <PageMetadataModal
+        isOpen={isMetadataModalOpen}
+        wikitext={wikitext}
+        pageTitle={title}
+        onUpdateWikitext={next => commitWikitextChange(next)}
+        onClose={() => setIsMetadataModalOpen(false)}
+      />
     </div>
   );
 };
