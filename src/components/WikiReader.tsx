@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, FolderTree, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X, Focus, Blocks } from 'lucide-react';
+import { BookOpen, Edit3, Clock, Eye, Shield, List, ArrowRight, RefreshCw, MessageSquare, FileText, GitCompare, Printer, Download, HeartHandshake, Database, Zap, Star, Shuffle, Minimize2, Maximize2, Type, X, Focus, Blocks } from 'lucide-react';
 import { Article, RenderedArticleResponse, TocItem, Revision, UserSession } from '../types';
 import { api } from '../api';
 import { wrapExternalUrl } from '../utils/urlHelper';
@@ -27,7 +27,9 @@ import {
 } from './TemplateDebugInspector';
 import { parseSemanticFacts } from '../utils/semanticParser';
 import { SemanticFactbox } from './SemanticFactbox';
-import { CategoryTreeView } from './CategoryTreeView';
+import { CategoryPageView } from './CategoryPageView';
+import { addWikitextCategory, removeWikitextCategory } from './PageMetadataModal';
+import { normalizeCategoryName } from '../utils/wikiCategories';
 import { subscribeToFirestoreArticle, auth } from '../firebase';
 import { parseFootnoteTagsInHtml } from '../utils/citationParser';
 import { downloadArticlePdf } from '../utils/pdfDownloader';
@@ -580,6 +582,93 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
   }
 
   const { article, html, toc, categories, parseTimeMs } = data;
+
+  const canQuickEditCategories = Boolean(
+    currentUser &&
+      !currentUser.isBanned &&
+      currentUser.role !== 'reader' &&
+      (!article.isProtected ||
+        ['bureaucrat', 'sysop', 'moderator', 'bot'].includes(currentUser.role))
+  );
+
+  const handleQuickAddCategory = async (rawCategoryName: string) => {
+    const clean = normalizeCategoryName(rawCategoryName);
+    if (!clean || !currentUser) return;
+    const baseWikitext =
+      article.latestRevisionId === 'virtual-category' ? '' : article.wikitext || '';
+    const nextWikitext = addWikitextCategory(baseWikitext, clean);
+    const saved = await api.saveArticle({
+      slug: article.slug,
+      title: article.title,
+      wikitext: nextWikitext,
+      summary: article.summary,
+      comment: `Categoria adicionada: ${clean}`,
+      isMinor: true,
+      namespace: article.namespace,
+      authorUser: currentUser,
+    });
+    const refreshed = await api.getRenderedArticle(saved.article.slug);
+    setData(refreshed);
+    loadedRevIdRef.current = refreshed.article.latestRevisionId || null;
+    loadedWikitextRef.current = refreshed.article.wikitext || null;
+    loadedUpdatedAtRef.current = refreshed.article.updatedAt || null;
+    setAllArticles(prev => {
+      const idx = prev.findIndex(a => a.slug === refreshed.article.slug);
+      if (idx === -1) return [refreshed.article, ...prev];
+      const next = [...prev];
+      next[idx] = refreshed.article;
+      return next;
+    });
+  };
+
+  const handleQuickRemoveCategory = async (rawCategoryName: string) => {
+    const clean = normalizeCategoryName(rawCategoryName);
+    if (!clean || !currentUser) return;
+    const nextWikitext = removeWikitextCategory(article.wikitext || '', clean);
+    const remainingCategories = (
+      categories && categories.length > 0 ? categories : article.categories || []
+    ).filter(c => normalizeCategoryName(c).toLowerCase() !== clean.toLowerCase());
+
+    const saved = await api.saveArticle({
+      slug: article.slug,
+      title: article.title,
+      wikitext: nextWikitext,
+      summary: article.summary,
+      comment: `Categoria removida: ${clean}`,
+      isMinor: true,
+      namespace: article.namespace,
+      authorUser: currentUser,
+    });
+    // Ensure remainingCategories reflects removal even if article came from seed without [[Category:...]] tags
+    const updatedArticle = {
+      ...saved.article,
+      categories: remainingCategories,
+    };
+    const refreshed = await api.getRenderedArticle(updatedArticle.slug);
+    setData({
+      ...refreshed,
+      article: {
+        ...refreshed.article,
+        categories:
+          refreshed.categories && refreshed.categories.length > 0
+            ? refreshed.categories
+            : remainingCategories,
+      },
+    });
+    setAllArticles(prev =>
+      prev.map(a =>
+        a.slug === updatedArticle.slug
+          ? {
+              ...refreshed.article,
+              categories:
+                refreshed.categories && refreshed.categories.length > 0
+                  ? refreshed.categories
+                  : remainingCategories,
+            }
+          : a
+      )
+    );
+  };
 
   return (
     <div className="relative">
@@ -1199,24 +1288,38 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               />
             )}
 
-          {/* Rendered HTML Container */}
-          <article
-            id="wiki-article-container"
-            ref={contentRef}
-            className={`wiki-content text-justify prose max-w-none text-slate-800 dark:text-slate-200 ${
-              isZenActive || isFocusMode ? 'zen-mode-article' : ''
-            } ${!highlightTemplateDebug ? 'hide-template-debug-highlights' : ''} ${
-              readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
-            } ${
-              readerFontSize === 'base'
-                ? 'text-base leading-relaxed'
-                : readerFontSize === 'lg'
-                ? 'text-lg leading-loose'
-                : 'text-xl leading-loose'
-            }`}
-            onClick={handleContentClick}
-            dangerouslySetInnerHTML={{ __html: renderedHtml }}
-          />
+          {/* Rendered HTML Container (skip empty spacer on virtual Namespace 14 category pages) */}
+          {(parsedTitle.namespaceId !== 14 || Boolean(renderedHtml.trim())) && (
+            <article
+              id="wiki-article-container"
+              ref={contentRef}
+              className={`wiki-content text-justify prose max-w-none text-slate-800 dark:text-slate-200 ${
+                isZenActive || isFocusMode ? 'zen-mode-article' : ''
+              } ${!highlightTemplateDebug ? 'hide-template-debug-highlights' : ''} ${
+                readerFontFamily === 'serif' ? 'font-serif' : 'font-sans'
+              } ${
+                readerFontSize === 'base'
+                  ? 'text-base leading-relaxed'
+                  : readerFontSize === 'lg'
+                  ? 'text-lg leading-loose'
+                  : 'text-xl leading-loose'
+              }`}
+              onClick={handleContentClick}
+              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+            />
+          )}
+
+          {/* Wikipedia-style Category Index for Namespace 14 (Categoria:) */}
+          {!isDistractionFree && parsedTitle.namespaceId === 14 && (
+            <CategoryPageView
+              categoryName={parsedTitle.baseTitle}
+              allArticles={allArticles}
+              onNavigate={onNavigate}
+              onEditCategory={() => onEdit(slug)}
+              canEdit={canQuickEditCategories}
+              showCategoryTree={isCategoryTreeEnabled}
+            />
+          )}
 
           {/* Numbered Citations & Footnotes Component parsed from Parsoid AST (Hidden in Zen Mode) */}
           {!isZenActive && isCiteExtEnabled && isParsoidEnabled && (
@@ -1286,13 +1389,16 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
             </div>
           )}
 
-          {/* Article Categories & Interactive Filter UI Component (Standard mode only) */}
-          {!isDistractionFree && isCategoryTreeEnabled && (
+          {/* Wikipedia-style Article Categories Box (#catlinks) (Standard mode only) */}
+          {!isDistractionFree && (
             <ArticleCategories
               categories={categories && categories.length > 0 ? categories : (article.categories || [])}
               allArticles={allArticles}
               currentSlug={slug}
               onNavigate={onNavigate}
+              canEdit={canQuickEditCategories}
+              onAddCategory={handleQuickAddCategory}
+              onRemoveCategory={handleQuickRemoveCategory}
             />
           )}
 
@@ -1303,24 +1409,6 @@ export const WikiReader: React.FC<WikiReaderProps> = ({
               articleTitle={article.title}
               onNavigateArticle={onNavigate}
             />
-          )}
-
-          {/* Canonical MediaWiki CategoryTree (Embedded for Namespace 14 - Categoria) (Standard mode only) */}
-          {!isDistractionFree && isCategoryTreeEnabled && parsedTitle.namespaceId === 14 && (
-            <div className="mt-8 border border-slate-200 dark:border-slate-800 rounded-lg p-5 bg-white dark:bg-slate-900 shadow-xs">
-              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
-                <FolderTree className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Árvore de Subcategorias & Artigos Membros ({parsedTitle.baseTitle})
-                </h2>
-              </div>
-              <CategoryTreeView
-                articles={allArticles}
-                currentCategory={parsedTitle.baseTitle}
-                onNavigateArticle={onNavigate}
-                onSelectCategory={(cat) => onNavigate(`Categoria:${cat}`)}
-              />
-            </div>
           )}
 
           {/* Related Articles Component (Visible on mobile/tablet viewports where sidebar is hidden) (Standard mode only) */}

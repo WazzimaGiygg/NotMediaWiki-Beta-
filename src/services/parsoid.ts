@@ -40,6 +40,7 @@ export interface ParseResult {
   usedTemplates?: string[];
   missingTemplates?: string[];
   templateDiagnostics?: TemplateDiagnostic[];
+  categorySortKeys?: Record<string, string>;
   interwikiLinks?: Array<{ lang: string; title: string }>;
   pageSettings?: {
     noToc?: boolean;
@@ -48,6 +49,7 @@ export interface ParseResult {
     noGallery?: boolean;
     disambig?: boolean;
     noIndex?: boolean;
+    hiddenCat?: boolean;
     displayTitle?: string;
     defaultSort?: string;
   };
@@ -185,6 +187,8 @@ export class ClientParsoidService {
     // 0. Strip editorial HTML comments <!-- ... --> (hidden in article output)
     processed = processed.replace(/<!--[\s\S]*?-->/g, '');
 
+    const categorySortKeys: Record<string, string> = {};
+
     // 0.5. Extract MediaWiki Page Settings & Metadata Magic Words
     processed = processed
       .replace(/__NOTOC__/g, () => { pageSettings.noToc = true; return ''; })
@@ -194,6 +198,7 @@ export class ClientParsoidService {
       .replace(/__DISAMBIG__/g, () => { pageSettings.disambig = true; return ''; })
       .replace(/__NOINDEX__/g, () => { pageSettings.noIndex = true; return ''; })
       .replace(/__INDEX__/g, () => { pageSettings.noIndex = false; return ''; })
+      .replace(/__HIDDENCAT__/g, () => { pageSettings.hiddenCat = true; return ''; })
       .replace(/\{\{DISPLAYTITLE:([^}]+)\}\}/gi, (_, dt) => { pageSettings.displayTitle = dt.trim(); return ''; })
       .replace(/\{\{DEFAULTSORT:([^}]+)\}\}/gi, (_, ds) => { pageSettings.defaultSort = ds.trim(); return ''; });
 
@@ -204,11 +209,19 @@ export class ClientParsoidService {
       return '';
     });
 
-    // 1. Extract and process Categories: [[Category:Foo]]
+    // 1. Extract and process Categories: [[Category:Foo]] or [[Categoria:Foo|SortKey]]
     processed = processed.replace(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi, (_, cat) => {
-      const cleanCat = cat.trim();
-      categories.push(cleanCat);
-      ast.push({ type: 'Category', name: cleanCat });
+      const pipeIdx = cat.indexOf('|');
+      const cleanCat = (pipeIdx === -1 ? cat : cat.slice(0, pipeIdx)).replace(/_/g, ' ').trim();
+      const sortKey = pipeIdx === -1 ? undefined : cat.slice(pipeIdx + 1).trim();
+      if (!cleanCat) return '';
+      if (!categories.includes(cleanCat)) {
+        categories.push(cleanCat);
+      }
+      if (sortKey !== undefined) {
+        categorySortKeys[cleanCat] = sortKey;
+      }
+      ast.push({ type: 'Category', name: cleanCat, ...(sortKey !== undefined ? { sortKey } : {}) });
       return '';
     });
 
@@ -299,10 +312,16 @@ export class ClientParsoidService {
 
     // Re-extract any categories introduced via transcluded templates
     processed = processed.replace(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi, (_, cat) => {
-      const cleanCat = cat.trim();
+      const pipeIdx = cat.indexOf('|');
+      const cleanCat = (pipeIdx === -1 ? cat : cat.slice(0, pipeIdx)).replace(/_/g, ' ').trim();
+      const sortKey = pipeIdx === -1 ? undefined : cat.slice(pipeIdx + 1).trim();
+      if (!cleanCat) return '';
       if (!categories.includes(cleanCat)) {
         categories.push(cleanCat);
-        ast.push({ type: 'Category', name: cleanCat });
+        ast.push({ type: 'Category', name: cleanCat, ...(sortKey !== undefined ? { sortKey } : {}) });
+      }
+      if (sortKey !== undefined) {
+        categorySortKeys[cleanCat] = sortKey;
       }
       return '';
     });
@@ -524,10 +543,11 @@ export class ClientParsoidService {
       }${caption ? `<figcaption class="mt-1.5 text-xs text-slate-600 dark:text-slate-400">${escapeAttrAndText(caption)}</figcaption>` : ''}</figure>`;
     });
 
-    // 7. Internal Links: [[Target|Text]] or [[Target]]
+    // 7. Internal Links: [[Target|Text]], [[Target]], and inline [[:Categoria:Foo]]
     processed = processed.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => {
-      const linkTarget = target.trim();
-      const displayLabel = (label || target).trim();
+      const rawTarget = target.trim();
+      const linkTarget = rawTarget.replace(/^:/, '').trim();
+      const displayLabel = (label || linkTarget).trim();
       internalLinks.push(linkTarget);
       ast.push({ type: 'InternalLink', target: linkTarget, label: displayLabel });
 
@@ -603,6 +623,7 @@ export class ClientParsoidService {
       usedTemplates: templateExpanded.usedTemplates,
       missingTemplates: templateExpanded.missingTemplates,
       templateDiagnostics: templateExpanded.diagnostics,
+      categorySortKeys,
       interwikiLinks,
       pageSettings,
       ast,

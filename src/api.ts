@@ -46,6 +46,11 @@ import {
 import { clientParsoid } from './services/parsoid';
 import { templateService, SaveTemplateInput, TemplateExpansionOptions } from './services/templateService';
 import { parseTitle } from './utils/namespaces';
+import {
+  buildCategorySlug,
+  CATEGORY_HIERARCHY_PARENTS,
+  normalizeCategoryName,
+} from './utils/wikiCategories';
 import { isRuntimeExtensionEnabled } from './extensions';
 import { LGPD_INVESTIGATION_ARTICLE } from './data/lgpdInvestigationArticle';
 import {
@@ -199,12 +204,26 @@ export const api = {
         };
       }
 
-      // Try case-insensitive or decoded slug from Firestore
+      // Try case-insensitive, decoded, or Category:/Categoria: alias slug from Firestore
       const all = await fetchArticlesFromFirestore();
-      const matched = all.find(
-        a => a.slug.toLowerCase() === cleanSlug.toLowerCase() ||
-             decodeURIComponent(a.slug).toLowerCase() === cleanSlug.toLowerCase()
-      );
+      const parsedTarget = parseTitle(decodeURIComponent(cleanSlug));
+      const matched = all.find(a => {
+        if (
+          a.slug.toLowerCase() === cleanSlug.toLowerCase() ||
+          decodeURIComponent(a.slug).toLowerCase() === cleanSlug.toLowerCase()
+        ) {
+          return true;
+        }
+        if (parsedTarget.namespaceId === 14) {
+          const parsedCandidate = parseTitle(decodeURIComponent(a.slug));
+          return (
+            parsedCandidate.namespaceId === 14 &&
+            normalizeCategoryName(parsedCandidate.baseTitle).toLowerCase() ===
+              normalizeCategoryName(parsedTarget.baseTitle).toLowerCase()
+          );
+        }
+        return false;
+      });
       if (matched) {
         return {
           ...matched,
@@ -245,6 +264,34 @@ export const api = {
       }
     }
 
+    // 4. Wikipedia-style automatic Namespace 14 (Categoria:) index page when no description page exists yet
+    const parsedNs = parseTitle(decodeURIComponent(cleanSlug));
+    if (parsedNs.namespaceId === 14 && parsedNs.baseTitle.trim()) {
+      const catDisplayName = normalizeCategoryName(parsedNs.baseTitle);
+      const canonicalSlug = buildCategorySlug(catDisplayName);
+      const inferredParent =
+        CATEGORY_HIERARCHY_PARENTS[catDisplayName] ||
+        Object.entries(CATEGORY_HIERARCHY_PARENTS).find(
+          ([child]) => child.toLowerCase() === catDisplayName.toLowerCase()
+        )?.[1];
+
+      const nowIso = new Date().toISOString();
+      return {
+        id: `virtual-cat-${catDisplayName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        slug: canonicalSlug,
+        title: `Categoria:${catDisplayName}`,
+        namespace: 14,
+        wikitext: '',
+        summary: `Índice automático da categoria ${catDisplayName}.`,
+        latestRevisionId: 'virtual-category',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        categories: inferredParent ? [inferredParent] : [],
+        views: 0,
+        isProtected: false,
+      };
+    }
+
     throw new Error(`Artigo "${slug}" não encontrado no banco de dados.`);
   },
 
@@ -275,6 +322,29 @@ export const api = {
       this.getArticle(cleanSlug),
       templatesEnabled ? this.getTemplates().catch(() => [] as Article[]) : Promise.resolve([] as Article[]),
     ]);
+
+    if (article.latestRevisionId === 'virtual-category') {
+      return {
+        article: {
+          ...article,
+          views: 0,
+          wikitext: '',
+        },
+        html: '',
+        toc: [],
+        categories: article.categories || [],
+        internalLinks: [],
+        externalLinks: [],
+        references: [],
+        usedTemplates: [],
+        missingTemplates: [],
+        templateDiagnostics: [],
+        ast: [],
+        parseTimeMs: 0,
+        cached: false,
+      };
+    }
+
     const isTemplatePage =
       article.namespace === 10 || parseTitle(article.title || cleanSlug).namespaceId === 10;
     const parsed = clientParsoid.parse(article.wikitext || '', article.title || cleanSlug, {

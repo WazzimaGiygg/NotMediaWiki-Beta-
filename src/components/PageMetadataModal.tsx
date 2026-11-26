@@ -38,7 +38,7 @@ export function extractWikitextMetadata(wikitext: string): WikitextMetadataSnaps
   const catRegex = /\[\[(?:Category|Categoria):([^\]]+)\]\]/gi;
   let match: RegExpExecArray | null;
   while ((match = catRegex.exec(wikitext)) !== null) {
-    const val = match[1].trim();
+    const val = (match[1].split('|')[0] || '').replace(/_/g, ' ').trim();
     if (val && !categories.includes(val)) categories.push(val);
   }
 
@@ -92,9 +92,9 @@ export function addWikitextCategory(wikitext: string, category: string): string 
 }
 
 export function removeWikitextCategory(wikitext: string, category: string): string {
-  const escaped = category.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = category.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\ /g, '[ _]+');
   return wikitext
-    .replace(new RegExp(`\\n?\\[\\[(?:Category|Categoria):\\s*${escaped}\\s*\\]\\]`, 'gi'), '')
+    .replace(new RegExp(`\\n?\\[\\[(?:Category|Categoria):\\s*${escaped}(?:\\|[^\\]]*)?\\s*\\]\\]`, 'gi'), '')
     .replace(/^\n+/, '')
     .trimEnd();
 }

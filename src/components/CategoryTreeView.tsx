@@ -13,6 +13,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Article } from '../types';
+import { CATEGORY_HIERARCHY_PARENTS, buildCategoryIndex } from '../utils/wikiCategories';
 
 interface CategoryNode {
   name: string;
@@ -40,8 +41,9 @@ export const CategoryTreeView: React.FC<CategoryTreeViewProps> = ({
   });
   const [filterQuery, setFilterQuery] = useState('');
 
-  // Constrói árvore de categorias a partir dos artigos cadastrados
+  // Constrói árvore de categorias a partir dos artigos e relações explícitas/convencionais
   const categoryTree = useMemo(() => {
+    const index = buildCategoryIndex(articles);
     const rootNodes = new Map<string, CategoryNode>();
 
     const getOrCreateNode = (catName: string): CategoryNode => {
@@ -55,41 +57,31 @@ export const CategoryTreeView: React.FC<CategoryTreeViewProps> = ({
       return rootNodes.get(catName)!;
     };
 
-    // Mapeamento de relações pai-filho convencionais de enciclopédia
-    const hierarchyMap: Record<string, string> = {
-      'Software Livre': 'Software',
-      'Software de Wiki': 'Software',
-      'Sistemas Operacionais': 'Computação',
-      'Linguagens de Programação': 'Ciência da Computação',
-      'Inteligência Artificial': 'Ciência da Computação',
-      'Algoritmos': 'Ciência da Computação',
-      'História do Brasil': 'Brasil',
-      'Geografia do Brasil': 'Brasil',
-      'Física Quântica': 'Física',
-      'Astrofísica': 'Física',
-    };
+    for (const entry of index.values()) {
+      const node = getOrCreateNode(entry.displayName);
+      node.articles = [...entry.memberArticles];
+    }
 
-    // Associa artigos às categorias
-    articles.forEach(art => {
-      const cats = art.categories || [];
-      cats.forEach(cat => {
-        const cleanCat = cat.trim();
-        if (!cleanCat) return;
-        const node = getOrCreateNode(cleanCat);
-        if (!node.articles.some(a => a.slug === art.slug)) {
-          node.articles.push(art);
+    for (const entry of index.values()) {
+      const childNode = getOrCreateNode(entry.displayName);
+      for (const subKey of entry.subcategoryKeys) {
+        const subEntry = index.get(subKey);
+        if (subEntry) {
+          const subNode = getOrCreateNode(subEntry.displayName);
+          childNode.subcategories.set(subEntry.displayName, subNode);
         }
+      }
 
-        // Se houver pai definido, registra como subcategoria
-        const parentName = hierarchyMap[cleanCat];
-        if (parentName) {
-          const parentNode = getOrCreateNode(parentName);
-          parentNode.subcategories.set(cleanCat, node);
-        }
-      });
-    });
+      const fallbackParent = CATEGORY_HIERARCHY_PARENTS[entry.displayName];
+      if (fallbackParent && entry.parentNames.length === 0) {
+        const parentNode = getOrCreateNode(fallbackParent);
+        parentNode.subcategories.set(entry.displayName, childNode);
+      }
+    }
 
-    return Array.from(rootNodes.values());
+    return Array.from(rootNodes.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+    );
   }, [articles]);
 
   const toggleNode = (name: string) => {

@@ -1103,11 +1103,11 @@ export async function saveArticleToFirestore(payload: {
     isMinor: !!payload.isMinor,
   };
 
-  // Extract categories from wikitext: [[Category:Foo]]
+  // Extract categories from wikitext: [[Category:Foo]] and [[Categoria:Foo|SortKey]]
   const extractedCategories: string[] = [];
-  const catMatches = Array.from(payload.wikitext.matchAll(/\[\[Category:([^\]]+)\]\]/gi));
+  const catMatches = Array.from(payload.wikitext.matchAll(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi));
   for (const m of catMatches) {
-    const clean = m[1].trim();
+    const clean = (m[1].split('|')[0] || '').replace(/_/g, ' ').trim();
     if (clean && !extractedCategories.includes(clean)) {
       extractedCategories.push(clean);
     }

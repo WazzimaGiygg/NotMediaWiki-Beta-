@@ -55,11 +55,18 @@ export class ParsoidService {
 
     let processed = wikitext;
 
-    // 1. Extract and process Categories: [[Category:Foo]]
-    processed = processed.replace(/\[\[Category:([^\]]+)\]\]/gi, (_, cat) => {
-      const cleanCat = cat.trim();
-      categories.push(cleanCat);
-      ast.push({ type: 'Category', name: cleanCat });
+    processed = processed.replace(/__HIDDENCAT__/g, '');
+
+    // 1. Extract and process Categories: [[Category:Foo]] / [[Categoria:Foo|SortKey]]
+    processed = processed.replace(/\[\[(?:Category|Categoria):([^\]]+)\]\]/gi, (_, cat) => {
+      const pipeIdx = cat.indexOf('|');
+      const cleanCat = (pipeIdx === -1 ? cat : cat.slice(0, pipeIdx)).replace(/_/g, ' ').trim();
+      const sortKey = pipeIdx === -1 ? undefined : cat.slice(pipeIdx + 1).trim();
+      if (!cleanCat) return '';
+      if (!categories.includes(cleanCat)) {
+        categories.push(cleanCat);
+      }
+      ast.push({ type: 'Category', name: cleanCat, ...(sortKey !== undefined ? { sortKey } : {}) });
       return '';
     });
 
@@ -324,10 +331,11 @@ export class ParsoidService {
       .replace(/'''([^']+)'''/g, '<strong>$1</strong>')
       .replace(/''([^']+)''/g, '<em>$1</em>');
 
-    // 7. Internal Links: [[Target|Text]] or [[Target]]
+    // 7. Internal Links: [[Target|Text]], [[Target]], or [[:Categoria:Foo]]
     processed = processed.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => {
-      const linkTarget = target.trim();
-      const displayLabel = (label || target).trim();
+      const rawTarget = target.trim();
+      const linkTarget = rawTarget.replace(/^:/, '').trim();
+      const displayLabel = (label || linkTarget).trim();
       internalLinks.push(linkTarget);
       ast.push({ type: 'InternalLink', target: linkTarget, label: displayLabel });
 
