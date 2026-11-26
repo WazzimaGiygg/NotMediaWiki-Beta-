@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle, FileText, PanelRight, Plus, ChevronDown } from 'lucide-react';
+import { Save, Eye, Code, ArrowLeft, AlertCircle, CheckCircle, Columns, Sparkles, Bot, ShieldAlert, X, FileCode2, BookOpen, Cloud, CloudOff, RotateCcw, Trash2, Loader2, Blocks, Wand2, AlertTriangle, FileText, PanelRight, Plus, ChevronDown, Languages } from 'lucide-react';
 import { Article, ArticleDraft, AutoSaveStatus, UserSession } from '../types';
 import { api } from '../api';
 import { botAgentService } from '../services/botAgentService';
@@ -29,13 +29,27 @@ import { ReferenceManagerModal } from './ReferenceManagerModal';
 import { TemplateManagerModal } from './TemplateManagerModal';
 import { TemplateManagementPanel } from './TemplateManagementPanel';
 import { TemplateFixAssistantPanel } from './TemplateFixAssistantPanel';
-import { RichFormattedEditor } from './RichFormattedEditor';
+import { RichFormattedEditor, RichFormattedEditorHandle } from './RichFormattedEditor';
+import { SpecialCharactersMenu } from './SpecialCharactersMenu';
 import { FORMATTED_INSERT_OPTIONS } from '../utils/wikitextRichConverter';
 import { buildDefaultTemplatePageSkeleton } from '../data/defaultTemplates';
 import { parseTitle } from '../utils/namespaces';
 import { useExtensions } from '../context/ExtensionsContext';
 
 export type EditorViewMode = 'split-formatted' | 'formatted' | 'split' | 'edit' | 'preview';
+
+export function insertTextAtCursor(
+  source: string,
+  insertedText: string,
+  selectionStart: number,
+  selectionEnd: number = selectionStart
+): { nextText: string; nextCursor: number } {
+  const safeStart = Math.max(0, Math.min(selectionStart, source.length));
+  const safeEnd = Math.max(safeStart, Math.min(selectionEnd, source.length));
+  const nextText = source.slice(0, safeStart) + insertedText + source.slice(safeEnd);
+  const nextCursor = safeStart + insertedText.length;
+  return { nextText, nextCursor };
+}
 
 interface WikiEditorProps {
   slug: string;
@@ -114,6 +128,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isTemplateManagementOpen, setIsTemplateManagementOpen] = useState(false);
   const [isTemplateFixPanelOpen, setIsTemplateFixPanelOpen] = useState(false);
+  const [isSpecialCharsOpen, setIsSpecialCharsOpen] = useState(false);
   const [cursorOffset, setCursorOffset] = useState<number>(0);
   const [customTemplates, setCustomTemplates] = useState<Article[]>([]);
 
@@ -123,6 +138,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   const [lastDraftSource, setLastDraftSource] = useState<'firestore' | 'local' | null>(null);
   const [recoverableDraft, setRecoverableDraft] = useState<ArticleDraft | null>(null);
 
+  const wikitextTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const richEditorHandleRef = useRef<RichFormattedEditorHandle>(null);
+  const selectionRangeRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const baselineRef = useRef<{ title: string; wikitext: string; summary: string }>({
     title: slug.replace(/_/g, ' '),
     wikitext: '',
@@ -346,7 +364,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   }, [previewHtml, activeTab, isSyntaxEnabled, isParsoidEnabled]);
 
   const insertMarkup = (before: string, after: string = '', defaultText: string = '') => {
-    const textarea = document.getElementById('wikitext-input') as HTMLTextAreaElement | null;
+    const textarea = wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
     if (!textarea) {
       const inserted = `${before}${defaultText}${after}`;
       setWikitext(prev => {
@@ -363,12 +381,61 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     const replacement = `${before}${selected}${after}`;
 
     const updated = wikitext.substring(0, start) + replacement + wikitext.substring(end);
+    latestEditorStateRef.current.wikitext = updated;
     setWikitext(updated);
 
+    const selStart = start + before.length;
+    const selEnd = start + before.length + selected.length;
+    selectionRangeRef.current = { start: selStart, end: selEnd };
+
     setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
-      setCursorOffset(start + before.length + selected.length);
+      const target = wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+      if (!target) return;
+      target.focus();
+      target.setSelectionRange(selStart, selEnd);
+      setCursorOffset(selEnd);
+    }, 0);
+  };
+
+  const handleInsertSpecialCharacter = (char: string) => {
+    if (!char) return;
+
+    if (activeTab === 'formatted' && isVisualEditorEnabled && richEditorHandleRef.current) {
+      richEditorHandleRef.current.insertText(char);
+      return;
+    }
+
+    const textarea =
+      wikitextTextareaRef.current ||
+      (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+
+    const currentWikitext = latestEditorStateRef.current.wikitext;
+    const hasLiveTextareaSelection =
+      textarea !== null && typeof textarea.selectionStart === 'number';
+    const start = hasLiveTextareaSelection
+      ? textarea.selectionStart
+      : selectionRangeRef.current.start;
+    const end = hasLiveTextareaSelection
+      ? (textarea.selectionEnd ?? textarea.selectionStart)
+      : selectionRangeRef.current.end;
+
+    const { nextText, nextCursor } = insertTextAtCursor(currentWikitext, char, start, end);
+    latestEditorStateRef.current.wikitext = nextText;
+    selectionRangeRef.current = { start: nextCursor, end: nextCursor };
+    setWikitext(nextText);
+    setCursorOffset(nextCursor);
+
+    if (activeTab === 'preview' && isVisualEditorEnabled) {
+      setActiveTab('split');
+    }
+
+    setTimeout(() => {
+      const target =
+        wikitextTextareaRef.current ||
+        (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+      if (!target) return;
+      target.focus();
+      target.setSelectionRange(nextCursor, nextCursor);
     }, 0);
   };
 
@@ -386,9 +453,12 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   }, [isTemplatesEnabled, wikitext, customTemplates, cursorOffset, isTemplatePage]);
 
   const syncCursorFromTextarea = (el?: HTMLTextAreaElement | null) => {
-    const target = el || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
+    const target = el || wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
     if (target && typeof target.selectionStart === 'number') {
-      setCursorOffset(target.selectionStart);
+      const start = target.selectionStart;
+      const end = target.selectionEnd ?? start;
+      selectionRangeRef.current = { start, end };
+      setCursorOffset(start);
     }
   };
 
@@ -396,8 +466,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
     if (activeTab === 'preview' && isVisualEditorEnabled) {
       setActiveTab('split');
     }
+    selectionRangeRef.current = { start: selStart, end: selEnd };
     setTimeout(() => {
-      const textarea = document.getElementById('wikitext-input') as HTMLTextAreaElement | null;
+      const textarea = wikitextTextareaRef.current || (document.getElementById('wikitext-input') as HTMLTextAreaElement | null);
       if (!textarea) return;
       textarea.focus();
       textarea.setSelectionRange(selStart, selEnd);
@@ -887,8 +958,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
 
       <form onSubmit={handleSave}>
         {/* Wikitext Syntax Quick-Bar */}
-        {(isVisualEditorEnabled || isTemplatesEnabled || isInfoboxEnabled || isCiteEnabled || isSyntaxEnabled || isBotsEnabled) && (
-        <div className="bg-slate-50 border border-slate-200 rounded-t p-2 flex flex-wrap items-center gap-1 text-xs">
+        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t p-2 flex flex-wrap items-center gap-1 text-xs">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-2">Markup:</span>
           {isVisualEditorEnabled && (
             <>
@@ -1086,6 +1156,23 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             </button>
           )}
 
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => setIsSpecialCharsOpen(prev => !prev)}
+            aria-expanded={isSpecialCharsOpen}
+            data-testid="toggle-special-characters-btn"
+            className={`px-2.5 py-1 border rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+              isSpecialCharsOpen
+                ? 'bg-slate-900 dark:bg-slate-100 border-slate-900 dark:border-slate-100 text-white dark:text-slate-900'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+            }`}
+            title="Inserir caracteres especiais (Grego, Cirílico, AFI/IPA) na posição do cursor"
+          >
+            <Languages className="w-3 h-3 shrink-0" />
+            <span>Ω Caracteres</span>
+          </button>
+
           {isVisualEditorEnabled && (
             <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500 font-mono">
               <span>Parsoid preview:</span>
@@ -1093,6 +1180,13 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             </div>
           )}
         </div>
+
+        {/* Inline Special Characters Menu (Greek, Cyrillic, IPA) */}
+        {isSpecialCharsOpen && (
+          <SpecialCharactersMenu
+            onSelectCharacter={handleInsertSpecialCharacter}
+            onClose={() => setIsSpecialCharsOpen(false)}
+          />
         )}
 
         {/* Inline Gestão de Predefinições (Wikidot + Wikipédia + NS10) */}
@@ -1142,15 +1236,20 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
               )}
               <div className="p-2 flex-1">
                 <textarea
+                  ref={wikitextTextareaRef}
                   id="wikitext-input"
                   value={wikitext}
                   onChange={e => {
+                    const nextStart = e.target.selectionStart ?? 0;
+                    const nextEnd = e.target.selectionEnd ?? nextStart;
+                    selectionRangeRef.current = { start: nextStart, end: nextEnd };
                     setWikitext(e.target.value);
-                    setCursorOffset(e.target.selectionStart ?? 0);
+                    setCursorOffset(nextStart);
                   }}
                   onClick={e => syncCursorFromTextarea(e.currentTarget)}
                   onKeyUp={e => syncCursorFromTextarea(e.currentTarget)}
                   onSelect={e => syncCursorFromTextarea(e.currentTarget)}
+                  onBlur={e => syncCursorFromTextarea(e.currentTarget)}
                   rows={22}
                   className="w-full h-full min-h-[460px] p-3 font-mono text-xs text-slate-800 dark:text-slate-100 bg-transparent leading-relaxed outline-none resize-y placeholder:text-slate-400"
                   placeholder="Type MediaWiki markup here..."
@@ -1172,6 +1271,7 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
                 </span>
               </div>
               <RichFormattedEditor
+                ref={richEditorHandleRef}
                 wikitext={wikitext}
                 onChange={next => setWikitext(next)}
                 disabled={Boolean(currentUser?.isBanned || currentUser?.role === 'reader')}

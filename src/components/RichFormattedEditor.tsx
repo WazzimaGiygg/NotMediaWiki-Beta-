@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Bold,
   Italic,
@@ -27,6 +27,10 @@ import {
   wikitextToEditableHtml,
 } from '../utils/wikitextRichConverter';
 
+export interface RichFormattedEditorHandle {
+  insertText: (text: string) => void;
+}
+
 interface RichFormattedEditorProps {
   wikitext: string;
   onChange: (nextWikitext: string) => void;
@@ -38,7 +42,7 @@ interface RichFormattedEditorProps {
   onOpenReferenceManager?: () => void;
 }
 
-export const RichFormattedEditor: React.FC<RichFormattedEditorProps> = ({
+export const RichFormattedEditor = forwardRef<RichFormattedEditorHandle, RichFormattedEditorProps>(({
   wikitext,
   onChange,
   disabled = false,
@@ -47,7 +51,7 @@ export const RichFormattedEditor: React.FC<RichFormattedEditorProps> = ({
   onOpenTemplateManager,
   onOpenInfoboxBuilder,
   onOpenReferenceManager,
-}) => {
+}, ref) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastEmittedWikitextRef = useRef<string | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
@@ -207,6 +211,35 @@ export const RichFormattedEditor: React.FC<RichFormattedEditorProps> = ({
     saveCurrentSelection();
     syncFromDom();
   };
+
+  const insertPlainTextAtSelection = (text: string) => {
+    if (disabled || !text) return;
+    const el = editorRef.current;
+    if (!el) return;
+    restoreSelectionOrFocusEnd();
+
+    const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+    if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+      const afterRange = document.createRange();
+      afterRange.setStartAfter(textNode);
+      afterRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(afterRange);
+    } else {
+      el.appendChild(document.createTextNode(text));
+    }
+
+    saveCurrentSelection();
+    syncFromDom();
+  };
+
+  useImperativeHandle(ref, () => ({
+    insertText: insertPlainTextAtSelection,
+  }));
 
   const handleInsertFormattedOption = (option: FormattedInsertOption) => {
     setIsInsertMenuOpen(false);
@@ -615,6 +648,8 @@ export const RichFormattedEditor: React.FC<RichFormattedEditorProps> = ({
       />
     </div>
   );
-};
+});
+
+RichFormattedEditor.displayName = 'RichFormattedEditor';
 
 export default RichFormattedEditor;
