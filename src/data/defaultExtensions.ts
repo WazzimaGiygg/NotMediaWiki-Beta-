@@ -10,6 +10,7 @@ import { botManagerExtension } from '../extensions/bots/BotManagerExtension';
 import { supportTicketsExtension } from '../extensions/supportTicketsExtension';
 import { externalRedirectExtension } from '../extensions/externalRedirectExtension';
 import { maintenanceModeExtension } from '../extensions/maintenanceModeExtension';
+import { chatbotBlockerExtension } from '../extensions/chatbotBlockerExtension';
 import {
   wikiLivrosExtension,
   wikiUniversitarioExtension,
@@ -738,6 +739,7 @@ export const DEFAULT_EXTENSIONS: WikiExtension[] = [
   supportTicketsExtension,
   externalRedirectExtension,
   maintenanceModeExtension,
+  chatbotBlockerExtension,
   wikiLivrosExtension,
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,

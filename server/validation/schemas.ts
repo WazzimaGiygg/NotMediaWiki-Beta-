@@ -61,3 +61,14 @@ export const eventsHistorySchema = z.object({
     return Number.isNaN(parsed) || parsed <= 0 ? 50 : Math.min(parsed, 100);
   }),
 });
+
+export const chatbotBlockerPolicySchema = z.object({
+  enabled: z.boolean().optional(),
+  blockMode: z
+    .enum(['block_all_chatbots', 'allow_traditional_search_only', 'strict_zero_ai'])
+    .optional(),
+  statusCode: z.number().int().min(400).max(599).optional(),
+  blockMessage: z.string().min(1).max(600).optional(),
+  injectNoAiMeta: z.boolean().optional(),
+  customBlockedAgents: z.array(z.string().min(2).max(120)).max(50).optional(),
+});

@@ -5,6 +5,10 @@ import rateLimit from 'express-rate-limit';
 import { gatewayRouter } from './gateway';
 import { handleActionApi } from './services/actionApi';
 import { contentService } from './services/content';
+import {
+  chatbotBlockerMiddleware,
+  getServerRobotsTxtContent,
+} from './middleware/chatbotBlocker';
 
 export function createExpressApp() {
   const app = express();
@@ -31,6 +35,9 @@ export function createExpressApp() {
     }
     next();
   });
+
+  // 1.2. ChatbotBlocker Extension Middleware: Prevent any chatbot/AI fetcher from opening Wiki-site links
+  app.use(chatbotBlockerMiddleware);
 
   // 2. Security Headers via Helmet + CSP frame-ancestors allowing Google AI Studio
   app.use(
@@ -113,6 +120,13 @@ export function createExpressApp() {
 
   // 6. Mount MediaWiki Microservices API Gateway
   app.use('/api/v1', gatewayRouter);
+
+  // 6.05. Dynamic robots.txt aligned with ChatbotBlocker extension
+  app.get('/robots.txt', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.status(200).send(getServerRobotsTxtContent());
+  });
 
   // 6.1. Dynamic XML Sitemap for search engine crawlers anchored on core.wazzimagiygg.com
   app.get('/sitemap.xml', (_req: Request, res: Response) => {

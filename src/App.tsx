@@ -38,6 +38,9 @@ import { AppInstallModal } from './components/AppInstallModal';
 import { MobileAppNavBar } from './components/MobileAppNavBar';
 import { useAppPlatformMode } from './hooks/usePWAInstall';
 import { isRuntimeExtensionEnabled } from './extensions';
+import { getChatbotBlockerConfig } from './extensions/chatbotBlockerExtension';
+import { detectChatbotClientAccess } from './utils/chatbotGuard';
+import { ChatbotBlockedScreen } from './components/ChatbotBlockedScreen';
 
 interface WikiAppShellProps {
   currentUser: UserSession | null;
@@ -107,10 +110,14 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     extensionsLoadError,
     siteTitleConfig,
     maintenanceConfig,
+    chatbotBlockerConfig,
     saveExtension,
     retryLoadExtensions,
     isExtensionEnabled,
   } = useExtensions();
+
+  const resolvedChatbotConfig = chatbotBlockerConfig || getChatbotBlockerConfig(extensions);
+  const chatbotAccessCheck = detectChatbotClientAccess(resolvedChatbotConfig);
 
   const isParodyBannerEnabled = isExtensionEnabled ? isExtensionEnabled('WikidiotaParodyBanner', true) : true;
   const isGoogleOneTapEnabled = isExtensionEnabled ? isExtensionEnabled('GoogleOneTapQuickLogin', true) : true;
@@ -520,6 +527,17 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           </a>
         </section>
       </main>
+    );
+  }
+
+  if (chatbotAccessCheck.blocked) {
+    return (
+      <ChatbotBlockedScreen
+        siteTitle={siteTitleConfig.siteTitle}
+        blockMessage={resolvedChatbotConfig.blockMessage}
+        matchedAgent={chatbotAccessCheck.matchedAgent}
+        reason={chatbotAccessCheck.reason}
+      />
     );
   }
 

@@ -10,6 +10,11 @@ import { supportTicketsExtension, getSupportTicketsConfig } from './supportTicke
 import { externalRedirectExtension, getExternalRedirectConfig } from './externalRedirectExtension';
 import { maintenanceModeExtension, getMaintenanceModeConfig } from './maintenanceModeExtension';
 import {
+  chatbotBlockerExtension,
+  getChatbotBlockerConfig,
+  EXTENSION_CHATBOT_BLOCKER_ENABLED,
+} from './chatbotBlockerExtension';
+import {
   wikiLivrosExtension,
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
@@ -62,6 +67,9 @@ export {
   getExternalRedirectConfig,
   maintenanceModeExtension,
   getMaintenanceModeConfig,
+  chatbotBlockerExtension,
+  getChatbotBlockerConfig,
+  EXTENSION_CHATBOT_BLOCKER_ENABLED,
   wikiLivrosExtension,
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
@@ -101,6 +109,7 @@ export const MANAGED_FEATURE_EXTENSIONS = [
   supportTicketsExtension,
   externalRedirectExtension,
   maintenanceModeExtension,
+  chatbotBlockerExtension,
   wikiLivrosExtension,
   wikiUniversitarioExtension,
   jornalWazzimaGiyggExtension,
@@ -152,7 +161,7 @@ export function isRuntimeExtensionEnabled(
  * prioritariamente as extensões ativas (seja no arquivo ou no estado persistido).
  */
 export function isFeatureExtensionEnabled(
-  featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist' | 'bots' | 'support' | 'redirect' | 'maintenance' | 'livros' | 'universitario' | 'jornal',
+  featureId: 'logs' | 'mesh' | 'events' | 'migration' | 'workbench' | 'checklist' | 'bots' | 'support' | 'redirect' | 'maintenance' | 'chatbotBlocker' | 'livros' | 'universitario' | 'jornal',
   runtimeExtensions?: { id: string; name?: string; enabled: boolean }[]
 ): boolean {
   const idMap: Record<string, { fileEnabled: boolean; extId: string }> = {
@@ -166,6 +175,7 @@ export function isFeatureExtensionEnabled(
     support: { fileEnabled: true, extId: supportTicketsExtension.id },
     redirect: { fileEnabled: true, extId: externalRedirectExtension.id },
     maintenance: { fileEnabled: true, extId: maintenanceModeExtension.id },
+    chatbotBlocker: { fileEnabled: EXTENSION_CHATBOT_BLOCKER_ENABLED, extId: chatbotBlockerExtension.id },
     livros: { fileEnabled: true, extId: wikiLivrosExtension.id },
     universitario: { fileEnabled: true, extId: wikiUniversitarioExtension.id },
     jornal: { fileEnabled: true, extId: jornalWazzimaGiyggExtension.id },

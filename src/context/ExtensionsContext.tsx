@@ -19,6 +19,13 @@ import {
   ThemeAppearanceConfig,
 } from '../extensions/themeAppearanceExtension';
 import {
+  getChatbotBlockerConfig,
+  ChatbotBlockerConfig,
+  applyChatbotMetaProtection,
+  syncChatbotBlockerPolicyToServer,
+} from '../extensions/chatbotBlockerExtension';
+import { auth } from '../firebase';
+import {
   applyWikiThemeToDocument,
   readStoredUserWikiTheme,
   resolveWikiTheme,
@@ -75,6 +82,7 @@ export interface ExtensionsContextValue {
   openThemeSelector: () => void;
   closeThemeSelector: () => void;
   maintenanceConfig: ReturnType<typeof getMaintenanceModeConfig>;
+  chatbotBlockerConfig?: ChatbotBlockerConfig;
   externalRedirectConfig: ReturnType<typeof getExternalRedirectConfig>;
   supportTicketsConfig: ReturnType<typeof getSupportTicketsConfig>;
   portalsConfig: ReturnType<typeof getPortalsConfig>;
@@ -115,6 +123,7 @@ const defaultContextValue: ExtensionsContextValue = {
   openThemeSelector: () => {},
   closeThemeSelector: () => {},
   maintenanceConfig: getMaintenanceModeConfig(DEFAULT_EXTENSIONS),
+  chatbotBlockerConfig: getChatbotBlockerConfig(DEFAULT_EXTENSIONS),
   externalRedirectConfig: getExternalRedirectConfig(DEFAULT_EXTENSIONS),
   supportTicketsConfig: getSupportTicketsConfig(DEFAULT_EXTENSIONS),
   portalsConfig: getPortalsConfig(DEFAULT_EXTENSIONS),
@@ -266,6 +275,18 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
       setHasLoadedFromFirebase(true);
       setExtensionsLoadError(null);
       setLastSyncAt(new Date().toISOString());
+
+      if (saved.id === 'ext-chatbot-blocker') {
+        try {
+          const nextConfig = getChatbotBlockerConfig([saved]);
+          applyChatbotMetaProtection(nextConfig);
+          const idToken = await auth.currentUser?.getIdToken?.();
+          await syncChatbotBlockerPolicyToServer(nextConfig, idToken);
+        } catch {
+          // Ignore sync failures in offline/test contexts
+        }
+      }
+
       return saved;
     },
     [currentUser]
@@ -384,7 +405,12 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
   const closeThemeSelector = useCallback(() => setIsThemeSelectorOpen(false), []);
 
   const maintenanceConfig = useMemo(() => getMaintenanceModeConfig(extensions), [extensions]);
+  const chatbotBlockerConfig = useMemo(() => getChatbotBlockerConfig(extensions), [extensions]);
   const externalRedirectConfig = useMemo(() => getExternalRedirectConfig(extensions), [extensions]);
+
+  useEffect(() => {
+    applyChatbotMetaProtection(chatbotBlockerConfig);
+  }, [chatbotBlockerConfig]);
   const supportTicketsConfig = useMemo(() => getSupportTicketsConfig(extensions), [extensions]);
   const portalsConfig = useMemo(() => getPortalsConfig(extensions), [extensions]);
 
@@ -408,6 +434,7 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
       openThemeSelector,
       closeThemeSelector,
       maintenanceConfig,
+      chatbotBlockerConfig,
       externalRedirectConfig,
       supportTicketsConfig,
       portalsConfig,
@@ -437,6 +464,7 @@ export const ExtensionsProvider: React.FC<ExtensionsProviderProps> = ({
       openThemeSelector,
       closeThemeSelector,
       maintenanceConfig,
+      chatbotBlockerConfig,
       externalRedirectConfig,
       supportTicketsConfig,
       portalsConfig,

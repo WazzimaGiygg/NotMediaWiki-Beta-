@@ -11,6 +11,10 @@ import { botEngine } from './services/botEngine';
 import { authenticateToken, requireAuth, requireRole, isSuperAdmin } from './middleware/auth';
 import { getFirebaseAdmin } from './firebaseAdmin';
 import {
+  getChatbotBlockerStatus,
+  updateChatbotBlockerPolicy,
+} from './middleware/chatbotBlocker';
+import {
   articleSaveSchema,
   articleRollbackSchema,
   parsoidParseSchema,
@@ -20,6 +24,7 @@ import {
   simulateTrafficSchema,
   searchQuerySchema,
   eventsHistorySchema,
+  chatbotBlockerPolicySchema,
 } from './validation/schemas';
 
 export const gatewayRouter = Router();
@@ -1019,6 +1024,36 @@ Mantenha a resposta concisa (1 a 2 parágrafos curtos) e factual.`,
     });
   }
 });
+
+// -----------------------------------------------------------------------------
+// 10. CHATBOT BLOCKER EXTENSION ROUTES (ext-chatbot-blocker)
+// -----------------------------------------------------------------------------
+gatewayRouter.get('/security/chatbot-blocker/status', (req: Request, res: Response) => {
+  const isBureaucrat = Boolean(
+    req.user &&
+      (isSuperAdmin(req.user.email) || ['sysop', 'bureaucrat'].includes(req.user.role || ''))
+  );
+  res.json(getChatbotBlockerStatus(isBureaucrat));
+});
+
+gatewayRouter.post(
+  '/security/chatbot-blocker',
+  requireRole('sysop', 'bureaucrat'),
+  (req: Request, res: Response) => {
+    const parsed = chatbotBlockerPolicySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Parâmetros inválidos para a extensão ChatbotBlocker',
+        details: parsed.error.issues.map(i => i.message),
+      });
+    }
+    const updated = updateChatbotBlockerPolicy(parsed.data);
+    return res.json({
+      success: true,
+      policy: updated,
+    });
+  }
+);
 
 
 
