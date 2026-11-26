@@ -414,6 +414,31 @@
         "read": { "type": "boolean" }
       },
       "required": ["id", "chatId", "senderId", "senderUsername", "text", "timestamp"]
+    },
+    "UserPage": {
+      "title": "UserPage",
+      "description": "Personal user profile page, userboxes, and public talkPosts discussion thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 160 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 255 },
+        "userTag": { "type": "string", "maxLength": 32 },
+        "displayName": { "type": "string", "maxLength": 255 },
+        "slug": { "type": "string", "maxLength": 280 },
+        "wikitext": { "type": "string", "maxLength": 500000 },
+        "role": { "type": "string", "enum": ["sysop", "bureaucrat", "moderator", "editor", "reader", "bot"] },
+        "avatar": { "type": "string", "maxLength": 64 },
+        "email": { "type": "string", "maxLength": 255 },
+        "photoURL": { "type": "string", "maxLength": 1000 },
+        "location": { "type": "string", "maxLength": 255 },
+        "badges": { "type": "array" },
+        "userboxes": { "type": "array" },
+        "talkPosts": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "username", "userTag", "slug", "wikitext", "talkPosts", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -516,6 +541,10 @@
     "/direct_chats/{chatId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Messages belonging to a direct chat conversation"
+    },
+    "/user_pages/{pageId}": {
+      "schema": { "$ref": "#/entities/UserPage" },
+      "description": "Personal user pages and talk page welcome/discussion posts"
     }
   }
 }

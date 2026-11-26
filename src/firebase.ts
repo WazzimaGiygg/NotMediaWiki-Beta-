@@ -246,9 +246,12 @@ export async function syncFirebaseUserToSession(fbUser: FirebaseUser): Promise<U
     console.warn('User profile sync to Firestore error:', dbErr);
   }
 
-  // Automatically verify and create the personal user page in Firestore if not present
+  // Automatically verify and create the personal user page + welcome talk post in Firestore
   try {
-    await ensureUserPageInFirestore(userProfile);
+    const ensured = await ensureUserPageInFirestore(userProfile);
+    userProfile.userTag = ensured.user.userTag;
+    userProfile.discriminator = ensured.user.discriminator;
+    userProfile.userPageSlug = ensured.user.userPageSlug;
   } catch (pageErr) {
     console.warn('Could not auto-create personal user page:', pageErr);
   }
@@ -298,7 +301,7 @@ export async function resolveCurrentFirestoreUser(fbUser: FirebaseUser): Promise
         await setDoc(userRef, { role: 'bureaucrat', syncedToCloudAt: new Date().toISOString() }, { merge: true }).catch(() => {});
       }
 
-      return {
+      const resolvedUser: UserSession = {
         id: fbUser.uid,
         username,
         userTag,
@@ -322,6 +325,23 @@ export async function resolveCurrentFirestoreUser(fbUser: FirebaseUser): Promise
         lastLoginAt: data.lastLoginAt || undefined,
         syncedToCloudAt: data.syncedToCloudAt || undefined,
       };
+
+      // Guarantee personal user page and welcome talk post exist on login
+      try {
+        const userPageRef = doc(db, 'user_pages', `userpage_${fbUser.uid}`);
+        const pageSnap = await getDoc(userPageRef);
+        const pageData = pageSnap.exists() ? (pageSnap.data() as Partial<UserPage>) : null;
+        if (!pageData || !Array.isArray(pageData.talkPosts) || pageData.talkPosts.length === 0) {
+          const ensured = await ensureUserPageInFirestore(resolvedUser);
+          resolvedUser.userTag = ensured.user.userTag;
+          resolvedUser.discriminator = ensured.user.discriminator;
+          resolvedUser.userPageSlug = ensured.user.userPageSlug;
+        }
+      } catch (pageErr) {
+        console.warn('Notice: Could not verify user talk page welcome message:', pageErr);
+      }
+
+      return resolvedUser;
     }
 
     // Profile document does not exist yet: provision /users/{uid} and /user_pages
@@ -2546,6 +2566,34 @@ export async function deleteEmergencyReportFromFirestore(id: string): Promise<vo
 // USER PAGES (Páginas Pessoais de Usuários com Tags e Prevenção de Duplicatas)
 // =============================================================================
 
+function stripUndefinedFields<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
+}
+
+export function buildWelcomeTalkPost(
+  user: Pick<UserSession, 'username'>,
+  tag: string
+): UserPageTalkPost {
+  const safeUsername = String(user.username || 'Wikipedian').trim() || 'Wikipedian';
+  const safeTag = tag || '#0001';
+  return {
+    id: `talk-welcome-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    authorId: 'system',
+    authorUsername: 'NotMediaWiki Boas-Vindas',
+    authorTag: '#0001',
+    authorAvatar: 'NW',
+    authorRole: 'bureaucrat',
+    text: `Olá ${safeUsername}! Seja muito bem-vindo(a) ao NotMediaWiki. Sua página de usuário e sua página de discussão pessoal foram criadas automaticamente com a tag exclusiva ${safeTag}. Sinta-se à vontade para editar artigos, consultar a aba "Tutorial de Infobox" e conversar com a comunidade por aqui!`,
+    timestamp: new Date().toISOString(),
+  };
+}
+
 export async function ensureUserPageInFirestore(user: UserSession): Promise<{ user: UserSession; userPage: UserPage }> {
   const allUsers = await fetchUsersFromFirestore();
   const sameNameUsers = allUsers.filter(u => u.username.toLowerCase() === user.username.toLowerCase() && u.id !== user.id);
@@ -2587,12 +2635,29 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
 
   if (snap.exists()) {
     userPage = snap.data() as UserPage;
-    // ensure slug/tag matches (only write if viewer owns page or is bureaucrat)
-    if (canWriteTargetUserPage && (!userPage.userTag || userPage.userTag !== tag)) {
+    const needsTagSync = !userPage.userTag || userPage.userTag !== tag;
+    const needsWelcomePost = !Array.isArray(userPage.talkPosts) || userPage.talkPosts.length === 0;
+
+    if (needsTagSync) {
       userPage.userTag = tag;
       userPage.slug = slug;
       userPage.displayName = `${user.username}${tag}`;
-      await setDoc(pageRef, userPage, { merge: true });
+    }
+    if (needsWelcomePost) {
+      userPage.talkPosts = [buildWelcomeTalkPost(user, tag)];
+      userPage.updatedAt = new Date().toISOString();
+    }
+
+    if (canWriteTargetUserPage && (needsTagSync || needsWelcomePost)) {
+      if (needsTagSync) {
+        await setDoc(pageRef, stripUndefinedFields(userPage), { merge: true });
+      } else {
+        await setDoc(
+          pageRef,
+          { talkPosts: userPage.talkPosts, updatedAt: userPage.updatedAt },
+          { merge: true }
+        );
+      }
     }
   } else {
     const initialWikitext = buildInitialUserPageWikitext(user, tag, roleTitle);
@@ -2603,6 +2668,7 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
       { id: 'ub-sec', label: 'SEC', text: 'Conexão monitorada com verificação de integridade e VPN', bgClass: 'bg-emerald-100 dark:bg-emerald-950/70', textClass: 'text-emerald-800 dark:text-emerald-300' },
     ];
 
+    const nowIso = new Date().toISOString();
     userPage = {
       id: userPageDocId,
       userId: user.id,
@@ -2613,28 +2679,18 @@ export async function ensureUserPageInFirestore(user: UserSession): Promise<{ us
       wikitext: initialWikitext,
       role: user.role,
       avatar: user.avatar || user.username.substring(0, 2).toUpperCase(),
-      email: user.email,
-      photoURL: user.photoURL,
+      ...(user.email ? { email: user.email } : {}),
+      ...(user.photoURL ? { photoURL: user.photoURL } : {}),
       location: 'Brasil',
       badges: [roleTitle, 'Conta Verificada', 'Membro da Comunidade'],
       userboxes,
-      talkPosts: [
-        {
-          id: `talk-welcome-${Date.now()}`,
-          authorId: 'system',
-          authorUsername: 'NotMediaWiki Boas-Vindas',
-          authorTag: '#0001',
-          authorRole: 'bureaucrat',
-          text: `Olá ${user.username}! Seja muito bem-vindo(a) ao NotMediaWiki. Sua página de usuário pessoal foi criada automaticamente com seu Infobox de Usuário e sua tag exclusiva ${tag}. Consulte a aba "Tutorial de Infobox" para personalizar seus dados e aprender a usar infoboxes nos artigos!`,
-          timestamp: new Date().toISOString(),
-        }
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      talkPosts: [buildWelcomeTalkPost(user, tag)],
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     if (canWriteTargetUserPage) {
-      await setDoc(pageRef, userPage);
+      await setDoc(pageRef, stripUndefinedFields(userPage));
     }
   }
 
@@ -2695,7 +2751,7 @@ export async function saveUserPageToFirestore(page: UserPage): Promise<void> {
   const path = 'user_pages';
   try {
     page.updatedAt = new Date().toISOString();
-    await setDoc(doc(db, path, page.id), page, { merge: true });
+    await setDoc(doc(db, path, page.id), stripUndefinedFields(page), { merge: true });
     await writeSystemLog({
       level: 'INFO',
       service: 'UserPages',

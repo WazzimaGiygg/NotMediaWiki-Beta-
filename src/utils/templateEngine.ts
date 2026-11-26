@@ -451,6 +451,93 @@ function getParam(call: ParsedTemplateCall, keys: string[], fallback = ''): stri
   return fallback;
 }
 
+function escapeTemplateHtml(value: string): string {
+  return (value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderStructuredInfoboxCard(opts: {
+  templateAttr: string;
+  title: string;
+  subtitle?: string;
+  imageSrc?: string;
+  imageCaption?: string;
+  rows: Array<{ label: string; value: string; italicValue?: boolean }>;
+  headerBgClass?: string;
+  missingParams?: string[];
+  missingWarnHtml?: string;
+}): string {
+  const safeImg = opts.imageSrc ? sanitizeImageSrc(opts.imageSrc) : '';
+  const imgHtml = safeImg
+    ? `<div class="mb-3 flex flex-col items-center gap-1.5 pb-2 border-b border-slate-200/70 dark:border-slate-800/70"><img src="${safeImg}" alt="${escapeHtmlAttr(opts.title)}" class="max-h-32 w-auto object-contain rounded" />${opts.imageCaption ? `<span class="text-[11px] text-slate-500 dark:text-slate-400 text-center">${escapeTemplateHtml(opts.imageCaption)}</span>` : ''}</div>`
+    : '';
+  const rowsHtml = opts.rows
+    .map(
+      r =>
+        `<tr class="border-b border-slate-100 dark:border-slate-800/70 last:border-0"><th class="text-left font-semibold py-1.5 pr-2 align-top text-slate-700 dark:text-slate-300 w-2/5">${escapeTemplateHtml(r.label)}</th><td class="py-1.5 text-slate-600 dark:text-slate-400 break-words ${r.italicValue ? 'italic' : ''}">${escapeTemplateHtml(r.value)}</td></tr>`
+    )
+    .join('');
+
+  return compactHtmlBlock(
+    `<aside class="wiki-template infobox ${opts.missingParams && opts.missingParams.length > 0 ? 'wiki-template-has-missing-params ring-1 ring-amber-400/70 dark:ring-amber-600/70' : ''} float-right clear-right ml-6 mb-4 w-72 md:w-80 border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 rounded-lg p-4 text-sm shadow-xs font-sans" data-template="${escapeHtmlAttr(opts.templateAttr)}">
+      <div class="text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 ${opts.headerBgClass || ''}">
+        <div class="font-bold text-base text-slate-900 dark:text-slate-100">${escapeTemplateHtml(opts.title)}</div>
+        ${opts.subtitle ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${escapeTemplateHtml(opts.subtitle)}</div>` : ''}
+        ${opts.missingWarnHtml || ''}
+      </div>
+      ${imgHtml}
+      ${rowsHtml ? `<table class="w-full text-xs border-collapse">${rowsHtml}</table>` : ''}
+    </aside>`
+  );
+}
+
+function convertWikipediaUnit(value: number, fromRaw: string, toRaw?: string): { primary: string; converted: string } | null {
+  const from = (fromRaw || '').trim().toLowerCase();
+  const to = (toRaw || '').trim().toLowerCase();
+  const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(1).replace(/\.0$/, '') : n.toFixed(2).replace(/\.?0+$/, ''));
+
+  if ((from === 'km' && (!to || to === 'mi'))) {
+    return { primary: `${fmt(value)} km`, converted: `${fmt(value * 0.621371)} mi` };
+  }
+  if ((from === 'mi' && (!to || to === 'km'))) {
+    return { primary: `${fmt(value)} mi`, converted: `${fmt(value * 1.60934)} km` };
+  }
+  if ((from === 'm' && (!to || to === 'ft'))) {
+    return { primary: `${fmt(value)} m`, converted: `${fmt(value * 3.28084)} ft` };
+  }
+  if ((from === 'ft' && (!to || to === 'm'))) {
+    return { primary: `${fmt(value)} ft`, converted: `${fmt(value * 0.3048)} m` };
+  }
+  if ((from === 'kg' && (!to || to === 'lb'))) {
+    return { primary: `${fmt(value)} kg`, converted: `${fmt(value * 2.20462)} lb` };
+  }
+  if ((from === 'lb' && (!to || to === 'kg'))) {
+    return { primary: `${fmt(value)} lb`, converted: `${fmt(value * 0.453592)} kg` };
+  }
+  if ((from === 'c' || from === '°c') && (!to || to === 'f' || to === '°f')) {
+    return { primary: `${fmt(value)} °C`, converted: `${fmt((value * 9) / 5 + 32)} °F` };
+  }
+  if ((from === 'f' || from === '°f') && (!to || to === 'c' || to === '°c')) {
+    return { primary: `${fmt(value)} °F`, converted: `${fmt(((value - 32) * 5) / 9)} °C` };
+  }
+  if ((from === 'km2' || from === 'km²') && (!to || to === 'mi2' || to === 'mi²' || to === 'sqmi')) {
+    return { primary: `${fmt(value)} km²`, converted: `${fmt(value * 0.386102)} mi²` };
+  }
+  if ((from === 'mi2' || from === 'mi²' || from === 'sqmi') && (!to || to === 'km2' || to === 'km²')) {
+    return { primary: `${fmt(value)} mi²`, converted: `${fmt(value * 2.58999)} km²` };
+  }
+  if ((from === 'l' && (!to || to === 'gal'))) {
+    return { primary: `${fmt(value)} L`, converted: `${fmt(value * 0.264172)} gal` };
+  }
+  if ((from === 'gal' && (!to || to === 'l'))) {
+    return { primary: `${fmt(value)} gal`, converted: `${fmt(value * 3.78541)} L` };
+  }
+  return null;
+}
+
 /**
  * Renders built-in standard MediaWiki Predefinições to clean semantic HTML.
  * Follows editorial design discipline: crisp all-around hairline borders (zero thick border-l-4),
@@ -1205,6 +1292,777 @@ function renderBuiltinTemplate(
   // 20. {{Reflist}} / {{Referências}}
   if (['reflist', 'referências', 'referencias', 'listaref'].includes(normalizedKey)) {
     return `<div class="wiki-template-reflist-anchor" data-template="Reflist"></div>`;
+  }
+
+  // 21. {{Mais fontes}} / {{More citations needed}}
+  if (['mais fontes', 'sem notas', 'faltam fontes', 'more citations needed', 'refimprove'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', 'date', '1'], '');
+    const assunto = getParam(call, ['assunto', 'seção', 'secao', 'topic', '2'], '');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${escapeTemplateHtml(data)})</span>` : '';
+    const assuntoNote = assunto ? ` Na seção <strong>${escapeTemplateHtml(assunto)}</strong>.` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border border-amber-300 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/35 p-4 text-xs text-amber-950 dark:text-amber-100 font-sans flex items-start gap-3" role="note" data-template="Mais fontes">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-amber-200 dark:border-amber-800 bg-white/90 dark:bg-amber-900/40 flex items-center justify-center font-bold text-amber-700 dark:text-amber-300" aria-hidden="true">+</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Este artigo precisa de fontes adicionais para verificação.${dataNote}</strong>
+          <span>Ajude a melhorar este verbete citando referências confiáveis e independentes.${assuntoNote}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 22. {{Wikificação}} / {{Wikificar}} / {{Wikify}}
+  if (['wikificação', 'wikificacao', 'wikificar', 'formatar', 'wikify'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', 'date', '1'], '');
+    const motivo = getParam(call, ['motivo', 'reason', '2'], 'Recomenda-se formatar seções, ligações internas ([[wikilinks]]) e referências segundo o manual de estilo.');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${escapeTemplateHtml(data)})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border border-violet-200 dark:border-violet-800/80 bg-violet-50/85 dark:bg-violet-950/35 p-4 text-xs text-violet-950 dark:text-violet-100 font-sans flex items-start gap-3" role="note" data-template="Wikificação">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-violet-200 dark:border-violet-800 bg-white/90 dark:bg-violet-900/40 flex items-center justify-center font-mono font-bold text-violet-700 dark:text-violet-300" aria-hidden="true">[[]]</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Este verbete precisa ser wikificado.${dataNote}</strong>
+          <span>${escapeTemplateHtml(motivo)}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 23. {{Fusão}} / {{Fundir com}} / {{Merge}}
+  if (['fusão', 'fusao', 'fundir', 'fundir com', 'merge'].includes(normalizedKey)) {
+    const alvo = getParam(call, ['1', 'artigo', 'destino', 'target'], '');
+    const data = getParam(call, ['data', 'date'], '');
+    const motivo = getParam(call, ['motivo', 'reason'], '');
+    if (!alvo) {
+      const diagId = registerMissingRequired?.('Fusão', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-ambox my-4" data-template="Fusão">${buildMissingParamHtml(
+          '{{Fusão}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe o artigo de destino, ex: {{Fusão|Artigo Destino}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
+    const targetHref = `#/wiki/${encodeURIComponent(alvo.replace(/\s+/g, '_'))}`;
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${escapeTemplateHtml(data)})</span>` : '';
+    const motivoHtml = motivo ? ` <span class="opacity-90">Motivo: ${escapeTemplateHtml(motivo)}</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/85 dark:bg-indigo-950/35 p-4 text-xs text-indigo-950 dark:text-indigo-100 font-sans flex items-start gap-3" role="note" data-template="Fusão">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-indigo-200 dark:border-indigo-800 bg-white/90 dark:bg-indigo-900/40 flex items-center justify-center font-bold text-indigo-700 dark:text-indigo-300" aria-hidden="true">⇄</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Proposta de fusão de conteúdo${dataNote}</strong>
+          <span>Foi sugerido que este artigo seja fundido com <a href="${targetHref}" class="wiki-link font-semibold text-blue-700 dark:text-blue-400 hover:underline">${escapeTemplateHtml(alvo)}</a>.${motivoHtml}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 24. {{Atualizar}} / {{Desatualizado}} / {{Update}}
+  if (['atualizar', 'desatualizado', 'update', 'out of date'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', 'date', '1'], '');
+    const parte = getParam(call, ['parte', 'part', 'motivo', '2'], '');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${escapeTemplateHtml(data)})</span>` : '';
+    const parteHtml = parte ? ` Trecho sinalizado: <strong>${escapeTemplateHtml(parte)}</strong>.` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border border-amber-300 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/35 p-4 text-xs text-amber-950 dark:text-amber-100 font-sans flex items-start gap-3" role="note" data-template="Atualizar">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-amber-200 dark:border-amber-800 bg-white/90 dark:bg-amber-900/40 flex items-center justify-center font-bold text-amber-700 dark:text-amber-300" aria-hidden="true">↻</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Este artigo ou seção necessita de atualização.${dataNote}</strong>
+          <span>Algumas informações podem estar desatualizadas em relação a eventos ou versões recentes.${parteHtml}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 25. {{Publicidade}} / {{Advert}}
+  if (['publicidade', 'propaganda', 'advert', 'tom promocional'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', 'date', '1'], '');
+    const motivo = getParam(call, ['motivo', 'reason', '2'], 'O texto parece conter linguagem promocional e deve ser reescrito em tom enciclopédico neutro.');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${escapeTemplateHtml(data)})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border border-rose-200 dark:border-rose-800/80 bg-rose-50/85 dark:bg-rose-950/35 p-4 text-xs text-rose-950 dark:text-rose-100 font-sans flex items-start gap-3" role="note" data-template="Publicidade">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-rose-200 dark:border-rose-800 bg-white/90 dark:bg-rose-900/40 flex items-center justify-center font-bold text-rose-700 dark:text-rose-300" aria-hidden="true">!</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Aviso de redação promocional ou publicitária.${dataNote}</strong>
+          <span>${escapeTemplateHtml(motivo)}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 26. {{Controverso}} / {{Disputed}}
+  if (['controverso', 'polêmico', 'polemico', 'disputado', 'disputed'].includes(normalizedKey)) {
+    const motivo = getParam(call, ['motivo', 'reason', '1'], 'A exatidão factual de afirmações neste artigo está em debate editorial.');
+    const data = getParam(call, ['data', 'date', '2'], '');
+    const dataNote = data ? ` <span class="text-[11px] font-mono opacity-75">(${escapeTemplateHtml(data)})</span>` : '';
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-ambox not-prose my-4 rounded-lg border border-amber-300 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/35 p-4 text-xs text-amber-950 dark:text-amber-100 font-sans flex items-start gap-3" role="note" data-template="Controverso">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-amber-200 dark:border-amber-800 bg-white/90 dark:bg-amber-900/40 flex items-center justify-center font-bold text-amber-700 dark:text-amber-300" aria-hidden="true">?</span>
+        <div class="leading-relaxed">
+          <strong class="block font-bold mb-0.5">Exatidão factual contestada.${dataNote}</strong>
+          <span>${escapeTemplateHtml(motivo)}</span>
+        </div>
+      </div>`
+    );
+  }
+
+  // 27. {{Protegido}} / {{Pp}} / {{Protected}}
+  if (['protegido', 'pp', 'semiprotegido', 'protected'].includes(normalizedKey)) {
+    const nivel = getParam(call, ['nível', 'nivel', 'level', '1'], 'semiproteção');
+    const motivo = getParam(call, ['motivo', 'reason', '2'], 'Página protegida conforme política editorial de preservação.');
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-protected not-prose my-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-900/80 p-3.5 text-xs text-slate-800 dark:text-slate-200 font-sans flex items-center gap-3" role="note" data-template="Protegido">
+        <span class="shrink-0 w-7 h-7 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200" aria-hidden="true">🔒</span>
+        <div class="leading-relaxed">
+          <strong>Página sob ${escapeTemplateHtml(nivel)}:</strong> ${escapeTemplateHtml(motivo)}
+        </div>
+      </div>`
+    );
+  }
+
+  // 28. {{Redireciona}} / {{Redirect}}
+  if (['redireciona', 'redirect', 'redir'].includes(normalizedKey)) {
+    const termo = getParam(call, ['1', 'termo'], '');
+    const destino = getParam(call, ['2', 'destino'], '');
+    if (!termo) {
+      const diagId = registerMissingRequired?.('Redireciona', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-hatnote my-2" data-template="Redireciona">${buildMissingParamHtml(
+          '{{Redireciona}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe o termo redirecionado, ex: {{Redireciona|Wiki|Wiki (desambiguação)}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
+    const targetName = destino || `${termo} (desambiguação)`;
+    const href = `#/wiki/${encodeURIComponent(targetName.replace(/\s+/g, '_'))}`;
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-hatnote not-prose pl-3 py-1 my-2 text-xs italic text-slate-600 dark:text-slate-400 font-sans" data-template="Redireciona">
+        ↳ “${escapeTemplateHtml(termo)}” redireciona para este artigo. Para outros significados, veja <a href="${href}" class="wiki-link font-semibold text-blue-700 dark:text-blue-400 hover:underline">${escapeTemplateHtml(targetName)}</a>.
+      </div>`
+    );
+  }
+
+  // 29. {{Sobre}} / {{About}} / {{Ver desambiguação}}
+  if (['sobre', 'ver desambiguação', 'ver desambiguacao', 'about', 'outros usos'].includes(normalizedKey)) {
+    const assunto = getParam(call, ['1', 'assunto'], '');
+    const outroUso = getParam(call, ['2'], 'outros significados');
+    const destino = getParam(call, ['3', 'destino'], `${pageTitle} (desambiguação)`);
+    if (!assunto) {
+      const diagId = registerMissingRequired?.('Sobre', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-hatnote my-2" data-template="Sobre">${buildMissingParamHtml(
+          '{{Sobre}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe o assunto deste artigo, ex: {{Sobre|o software|outros significados|Termo (desambiguação)}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
+    const href = `#/wiki/${encodeURIComponent(destino.replace(/\s+/g, '_'))}`;
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-hatnote not-prose pl-3 py-1 my-2 text-xs italic text-slate-600 dark:text-slate-400 font-sans" data-template="Sobre">
+        ↳ Este artigo é sobre ${escapeTemplateHtml(assunto)}. Para ${escapeTemplateHtml(outroUso)}, veja <a href="${href}" class="wiki-link font-semibold text-blue-700 dark:text-blue-400 hover:underline">${escapeTemplateHtml(destino)}</a>.
+      </div>`
+    );
+  }
+
+  // 30. {{Distinguir}} / {{Não confundir}} / {{Distinguish}}
+  if (['distinguir', 'não confundir', 'nao confundir', 'distinguish'].includes(normalizedKey)) {
+    const targets = call.positional.map(t => t.trim()).filter(Boolean);
+    if (targets.length === 0) {
+      const diagId = registerMissingRequired?.('Distinguir', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-hatnote my-2" data-template="Distinguir">${buildMissingParamHtml(
+          '{{Distinguir}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe ao menos um termo semelhante, ex: {{Distinguir|JavaScript|TypeScript}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
+    const linksHtml = targets
+      .map(t => `<a href="#/wiki/${encodeURIComponent(t.replace(/\s+/g, '_'))}" class="wiki-link font-semibold text-blue-700 dark:text-blue-400 hover:underline">${escapeTemplateHtml(t)}</a>`)
+      .join(' ou ');
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-hatnote not-prose pl-3 py-1 my-2 text-xs italic text-slate-600 dark:text-slate-400 font-sans" data-template="Distinguir">
+        ↳ Não confundir com ${linksHtml}.
+      </div>`
+    );
+  }
+
+  // 31. {{Portal}} / {{Portais}}
+  if (['portal', 'portais', 'portal3'].includes(normalizedKey)) {
+    const portals = call.positional.map(p => p.trim()).filter(Boolean);
+    if (portals.length === 0) {
+      const diagId = registerMissingRequired?.('Portal', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template wiki-template-portal my-3" data-template="Portal">${buildMissingParamHtml(
+          '{{Portal}}: parâmetro obrigatório ausente (1)',
+          ['1'],
+          'missing_required_param',
+          'Informe ao menos um portal, ex: {{Portal|Tecnologia|Ciência}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
+    const chipsHtml = portals
+      .map(p => {
+        const target = `Portal:${p.replace(/^Portal:/i, '').trim()}`;
+        const href = `#/wiki/${encodeURIComponent(target.replace(/\s+/g, '_'))}`;
+        return `<a href="${href}" class="wiki-link inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-blue-700 dark:text-blue-400 hover:underline"><span aria-hidden="true">❖</span>Portal ${escapeTemplateHtml(p.replace(/^Portal:/i, '').trim())}</a>`;
+      })
+      .join(' ');
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-portal not-prose my-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/70 px-3.5 py-2.5 flex flex-wrap items-center gap-2 font-sans" data-template="Portal">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-1">Portais:</span>
+        ${chipsHtml}
+      </div>`
+    );
+  }
+
+  // 32. {{Correlatos}} / {{Wikimedia}}
+  if (['correlatos', 'projetos irmãos', 'projetos irmaos', 'wikimedia', 'sister project links'].includes(normalizedKey)) {
+    const projects: Array<{ label: string; value: string; baseUrl: string }> = [
+      { label: 'Wikimedia Commons', value: getParam(call, ['commons', '1'], ''), baseUrl: 'https://commons.wikimedia.org/wiki/' },
+      { label: 'Wikiquote', value: getParam(call, ['wikiquote', '2'], ''), baseUrl: 'https://pt.wikiquote.org/wiki/' },
+      { label: 'Wikcionário', value: getParam(call, ['wikcionario', 'wikcionário', 'wiktionary', '3'], ''), baseUrl: 'https://pt.wiktionary.org/wiki/' },
+      { label: 'Wikisource', value: getParam(call, ['wikisource', '4'], ''), baseUrl: 'https://pt.wikisource.org/wiki/' },
+    ].filter(p => p.value);
+
+    const items = projects.length > 0 ? projects : [{ label: 'Wikimedia Commons', value: pageTitle, baseUrl: 'https://commons.wikimedia.org/wiki/' }];
+    const listHtml = items
+      .map(
+        p =>
+          `<li class="flex items-center justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800 last:border-0"><span class="text-slate-600 dark:text-slate-400">${p.label}</span><a href="${escapeHtmlAttr(p.baseUrl + encodeURIComponent(p.value.replace(/\s+/g, '_')))}" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-700 dark:text-blue-400 hover:underline truncate">${escapeTemplateHtml(p.value)}</a></li>`
+      )
+      .join('');
+    return compactHtmlBlock(
+      `<aside class="wiki-template wiki-template-sister not-prose my-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/75 p-3.5 text-xs font-sans max-w-md" data-template="Correlatos">
+        <div class="font-bold text-slate-800 dark:text-slate-200 pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-800">Projetos correlatos Wikimedia</div>
+        <ul class="m-0 p-0 list-none">${listHtml}</ul>
+      </aside>`
+    );
+  }
+
+  // 33. {{Controle de autoridade}} / {{Authority control}}
+  if (['controle de autoridade', 'authority control', 'autoridade'].includes(normalizedKey)) {
+    const entries: Array<{ label: string; value: string; url: string }> = [
+      { label: 'VIAF', value: getParam(call, ['VIAF', 'viaf'], ''), url: 'https://viaf.org/viaf/' },
+      { label: 'ISNI', value: getParam(call, ['ISNI', 'isni'], ''), url: 'https://isni.org/isni/' },
+      { label: 'ORCID', value: getParam(call, ['ORCID', 'orcid'], ''), url: 'https://orcid.org/' },
+      { label: 'LCCN', value: getParam(call, ['LCCN', 'lccn'], ''), url: 'https://id.loc.gov/authorities/names/' },
+      { label: 'GND', value: getParam(call, ['GND', 'gnd'], ''), url: 'https://d-nb.info/gnd/' },
+      { label: 'Wikidata', value: getParam(call, ['Wikidata', 'wikidata'], ''), url: 'https://www.wikidata.org/wiki/' },
+    ].filter(e => e.value);
+
+    const chipsHtml =
+      entries.length > 0
+        ? entries
+            .map(
+              e =>
+                `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px]"><strong class="text-slate-600 dark:text-slate-300">${e.label}:</strong> <a href="${escapeHtmlAttr(e.url + encodeURIComponent(e.value.replace(/\s+/g, '')))}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-700 dark:text-blue-400 hover:underline">${escapeTemplateHtml(e.value)}</a></span>`
+            )
+            .join(' ')
+        : `<span class="text-slate-500 dark:text-slate-400 italic">Sem identificadores externos informados.</span>`;
+
+    return compactHtmlBlock(
+      `<div class="wiki-template wiki-template-authority not-prose my-5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/85 dark:bg-slate-900/75 px-4 py-2.5 font-sans text-xs flex flex-wrap items-center gap-2" role="navigation" aria-label="Controle de autoridade" data-template="Controle de autoridade">
+        <span class="font-bold text-slate-700 dark:text-slate-200 mr-1">Controle de autoridade</span>
+        ${chipsHtml}
+      </div>`
+    );
+  }
+
+  // 34. {{Infocaixa país}} / {{Info/País}}
+  if (['infocaixa país', 'infocaixa pais', 'info/país', 'info/pais'].includes(normalizedKey)) {
+    const rawNome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], '');
+    const missingParams = !rawNome ? ['nome'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa país', missingParams) : undefined;
+    const nome = rawNome || pageTitle;
+    const rows = [
+      { label: 'Capital', value: getParam(call, ['capital'], '') },
+      { label: 'Idioma oficial', value: getParam(call, ['idioma', 'língua', 'lingua', 'idiomas'], '') },
+      { label: 'Governo', value: getParam(call, ['governo', 'sistema'], '') },
+      { label: 'População', value: getParam(call, ['população', 'populacao'], '') },
+      { label: 'Área total', value: getParam(call, ['área', 'area'], '') },
+      { label: 'Moeda', value: getParam(call, ['moeda', 'currency'], '') },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa país}}: nome', missingParams, 'missing_required_param', 'Informe nome=... em {{Infocaixa país}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa país',
+      title: nome,
+      subtitle: 'País / Território',
+      imageSrc: getParam(call, ['imagem', 'bandeira', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 35. {{Infocaixa município}} / {{Info/Município}} / {{Infocaixa cidade}}
+  if (['infocaixa município', 'infocaixa municipio', 'info/município', 'info/municipio', 'infocaixa cidade', 'info/cidade'].includes(normalizedKey)) {
+    const rawNome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], '');
+    const missingParams = !rawNome ? ['nome'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa município', missingParams) : undefined;
+    const nome = rawNome || pageTitle;
+    const rows = [
+      { label: 'Estado', value: getParam(call, ['estado', 'uf', 'província', 'provincia'], '') },
+      { label: 'País', value: getParam(call, ['país', 'pais', 'country'], '') },
+      { label: 'Fundação', value: getParam(call, ['fundação', 'fundacao'], '') },
+      { label: 'População', value: getParam(call, ['população', 'populacao'], '') },
+      { label: 'Área', value: getParam(call, ['área', 'area'], '') },
+      { label: 'Fuso horário', value: getParam(call, ['fuso', 'timezone'], '') },
+      { label: 'Website', value: getParam(call, ['website', 'site'], '') },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa município}}: nome', missingParams, 'missing_required_param', 'Informe nome=... em {{Infocaixa município}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa município',
+      title: nome,
+      subtitle: 'Município / Cidade',
+      imageSrc: getParam(call, ['imagem', 'brasão', 'brasao', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 36. {{Infocaixa filme}} / {{Info/Filme}}
+  if (['infocaixa filme', 'info/filme', 'infocaixa cinema'].includes(normalizedKey)) {
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', 'nome', '1'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa filme', missingParams) : undefined;
+    const titulo = rawTitulo || pageTitle;
+    const rows = [
+      { label: 'Direção', value: getParam(call, ['direção', 'direcao', 'diretor', 'director'], '') },
+      { label: 'Roteiro', value: getParam(call, ['roteiro', 'writer'], '') },
+      { label: 'Elenco', value: getParam(call, ['elenco', 'starring'], '') },
+      { label: 'Gênero', value: getParam(call, ['gênero', 'genero', 'genre'], '') },
+      { label: 'Duração', value: getParam(call, ['duração', 'duracao', 'runtime'], '') },
+      { label: 'Ano', value: getParam(call, ['ano', 'lançamento', 'lancamento', 'year'], '') },
+      { label: 'País', value: getParam(call, ['país', 'pais', 'country'], '') },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa filme}}: título', missingParams, 'missing_required_param', 'Informe título=... em {{Infocaixa filme}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa filme',
+      title: titulo,
+      subtitle: 'Filme',
+      imageSrc: getParam(call, ['imagem', 'poster', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 37. {{Infocaixa livro}} / {{Info/Livro}}
+  if (['infocaixa livro', 'info/livro', 'infocaixa obra'].includes(normalizedKey)) {
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', 'nome', '1'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa livro', missingParams) : undefined;
+    const titulo = rawTitulo || pageTitle;
+    const rows = [
+      { label: 'Autor', value: getParam(call, ['autor', 'author'], '') },
+      { label: 'Gênero', value: getParam(call, ['gênero', 'genero', 'genre'], '') },
+      { label: 'Editora', value: getParam(call, ['editora', 'publisher'], '') },
+      { label: 'Lançamento', value: getParam(call, ['ano', 'lançamento', 'lancamento', 'year'], '') },
+      { label: 'Páginas', value: getParam(call, ['páginas', 'paginas', 'pages'], '') },
+      { label: 'ISBN', value: getParam(call, ['isbn'], '') },
+      { label: 'Idioma', value: getParam(call, ['idioma', 'language'], '') },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa livro}}: título', missingParams, 'missing_required_param', 'Informe título=... em {{Infocaixa livro}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa livro',
+      title: titulo,
+      subtitle: 'Obra Literária',
+      imageSrc: getParam(call, ['imagem', 'capa', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 38. {{Infocaixa jogo}} / {{Info/Jogo}}
+  if (['infocaixa jogo', 'info/jogo', 'infocaixa videojogo', 'info/videojogo'].includes(normalizedKey)) {
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', 'nome', '1'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa jogo', missingParams) : undefined;
+    const titulo = rawTitulo || pageTitle;
+    const rows = [
+      { label: 'Desenvolvedora', value: getParam(call, ['desenvolvedora', 'developer'], '') },
+      { label: 'Publicadora', value: getParam(call, ['publicadora', 'publisher'], '') },
+      { label: 'Gênero', value: getParam(call, ['gênero', 'genero', 'genre'], '') },
+      { label: 'Plataformas', value: getParam(call, ['plataformas', 'plataforma', 'platforms'], '') },
+      { label: 'Lançamento', value: getParam(call, ['lançamento', 'lancamento', 'ano', 'release'], '') },
+      { label: 'Modos', value: getParam(call, ['modos', 'modes'], '') },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa jogo}}: título', missingParams, 'missing_required_param', 'Informe título=... em {{Infocaixa jogo}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa jogo',
+      title: titulo,
+      subtitle: 'Jogo Eletrônico',
+      imageSrc: getParam(call, ['imagem', 'capa', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 39. {{Infocaixa álbum}} / {{Info/Álbum}}
+  if (['infocaixa álbum', 'infocaixa album', 'info/álbum', 'info/album', 'infocaixa disco'].includes(normalizedKey)) {
+    const rawNome = getParam(call, ['nome', 'título', 'titulo', 'name', '1'], '');
+    const missingParams = !rawNome ? ['nome'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa álbum', missingParams) : undefined;
+    const nome = rawNome || pageTitle;
+    const tipo = getParam(call, ['tipo', 'type'], 'Álbum musical');
+    const rows = [
+      { label: 'Artista', value: getParam(call, ['artista', 'artist', 'banda'], '') },
+      { label: 'Lançamento', value: getParam(call, ['lançamento', 'lancamento', 'ano', 'released'], '') },
+      { label: 'Gênero', value: getParam(call, ['gênero', 'genero', 'genre'], '') },
+      { label: 'Duração', value: getParam(call, ['duração', 'duracao', 'length'], '') },
+      { label: 'Gravadora', value: getParam(call, ['gravadora', 'label'], '') },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa álbum}}: nome', missingParams, 'missing_required_param', 'Informe nome=... em {{Infocaixa álbum}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa álbum',
+      title: nome,
+      subtitle: tipo,
+      imageSrc: getParam(call, ['imagem', 'capa', 'cover', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 40. {{Infocaixa taxonomia}} / {{Info/Taxonomia}} / {{Taxocaixa}}
+  if (['infocaixa taxonomia', 'info/taxonomia', 'taxocaixa', 'taxobox'].includes(normalizedKey)) {
+    const rawNome = getParam(call, ['nome', 'name', 'título', 'titulo', '1'], '');
+    const missingParams = !rawNome ? ['nome'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Infocaixa taxonomia', missingParams) : undefined;
+    const nome = rawNome || pageTitle;
+    const estado = getParam(call, ['estado', 'conservação', 'conservacao', 'status'], '');
+    const rows: Array<{ label: string; value: string; italicValue?: boolean }> = [
+      { label: 'Reino', value: getParam(call, ['reino', 'regnum'], '') },
+      { label: 'Filo', value: getParam(call, ['filo', 'divisão', 'divisao', 'phylum'], '') },
+      { label: 'Classe', value: getParam(call, ['classe', 'classis'], '') },
+      { label: 'Ordem', value: getParam(call, ['ordem', 'ordo'], '') },
+      { label: 'Família', value: getParam(call, ['família', 'familia', 'familia'], '') },
+      { label: 'Gênero', value: getParam(call, ['gênero', 'genero', 'genus'], ''), italicValue: true },
+      { label: 'Espécie', value: getParam(call, ['espécie', 'especie', 'species', 'binomial'], ''), italicValue: true },
+    ].filter(r => r.value);
+    const missingWarnHtml =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('Parâmetro ausente em {{Infocaixa taxonomia}}: nome', missingParams, 'missing_required_param', 'Informe nome=... em {{Infocaixa taxonomia}}', diagId, false)
+        : '';
+    return renderStructuredInfoboxCard({
+      templateAttr: 'Infocaixa taxonomia',
+      title: nome,
+      subtitle: estado ? `Conservação: ${estado}` : 'Classificação científica',
+      imageSrc: getParam(call, ['imagem', 'image'], ''),
+      rows,
+      missingParams,
+      missingWarnHtml,
+    });
+  }
+
+  // 41. {{Quem?}} / {{Quando?}} / {{Por quê?}} (inline editorial markers)
+  if (['quem?', 'quem', 'who'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', 'date', '1'], '');
+    const tip = data ? `Atribuição vaga sinalizada em ${escapeHtmlAttr(data)}` : 'Quem afirma isso? Requer atribuição específica';
+    return `<sup class="wiki-template-inline noprint font-sans text-[10px] text-slate-500 dark:text-slate-400 ml-0.5 select-none" data-template="Quem?" title="${tip}">[<i>quem?</i>]</sup>`;
+  }
+
+  if (['quando?', 'quando', 'when'].includes(normalizedKey)) {
+    const data = getParam(call, ['data', 'date', '1'], '');
+    const tip = data ? `Referência temporal vaga sinalizada em ${escapeHtmlAttr(data)}` : 'Quando isso ocorreu? Especificar período ou data';
+    return `<sup class="wiki-template-inline noprint font-sans text-[10px] text-slate-500 dark:text-slate-400 ml-0.5 select-none" data-template="Quando?" title="${tip}">[<i>quando?</i>]</sup>`;
+  }
+
+  if (['por quê?', 'por que?', 'por quê', 'por que', 'why'].includes(normalizedKey)) {
+    const razao = getParam(call, ['razão', 'razao', 'reason', '1'], '');
+    const data = getParam(call, ['data', 'date', '2'], '');
+    const tipParts = [razao || 'Por quê? Necessita justificativa ou explicação causal', data ? `(${data})` : ''].filter(Boolean);
+    return `<sup class="wiki-template-inline noprint font-sans text-[10px] text-amber-700 dark:text-amber-400 ml-0.5 select-none" data-template="Por quê?" title="${escapeHtmlAttr(tipParts.join(' '))}">[<i>por quê?</i>]</sup>`;
+  }
+
+  // 42. {{Caixa de diálogo}} / {{Ocultar}} / {{Collapse}}
+  if (['caixa de diálogo', 'caixa de dialogo', 'ocultar', 'collapse', 'cot'].includes(normalizedKey)) {
+    const titulo = getParam(call, ['título', 'titulo', 'title'], 'Conteúdo recolhido');
+    const conteudo = getParam(call, ['1', 'conteúdo', 'conteudo', 'content', 'texto'], '');
+    if (!conteudo) {
+      const diagId = registerMissingRequired?.('Caixa de diálogo', ['1']);
+      if (!highlightDiagnostics) return '';
+      return compactHtmlBlock(
+        `<div class="wiki-template my-4" data-template="Caixa de diálogo">${buildMissingParamHtml(
+          '{{Caixa de diálogo}}: parâmetro obrigatório ausente (1 / conteúdo)',
+          ['1'],
+          'missing_required_param',
+          'Informe o conteúdo oculto em {{Caixa de diálogo|título=...|1=...}}',
+          diagId,
+          true
+        )}</div>`
+      );
+    }
+    return compactHtmlBlock(
+      `<details class="wiki-template wiki-template-collapse not-prose my-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 font-sans text-xs overflow-hidden" data-template="Caixa de diálogo">
+        <summary class="px-3.5 py-2 font-semibold text-slate-800 dark:text-slate-200 bg-slate-100/90 dark:bg-slate-800/80 cursor-pointer select-none hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition-colors">${escapeTemplateHtml(titulo)}</summary>
+        <div class="p-3.5 text-slate-700 dark:text-slate-300 leading-relaxed border-t border-slate-200 dark:border-slate-800">${escapeTemplateHtml(conteudo)}</div>
+      </details>`
+    );
+  }
+
+  // 43. {{Sem quebra}} / {{Nowrap}}
+  if (['sem quebra', 'nowrap', 'nobr'].includes(normalizedKey)) {
+    const texto = getParam(call, ['1', 'texto'], '');
+    if (!texto) {
+      const diagId = registerMissingRequired?.('Sem quebra', ['1']);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml('{{Sem quebra}}: parâmetro obrigatório ausente (1)', ['1'], 'missing_required_param', 'Informe o texto, ex: {{Sem quebra|100 km/h}}', diagId, true);
+      }
+      return '';
+    }
+    return `<span class="wiki-template-nowrap whitespace-nowrap" data-template="Sem quebra">${escapeTemplateHtml(texto)}</span>`;
+  }
+
+  // 44. {{Símbolo}} / {{Done}} / {{Feito}} / {{Não feito}}
+  if (['símbolo', 'simbolo', 'done', 'feito', 'não feito', 'nao feito', 'check', 'cross'].includes(normalizedKey)) {
+    const defaultMode = ['não feito', 'nao feito', 'cross'].includes(normalizedKey) ? 'nao' : 'feito';
+    const estadoRaw = getParam(call, ['1', 'estado', 'status'], defaultMode).toLowerCase();
+    const defaultLabel = estadoRaw === 'nao' || estadoRaw === 'não' ? 'Não feito' : estadoRaw === 'pendente' ? 'Pendente' : estadoRaw === 'atencao' || estadoRaw === 'atenção' ? 'Atenção' : 'Feito';
+    const label = getParam(call, ['2', 'texto', 'label'], ['done', 'feito', 'não feito', 'nao feito'].includes(normalizedKey) ? defaultLabel : '');
+    let icon = '✓';
+    let colorClass = 'text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40';
+    if (['nao', 'não', 'cross', 'no', 'x'].includes(estadoRaw)) {
+      icon = '✕';
+      colorClass = 'text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40';
+    } else if (['pendente', 'neutro', 'pending', '?'].includes(estadoRaw)) {
+      icon = '◔';
+      colorClass = 'text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40';
+    } else if (['atencao', 'atenção', 'warn', '!'].includes(estadoRaw)) {
+      icon = '⚠';
+      colorClass = 'text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40';
+    }
+    return `<span class="wiki-template-symbol inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-sans font-semibold ${colorClass}" data-template="Símbolo"><span aria-hidden="true">${icon}</span>${label ? `<span>${escapeTemplateHtml(label)}</span>` : ''}</span>`;
+  }
+
+  // 45. {{Citar livro}} / {{Cite book}}
+  if (['citar livro', 'cite book', 'referência livro', 'referencia livro'].includes(normalizedKey)) {
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', '1'], '');
+    const autor = getParam(call, ['autor', 'author', 'sobrenome'], '');
+    const editora = getParam(call, ['editora', 'publisher'], '');
+    const local = getParam(call, ['local', 'location'], '');
+    const ano = getParam(call, ['ano', 'data', 'year', 'date'], '');
+    const paginas = getParam(call, ['páginas', 'paginas', 'pages', 'p'], '');
+    const isbn = getParam(call, ['isbn'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Citar livro', missingParams) : undefined;
+    const titulo = rawTitulo || 'Obra impressa';
+    const missingBadge =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('parâmetro ausente: título', missingParams, 'missing_required_param', 'Informe título=... em {{Citar livro}}', diagId, true)
+        : '';
+    const parts = [
+      autor ? `${escapeTemplateHtml(autor)}.` : '',
+      `<em>${escapeTemplateHtml(titulo)}</em>.`,
+      local && editora ? `${escapeTemplateHtml(local)}: ${escapeTemplateHtml(editora)},` : editora ? `${escapeTemplateHtml(editora)},` : local ? `${escapeTemplateHtml(local)},` : '',
+      ano ? `${escapeTemplateHtml(ano)}.` : '',
+      paginas ? `p. ${escapeTemplateHtml(paginas)}.` : '',
+      isbn ? `<span class="font-mono text-[11px] opacity-85">ISBN ${escapeTemplateHtml(isbn)}</span>` : '',
+      missingBadge,
+    ].filter(Boolean);
+    return `<cite class="wiki-template-citation not-italic text-xs font-sans text-slate-700 dark:text-slate-300" data-template="Citar livro">${parts.join(' ')}</cite>`;
+  }
+
+  // 46. {{Citar periódico}} / {{Citar jornal}} / {{Cite journal}}
+  if (['citar periódico', 'citar periodico', 'citar jornal', 'cite journal', 'cite paper'].includes(normalizedKey)) {
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', '1'], '');
+    const rawJornal = getParam(call, ['jornal', 'periódico', 'periodico', 'revista', 'journal'], '');
+    const autor = getParam(call, ['autor', 'author'], '');
+    const volume = getParam(call, ['volume', 'vol'], '');
+    const numero = getParam(call, ['número', 'numero', 'issue'], '');
+    const paginas = getParam(call, ['páginas', 'paginas', 'pages'], '');
+    const ano = getParam(call, ['ano', 'data', 'year', 'date'], '');
+    const doi = getParam(call, ['doi'], '');
+    const missingParams = [!rawTitulo ? 'título' : '', !rawJornal ? 'jornal' : ''].filter(Boolean);
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Citar periódico', missingParams) : undefined;
+    const titulo = rawTitulo || 'Artigo científico';
+    const jornal = rawJornal || 'Periódico';
+    const issueMeta = [volume ? `v. ${escapeTemplateHtml(volume)}` : '', numero ? `n. ${escapeTemplateHtml(numero)}` : '', paginas ? `p. ${escapeTemplateHtml(paginas)}` : ''].filter(Boolean).join(', ');
+    const doiHtml = doi ? ` <a href="${escapeHtmlAttr(`https://doi.org/${doi.replace(/^https?:\/\/doi\.org\//i, '')}`)}" target="_blank" rel="noopener noreferrer" class="font-mono text-[11px] text-blue-700 dark:text-blue-400 hover:underline">doi:${escapeTemplateHtml(doi)}</a>` : '';
+    const missingBadge =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml(`parâmetro ausente: ${missingParams.join(', ')}`, missingParams, 'missing_required_param', `Informe ${missingParams.map(p => `${p}=...`).join(' e ')} em {{Citar periódico}}`, diagId, true)
+        : '';
+    const parts = [
+      autor ? `${escapeTemplateHtml(autor)}.` : '',
+      `«${escapeTemplateHtml(titulo)}».`,
+      `<em>${escapeTemplateHtml(jornal)}</em>`,
+      issueMeta ? `(${issueMeta})` : '',
+      ano ? `(${escapeTemplateHtml(ano)}).` : '',
+      doiHtml,
+      missingBadge,
+    ].filter(Boolean);
+    return `<cite class="wiki-template-citation not-italic text-xs font-sans text-slate-700 dark:text-slate-300" data-template="Citar periódico">${parts.join(' ')}</cite>`;
+  }
+
+  // 47. {{Citar notícia}} / {{Cite news}}
+  if (['citar notícia', 'citar noticia', 'cite news', 'referência notícia', 'referencia noticia'].includes(normalizedKey)) {
+    const rawTitulo = getParam(call, ['título', 'titulo', 'title', '1'], '');
+    const jornal = getParam(call, ['jornal', 'publicado', 'newspaper', 'work'], '');
+    const url = getParam(call, ['url', 'link'], '');
+    const autor = getParam(call, ['autor', 'author'], '');
+    const data = getParam(call, ['data', 'ano', 'date', 'year'], '');
+    const missingParams = !rawTitulo ? ['título'] : [];
+    const diagId = missingParams.length > 0 ? registerMissingRequired?.('Citar notícia', missingParams) : undefined;
+    const titulo = rawTitulo || 'Notícia';
+    const safeHref = /^https?:\/\//i.test(url) ? escapeHtmlAttr(url) : '';
+    const titleHtml = safeHref
+      ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-blue-700 dark:text-blue-400 hover:underline font-medium">«${escapeTemplateHtml(titulo)}»</a>`
+      : `<span>«${escapeTemplateHtml(titulo)}»</span>`;
+    const missingBadge =
+      missingParams.length > 0 && highlightDiagnostics
+        ? buildMissingParamHtml('parâmetro ausente: título', missingParams, 'missing_required_param', 'Informe título=... em {{Citar notícia}}', diagId, true)
+        : '';
+    const parts = [
+      autor ? `${escapeTemplateHtml(autor)}.` : '',
+      titleHtml,
+      jornal ? `<em>${escapeTemplateHtml(jornal)}</em>` : '',
+      data ? `(${escapeTemplateHtml(data)})` : '',
+      missingBadge,
+    ].filter(Boolean);
+    return `<cite class="wiki-template-citation not-italic text-xs font-sans text-slate-700 dark:text-slate-300" data-template="Citar notícia">${parts.join(' ')}</cite>`;
+  }
+
+  // 48. {{Coord}} / {{Coordenadas}}
+  if (['coord', 'coordenadas', 'geocoord'].includes(normalizedKey)) {
+    const latRaw = getParam(call, ['1', 'lat', 'latitude'], '');
+    const lonRaw = getParam(call, ['2', 'lon', 'lng', 'longitude'], '');
+    const nome = getParam(call, ['nome', 'name', 'title'], '');
+    const missingParams = [!latRaw ? '1' : '', !lonRaw ? '2' : ''].filter(Boolean);
+    if (missingParams.length > 0) {
+      const diagId = registerMissingRequired?.('Coord', missingParams);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml('{{Coord}}: latitude/longitude ausentes', missingParams, 'missing_required_param', 'Informe latitude e longitude, ex: {{Coord|-15.79|-47.88}}', diagId, true);
+      }
+      return '';
+    }
+    const latNum = Number(latRaw);
+    const lonNum = Number(lonRaw);
+    const formatted =
+      Number.isFinite(latNum) && Number.isFinite(lonNum)
+        ? `${Math.abs(latNum).toFixed(4)}° ${latNum >= 0 ? 'N' : 'S'}, ${Math.abs(lonNum).toFixed(4)}° ${lonNum >= 0 ? 'L' : 'O'}`
+        : `${latRaw}, ${lonRaw}`;
+    const mapHref =
+      Number.isFinite(latNum) && Number.isFinite(lonNum)
+        ? `https://www.openstreetmap.org/?mlat=${encodeURIComponent(String(latNum))}&mlon=${encodeURIComponent(String(lonNum))}#map=12/${encodeURIComponent(String(latNum))}/${encodeURIComponent(String(lonNum))}`
+        : '';
+    const labelHtml = nome ? ` (${escapeTemplateHtml(nome)})` : '';
+    return mapHref
+      ? `<a href="${escapeHtmlAttr(mapHref)}" target="_blank" rel="noopener noreferrer" class="wiki-template-coord inline-flex items-center gap-1 font-mono text-xs text-blue-700 dark:text-blue-400 hover:underline" data-template="Coord" title="Abrir coordenadas no mapa">📍 ${escapeTemplateHtml(formatted)}${labelHtml}</a>`
+      : `<span class="wiki-template-coord font-mono text-xs" data-template="Coord">📍 ${escapeTemplateHtml(formatted)}${labelHtml}</span>`;
+  }
+
+  // 49. {{Converter}} / {{Convert}}
+  if (['converter', 'convert', 'conversão', 'conversao'].includes(normalizedKey)) {
+    const valRaw = getParam(call, ['1', 'valor'], '');
+    const unitFrom = getParam(call, ['2', 'de'], '');
+    const unitTo = getParam(call, ['3', 'para'], '');
+    const numVal = Number(valRaw.replace(',', '.'));
+    if (!valRaw || !unitFrom || !Number.isFinite(numVal)) {
+      const missingParams = [!valRaw ? '1' : '', !unitFrom ? '2' : ''].filter(Boolean);
+      const diagId = registerMissingRequired?.('Converter', missingParams.length ? missingParams : ['1']);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml('{{Converter}}: valor ou unidade inválida', missingParams.length ? missingParams : ['1'], 'missing_required_param', 'Use {{Converter|100|km|mi}}', diagId, true);
+      }
+      return escapeTemplateHtml(`${valRaw} ${unitFrom}`.trim());
+    }
+    const converted = convertWikipediaUnit(numVal, unitFrom, unitTo);
+    if (!converted) {
+      return `<span class="wiki-template-convert" data-template="Converter">${escapeTemplateHtml(valRaw)} ${escapeTemplateHtml(unitFrom)}</span>`;
+    }
+    return `<span class="wiki-template-convert" data-template="Converter">${escapeTemplateHtml(converted.primary)} (${escapeTemplateHtml(converted.converted)})</span>`;
+  }
+
+  // 50. {{Dni}} / {{Data}} / {{Birth date and age}}
+  if (['dni', 'data', 'idade', 'birth date and age'].includes(normalizedKey)) {
+    const d = Number(getParam(call, ['1', 'dia'], ''));
+    const m = Number(getParam(call, ['2', 'mes', 'mês'], ''));
+    const y = Number(getParam(call, ['3', 'ano'], ''));
+    if (!Number.isFinite(d) || !Number.isFinite(m) || !Number.isFinite(y) || d < 1 || m < 1 || m > 12 || y < 1) {
+      const diagId = registerMissingRequired?.('Dni', ['1', '2', '3']);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml('{{Dni}}: informe dia|mês|ano', ['1', '2', '3'], 'missing_required_param', 'Use {{Dni|15|1|2001}}', diagId, true);
+      }
+      return '';
+    }
+    const monthsPt = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const now = new Date();
+    let age = now.getFullYear() - y;
+    const beforeBirthday = now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d);
+    if (beforeBirthday) age -= 1;
+    const ageText = age >= 0 && y >= 1800 ? ` (${age} anos)` : '';
+    return `<time class="wiki-template-date" datetime="${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}" data-template="Dni">${d} de ${monthsPt[m - 1]} de ${y}${ageText}</time>`;
+  }
+
+  // 51. {{Lang}} / {{Língua}}
+  if (['lang', 'língua', 'lingua', 'idioma', 'langx'].includes(normalizedKey)) {
+    const code = getParam(call, ['1', 'lang', 'código', 'codigo'], '');
+    const text = getParam(call, ['2', 'texto', 'text'], '');
+    if (!code || !text) {
+      const missing = [!code ? '1' : '', !text ? '2' : ''].filter(Boolean);
+      const diagId = registerMissingRequired?.('Lang', missing);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml('{{Lang}}: informe código e texto', missing, 'missing_required_param', 'Use {{Lang|en|open knowledge}}', diagId, true);
+      }
+      return escapeTemplateHtml(text);
+    }
+    return `<span class="wiki-template-lang italic" lang="${escapeHtmlAttr(code)}" title="Idioma: ${escapeHtmlAttr(code)}" data-template="Lang">${escapeTemplateHtml(text)}</span>`;
+  }
+
+  // 52. {{Site oficial}} / {{Official website}}
+  if (['site oficial', 'oficial', 'official website', 'página oficial', 'pagina oficial'].includes(normalizedKey)) {
+    const url = getParam(call, ['1', 'url', 'site'], '');
+    const label = getParam(call, ['nome', '2', 'name', 'label'], 'Site oficial');
+    if (!url || !/^https?:\/\//i.test(url)) {
+      const diagId = registerMissingRequired?.('Site oficial', ['1']);
+      if (highlightDiagnostics) {
+        return buildMissingParamHtml('{{Site oficial}}: URL inválida ou ausente', ['1'], 'missing_required_param', 'Use {{Site oficial|https://exemplo.org}}', diagId, true);
+      }
+      return '';
+    }
+    return `<span class="wiki-template-official inline-flex items-center gap-1 text-xs font-sans" data-template="Site oficial">🌐 <a href="${escapeHtmlAttr(url)}" target="_blank" rel="noopener noreferrer" class="text-blue-700 dark:text-blue-400 hover:underline font-medium">${escapeTemplateHtml(label)}</a></span>`;
   }
 
   return null;

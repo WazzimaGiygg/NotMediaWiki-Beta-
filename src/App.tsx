@@ -489,8 +489,16 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
 
   if (isIframeBlocked) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans">
-        <div className="max-w-md w-full bg-slate-900 border border-rose-800/60 rounded-xl p-6 text-center space-y-4 shadow-xl">
+      <main
+        role="main"
+        aria-label="Aviso de exibição em iframe bloqueada"
+        className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans"
+      >
+        <section
+          role="region"
+          aria-label="Proteção Anti-Clickjacking"
+          className="max-w-md w-full bg-slate-900 border border-rose-800/60 rounded-xl p-6 text-center space-y-4 shadow-xl"
+        >
           <div className="text-xs font-mono uppercase tracking-wider text-rose-400">
             Proteção Anti-Clickjacking (CSP frame-ancestors)
           </div>
@@ -504,12 +512,14 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             href={typeof window !== 'undefined' ? window.location.href : PRIMARY_CANONICAL_ORIGIN}
             target="_top"
             rel="noopener noreferrer"
+            role="link"
+            aria-label={`Abrir ${siteTitleConfig.siteTitle} diretamente em nova aba`}
             className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
           >
             Abrir {siteTitleConfig.siteTitle} diretamente
           </a>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
@@ -568,16 +578,21 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Bureaucrat override banner when startup extension loading from Firebase failed */}
       {extensionsLoadError && isBureaucratUser && (
-        <div
+        <section
           data-testid="bureaucrat-extensions-error-banner"
+          role="alert"
+          aria-live="assertive"
+          aria-label="Aviso de falha ao carregar extensões"
           className="bg-rose-700 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2"
         >
           <span>
             <strong>Falha ao carregar extensões na abertura do Wiki:</strong> {extensionsLoadError} — Acesso liberado exclusivamente pelo login de Burocrata.
           </span>
-          <div className="flex items-center gap-2 shrink-0">
+          <div role="group" aria-label="Ações de recuperação e navegação de extensões" className="flex items-center gap-2 shrink-0">
             <button
               type="button"
+              role="button"
+              aria-label="Tentar recarregar configurações de extensões"
               onClick={() => {
                 retryLoadExtensions();
               }}
@@ -587,6 +602,8 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             </button>
             <button
               type="button"
+              role="button"
+              aria-label="Navegar para a Página dos Burocratas"
               onClick={() => {
                 setCurrentView('bureaucrats');
                 window.location.hash = '#/burocratas';
@@ -596,17 +613,24 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
               Página dos Burocratas
             </button>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Bureaucrat indicator when maintenance mode is active */}
       {maintenanceConfig.isMaintenanceActive && isBureaucratUser && (
-        <div className="bg-amber-600 text-white px-4 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2">
+        <section
+          role="status"
+          aria-live="polite"
+          aria-label="Indicador de modo de manutenção ativo"
+          className="bg-amber-600 text-white px-4 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2"
+        >
           <span>
             <strong>Modo de Manutenção Ativo:</strong> Visitantes gerais estão bloqueados conforme configuração do Firebase. Você possui acesso livre como Burocrata.
           </span>
           <button
             type="button"
+            role="button"
+            aria-label="Navegar para gerenciar extensão de manutenção na Página dos Burocratas"
             onClick={() => {
               setCurrentView('bureaucrats');
               window.location.hash = '#/burocratas';
@@ -615,7 +639,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           >
             Gerenciar Extensão na Página dos Burocratas
           </button>
-        </div>
+        </section>
       )}
 
       {/* Global Header */}
@@ -678,285 +702,309 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       {isParodyBannerEnabled && !(isZenMode && currentView === 'reader') && <WikidiotaParodyBanner />}
 
       {/* Main View Container */}
-      <main className="flex-1">
+      <main role="main" aria-label="Conteúdo principal da enciclopédia" className="flex-1">
         {currentView === 'home' && (
-          <HomeScreen
-            currentUser={currentUser}
-            onNavigateArticle={handleNavigateArticle}
-            onEditArticle={handleOpenEdit}
-            onOpenNewArticle={() => setIsNewArticleModalOpen(true)}
-            onRandomArticle={handleRandomArticle}
-          />
+          <section role="region" aria-label="Página inicial da enciclopédia">
+            <HomeScreen
+              currentUser={currentUser}
+              onNavigateArticle={handleNavigateArticle}
+              onEditArticle={handleOpenEdit}
+              onOpenNewArticle={() => setIsNewArticleModalOpen(true)}
+              onRandomArticle={handleRandomArticle}
+            />
+          </section>
         )}
 
         {currentView === 'reader' && (
-          <ErrorBoundary
-            fallbackTitle="Erro ao renderizar o artigo"
-            onReset={() => {
-              setCurrentView('home');
-              window.location.hash = '#/home';
-            }}
-          >
-            <ArticleViewer
-              key={activeArticleSlug}
-              slug={activeArticleSlug}
-              currentUser={currentUser}
-              onNavigate={handleNavigateArticle}
-              onEdit={handleOpenEdit}
-              onHistory={handleOpenHistory}
-              onNewArticle={() => setIsNewArticleModalOpen(true)}
-              onProgressChange={setReadingProgress}
-              onOpenChecklist={() => setIsChecklistOpen(true)}
-              onRandomArticle={handleRandomArticle}
-              onSearch={handleOpenSearch}
-              isZenMode={isZenMode}
-              onZenModeChange={setIsZenMode}
-            />
-          </ErrorBoundary>
+          <section role="region" aria-label={`Leitura do artigo ${activeArticleSlug}`}>
+            <ErrorBoundary
+              fallbackTitle="Erro ao renderizar o artigo"
+              onReset={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+            >
+              <ArticleViewer
+                key={activeArticleSlug}
+                slug={activeArticleSlug}
+                currentUser={currentUser}
+                onNavigate={handleNavigateArticle}
+                onEdit={handleOpenEdit}
+                onHistory={handleOpenHistory}
+                onNewArticle={() => setIsNewArticleModalOpen(true)}
+                onProgressChange={setReadingProgress}
+                onOpenChecklist={() => setIsChecklistOpen(true)}
+                onRandomArticle={handleRandomArticle}
+                onSearch={handleOpenSearch}
+                isZenMode={isZenMode}
+                onZenModeChange={setIsZenMode}
+              />
+            </ErrorBoundary>
+          </section>
         )}
 
         {currentView === 'directory' && (
-          isUserDirectoryEnabled ? (
-            <UserDirectory
+          <section role="region" aria-label="Diretório de usuários da comunidade">
+            {isUserDirectoryEnabled ? (
+              <UserDirectory
+                currentUser={currentUser}
+                onOpenUserPage={user => {
+                  setSelectedUserForPage(user);
+                  setCurrentView('user_page');
+                  window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
+                }}
+                onStartChatWithUser={user => {
+                  if (!isCommunityChatEnabled) return;
+                  setChatTargetUser(user);
+                  setIsChatOpen(true);
+                }}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="UserDirectoryProfiles"
+                featureLabel="Diretório de Usuários"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
+        )}
+
+        {currentView === 'user_page' && (
+          <section role="region" aria-label="Página pessoal e discussão de usuário">
+            {isUserDirectoryEnabled ? (
+              <UserPageView
+                targetUser={selectedUserForPage || currentUser || {
+                  id: 'mafersao1100',
+                  username: 'Mafersao',
+                  userTag: '#1100',
+                  role: 'bureaucrat',
+                  editCount: 5,
+                  avatar: 'MA',
+                  email: 'mafersao1100@gmail.com',
+                }}
+                currentUser={currentUser}
+                onBack={() => {
+                  setCurrentView('reader');
+                  window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+                }}
+                onStartChat={user => {
+                  if (!isCommunityChatEnabled) return;
+                  setChatTargetUser(user);
+                  setIsChatOpen(true);
+                }}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="UserDirectoryProfiles"
+                featureLabel="Páginas Pessoais de Usuários"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
+        )}
+
+        {currentView === 'editor' && (
+          <section role="region" aria-label={`Editor de artigo para ${activeArticleSlug}`}>
+            <WikiEditor
+              slug={activeArticleSlug}
               currentUser={currentUser}
+              initialWikitext={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.wikitext : undefined}
+              initialTitle={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.title : undefined}
+              initialMode={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.editorMode : undefined}
+              onSaved={slug => {
+                setPendingNewArticle(null);
+                setActiveArticleSlug(slug);
+                setCurrentView('reader');
+                window.location.hash = `#/wiki/${encodeURIComponent(slug)}`;
+              }}
+              onCancel={() => {
+                setPendingNewArticle(null);
+                setCurrentView('reader');
+                window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+              }}
+            />
+          </section>
+        )}
+
+        {currentView === 'history' && (
+          <section role="region" aria-label={`Histórico de revisões de ${activeArticleSlug}`}>
+            {isHistoryEnabled ? (
+              <ArticleHistory
+                slug={activeArticleSlug}
+                currentUser={currentUser}
+                onNavigateArticle={handleNavigateArticle}
+                onBackToReader={() => handleNavigateArticle(activeArticleSlug)}
+                onEditArticle={handleOpenEdit}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="DiffLedger"
+                featureLabel="Histórico de Revisões & Diffs"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
+        )}
+
+        {currentView === 'bureaucrats' && (
+          <section role="region" aria-label="Página dos burocratas e gerenciamento de extensões">
+            <BureaucratPage
+              currentUser={currentUser}
+              onUserChanged={setCurrentUser}
+              onBackToWiki={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onOpenAdminConsole={tab => {
+                if (tab) setAdminSubTab(tab);
+                setCurrentView('dev_admin');
+                window.location.hash = '#/admin';
+              }}
               onOpenUserPage={user => {
                 setSelectedUserForPage(user);
                 setCurrentView('user_page');
                 window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
               }}
               onStartChatWithUser={user => {
-                if (!isCommunityChatEnabled) return;
                 setChatTargetUser(user);
                 setIsChatOpen(true);
               }}
             />
-          ) : (
-            <DisabledExtensionView
-              extensionName="UserDirectoryProfiles"
-              featureLabel="Diretório de Usuários"
-              onGoHome={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-              onManageExtensions={() => {
-                setCurrentView('bureaucrats');
-                window.location.hash = '#/burocratas';
-              }}
-            />
-          )
-        )}
-
-        {currentView === 'user_page' && (
-          isUserDirectoryEnabled ? (
-            <UserPageView
-              targetUser={selectedUserForPage || currentUser || {
-                id: 'mafersao1100',
-                username: 'Mafersao',
-                userTag: '#1100',
-                role: 'bureaucrat',
-                editCount: 5,
-                avatar: 'MA',
-                email: 'mafersao1100@gmail.com',
-              }}
-              currentUser={currentUser}
-              onBack={() => {
-                setCurrentView('reader');
-                window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
-              }}
-              onStartChat={user => {
-                if (!isCommunityChatEnabled) return;
-                setChatTargetUser(user);
-                setIsChatOpen(true);
-              }}
-            />
-          ) : (
-            <DisabledExtensionView
-              extensionName="UserDirectoryProfiles"
-              featureLabel="Páginas Pessoais de Usuários"
-              onGoHome={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-              onManageExtensions={() => {
-                setCurrentView('bureaucrats');
-                window.location.hash = '#/burocratas';
-              }}
-            />
-          )
-        )}
-
-        {currentView === 'editor' && (
-          <WikiEditor
-            slug={activeArticleSlug}
-            currentUser={currentUser}
-            initialWikitext={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.wikitext : undefined}
-            initialTitle={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.title : undefined}
-            initialMode={pendingNewArticle?.slug === activeArticleSlug ? pendingNewArticle.editorMode : undefined}
-            onSaved={slug => {
-              setPendingNewArticle(null);
-              setActiveArticleSlug(slug);
-              setCurrentView('reader');
-              window.location.hash = `#/wiki/${encodeURIComponent(slug)}`;
-            }}
-            onCancel={() => {
-              setPendingNewArticle(null);
-              setCurrentView('reader');
-              window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
-            }}
-          />
-        )}
-
-        {currentView === 'history' && (
-          isHistoryEnabled ? (
-            <ArticleHistory
-              slug={activeArticleSlug}
-              currentUser={currentUser}
-              onNavigateArticle={handleNavigateArticle}
-              onBackToReader={() => handleNavigateArticle(activeArticleSlug)}
-              onEditArticle={handleOpenEdit}
-            />
-          ) : (
-            <DisabledExtensionView
-              extensionName="DiffLedger"
-              featureLabel="Histórico de Revisões & Diffs"
-              onGoHome={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-              onManageExtensions={() => {
-                setCurrentView('bureaucrats');
-                window.location.hash = '#/burocratas';
-              }}
-            />
-          )
-        )}
-
-        {currentView === 'bureaucrats' && (
-          <BureaucratPage
-            currentUser={currentUser}
-            onUserChanged={setCurrentUser}
-            onBackToWiki={() => {
-              setCurrentView('home');
-              window.location.hash = '#/home';
-            }}
-            onOpenAdminConsole={tab => {
-              if (tab) setAdminSubTab(tab);
-              setCurrentView('dev_admin');
-              window.location.hash = '#/admin';
-            }}
-            onOpenUserPage={user => {
-              setSelectedUserForPage(user);
-              setCurrentView('user_page');
-              window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
-            }}
-            onStartChatWithUser={user => {
-              setChatTargetUser(user);
-              setIsChatOpen(true);
-            }}
-          />
+          </section>
         )}
 
         {currentView === 'portal' && (
-          <PortalView
-            portalType={activePortal}
-            currentUser={currentUser}
-            onNavigateHome={() => {
-              setCurrentView('home');
-              window.location.hash = '#/home';
-            }}
-            onNavigateArticle={handleNavigateArticle}
-            onOpenExtensionsManager={() => {
-              setCurrentView('bureaucrats');
-              window.location.hash = '#/burocratas';
-            }}
-          />
+          <section role="region" aria-label={`Portal temático ${activePortal}`}>
+            <PortalView
+              portalType={activePortal}
+              currentUser={currentUser}
+              onNavigateHome={() => {
+                setCurrentView('home');
+                window.location.hash = '#/home';
+              }}
+              onNavigateArticle={handleNavigateArticle}
+              onOpenExtensionsManager={() => {
+                setCurrentView('bureaucrats');
+                window.location.hash = '#/burocratas';
+              }}
+            />
+          </section>
         )}
 
         {currentView === 'dev_admin' && (
-          <DevAdminDashboard
-            activeArticleSlug={activeArticleSlug}
-            currentUser={currentUser}
-            onUserChanged={setCurrentUser}
-            onNavigateArticle={handleNavigateArticle}
-            onBackToReader={() => {
-              setCurrentView('reader');
-              window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
-            }}
-            initialTab={adminSubTab}
-          />
+          <section role="region" aria-label="Painel de administração e desenvolvedor">
+            <DevAdminDashboard
+              activeArticleSlug={activeArticleSlug}
+              currentUser={currentUser}
+              onUserChanged={setCurrentUser}
+              onNavigateArticle={handleNavigateArticle}
+              onBackToReader={() => {
+                setCurrentView('reader');
+                window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+              }}
+              initialTab={adminSubTab}
+            />
+          </section>
         )}
 
         {currentView === 'special' && (
-          isSpecialPagesEnabled ? (
-            <SpecialPagesHub
-              initialSpecialPage={specialPageName}
-              currentUser={currentUser}
-              onNavigateArticle={handleNavigateArticle}
-              onOpenEdit={handleOpenEdit}
-              onOpenHistory={handleOpenHistory}
-              onRandomArticle={handleRandomArticle}
-            />
-          ) : (
-            <DisabledExtensionView
-              extensionName="SpecialPagesHub"
-              featureLabel="Central de Páginas Especiais"
-              onGoHome={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-              onManageExtensions={() => {
-                setCurrentView('bureaucrats');
-                window.location.hash = '#/burocratas';
-              }}
-            />
-          )
+          <section role="region" aria-label={`Central de páginas especiais: ${specialPageName}`}>
+            {isSpecialPagesEnabled ? (
+              <SpecialPagesHub
+                initialSpecialPage={specialPageName}
+                currentUser={currentUser}
+                onNavigateArticle={handleNavigateArticle}
+                onOpenEdit={handleOpenEdit}
+                onOpenHistory={handleOpenHistory}
+                onRandomArticle={handleRandomArticle}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="SpecialPagesHub"
+                featureLabel="Central de Páginas Especiais"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
         )}
 
         {currentView === 'search' && (
-          isCirrusSearchEnabled ? (
-            <SearchResults
-              initialQuery={searchQuery}
-              onNavigateArticle={handleNavigateArticle}
-              onRandomArticle={handleRandomArticle}
-            />
-          ) : (
-            <DisabledExtensionView
-              extensionName="CirrusSearch"
-              featureLabel="Busca Full-Text & Sugestões"
-              onGoHome={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-              onManageExtensions={() => {
-                setCurrentView('bureaucrats');
-                window.location.hash = '#/burocratas';
-              }}
-            />
-          )
+          <section role="region" aria-label="Resultados de busca">
+            {isCirrusSearchEnabled ? (
+              <SearchResults
+                initialQuery={searchQuery}
+                onNavigateArticle={handleNavigateArticle}
+                onRandomArticle={handleRandomArticle}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="CirrusSearch"
+                featureLabel="Busca Full-Text & Sugestões"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
         )}
 
         {currentView === 'promo_video' && (
-          isPromoVideoEnabled ? (
-            <PromoVideoStudio
-              onBack={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-            />
-          ) : (
-            <DisabledExtensionView
-              extensionName="PromoVideoStudio"
-              featureLabel="Estúdio de Vídeo Comercial"
-              onGoHome={() => {
-                setCurrentView('home');
-                window.location.hash = '#/home';
-              }}
-              onManageExtensions={() => {
-                setCurrentView('bureaucrats');
-                window.location.hash = '#/burocratas';
-              }}
-            />
-          )
+          <section role="region" aria-label="Estúdio de vídeo promocional">
+            {isPromoVideoEnabled ? (
+              <PromoVideoStudio
+                onBack={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="PromoVideoStudio"
+                featureLabel="Estúdio de Vídeo Comercial"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
         )}
       </main>
 
@@ -1054,20 +1102,23 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       {/* Floating Chat Trigger Button */}
       {isCommunityChatEnabled && !isChatOpen && !(isZenMode && currentView === 'reader') && (
         <button
+          type="button"
+          role="button"
+          aria-label="Abrir Chat Comunitário em Tempo Real"
           onClick={() => setIsChatOpen(true)}
           className={`fixed ${
             deviceMode === 'mobile' ? 'bottom-20' : 'bottom-20 md:bottom-5'
           } right-5 z-40 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-105`}
           title="Abrir Chat em Tempo Real"
         >
-          <MessageSquare className="w-4 h-4" />
+          <MessageSquare className="w-4 h-4" aria-hidden="true" />
           <span className="text-xs font-bold hidden sm:inline">Chat Comunitário</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
         </button>
       )}
       {/* Startup Extension Config Loading Indicator (non-blocking tiny badge if still syncing initially) */}
       {isLoadingExtensions && (
-        <span className="sr-only" role="status">
+        <span className="sr-only" role="status" aria-label="Status de carregamento das configurações de extensões">
           Carregando configurações de extensões do Firebase...
         </span>
       )}
@@ -1088,8 +1139,10 @@ const DisabledExtensionView: React.FC<DisabledExtensionViewProps> = ({
   onGoHome,
   onManageExtensions,
 }) => (
-  <div
+  <section
     data-testid={`disabled-view-${extensionName}`}
+    role="region"
+    aria-label={`Recurso indisponível: ${featureLabel}`}
     className="max-w-xl mx-auto my-12 px-4"
   >
     <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center space-y-4 shadow-sm">
@@ -1102,9 +1155,11 @@ const DisabledExtensionView: React.FC<DisabledExtensionViewProps> = ({
       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
         Este recurso foi desativado no Gerenciador de Extensões do Wiki. Burocratas podem reativá-lo a qualquer momento na Página dos Burocratas.
       </p>
-      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+      <div role="group" aria-label="Navegação alternativa para extensão desativada" className="flex flex-wrap items-center justify-center gap-2 pt-1">
         <button
           type="button"
+          role="button"
+          aria-label="Voltar para a Página Inicial"
           onClick={onGoHome}
           className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg cursor-pointer"
         >
@@ -1112,6 +1167,8 @@ const DisabledExtensionView: React.FC<DisabledExtensionViewProps> = ({
         </button>
         <button
           type="button"
+          role="button"
+          aria-label="Navegar para gerenciar extensões na Página dos Burocratas"
           onClick={onManageExtensions}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
         >
@@ -1119,5 +1176,5 @@ const DisabledExtensionView: React.FC<DisabledExtensionViewProps> = ({
         </button>
       </div>
     </div>
-  </div>
+  </section>
 );

@@ -442,7 +442,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Buscar predefinição por nome ou apelido (ex: Aviso, Esboço, AP, Navbox)..."
+                  placeholder="Buscar predefinição por nome ou apelido (ex: Aviso, Citar livro, Coord, Infocaixa país, Portal)..."
                   className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-blue-600"
                 />
               </div>
@@ -454,6 +454,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   { id: 'navegacao' as CategoryFilter, label: 'Navegação' },
                   { id: 'infocaixa' as CategoryFilter, label: 'Infocaixas' },
                   { id: 'editorial' as CategoryFilter, label: 'Editorial' },
+                  { id: 'dados' as CategoryFilter, label: 'Dados & Ref.' },
                   { id: 'custom' as CategoryFilter, label: `Personalizadas (${localCustomTemplates.length})` },
                 ].map(tab => (
                   <button
