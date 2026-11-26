@@ -1,4 +1,4 @@
-export type WikiTemplateCategory = 'avisos' | 'navegacao' | 'infocaixa' | 'editorial' | 'dados';
+export type WikiTemplateCategory = 'avisos' | 'navegacao' | 'infocaixa' | 'editorial' | 'dados' | 'wikidot';
 
 export interface WikiTemplateParamDef {
   name: string;
@@ -16,6 +16,8 @@ export interface WikiTemplateDefinition {
   aliases?: string[];
   category: WikiTemplateCategory;
   kind: 'block' | 'inline';
+  syntaxStyle?: 'mediawiki' | 'wikidot';
+  snippetPattern?: string;
   description: string;
   exampleWikitext: string;
   params: WikiTemplateParamDef[];
@@ -27,6 +29,7 @@ export const TEMPLATE_CATEGORY_LABELS: Record<WikiTemplateCategory, string> = {
   infocaixa: 'Infocaixas (Infobox)',
   editorial: 'Editorial & Citações',
   dados: 'Dados & Referências',
+  wikidot: 'Wikidot (Blocos & Módulos)',
 };
 
 export const BUILTIN_MEDIAWIKI_TEMPLATES: WikiTemplateDefinition[] = [
@@ -1677,16 +1680,551 @@ export const BUILTIN_MEDIAWIKI_TEMPLATES: WikiTemplateDefinition[] = [
       { name: 'nome', label: 'Texto do link (opcional)', description: 'Rótulo amigável exibido.', placeholder: 'Ex: Site oficial', defaultValue: 'Site oficial' },
     ],
   },
+  // === Novas Predefinições Populares da Wikipédia (Infocaixas, Avisos, Navegação, Editorial e Dados) ===
+  {
+    id: 'tpl-infocaixa-software',
+    name: 'Infocaixa software',
+    aliases: ['Info/Software', 'Ficha de software'],
+    category: 'infocaixa',
+    kind: 'block',
+    description: 'Infocaixa completa para programas, frameworks e sistemas digitais com desenvolvedor, versão, linguagem e licença.',
+    exampleWikitext: `{{Infocaixa software\n| nome = MediaWiki\n| desenvolvedor = Wikimedia Foundation\n| versão = 1.43\n| lançamento = 2002\n| linguagem = PHP e TypeScript\n| sistema = Multiplataforma\n| licença = GPLv2+\n| website = https://www.mediawiki.org\n}}`,
+    params: [
+      { name: 'nome', label: 'Nome do software', description: 'Nome oficial do projeto.', placeholder: 'Ex: MediaWiki', defaultValue: 'MediaWiki', required: true },
+      { name: 'desenvolvedor', label: 'Desenvolvedor(a)', description: 'Autor ou organização mantenedora.', placeholder: 'Ex: Wikimedia Foundation', defaultValue: 'Comunidade Open Source' },
+      { name: 'versão', label: 'Versão estável', description: 'Último lançamento estável.', placeholder: 'Ex: 1.43', defaultValue: '1.0' },
+      { name: 'lançamento', label: 'Lançamento inicial', description: 'Ano ou data da primeira versão.', placeholder: 'Ex: 2002', defaultValue: '2024' },
+      { name: 'linguagem', label: 'Linguagem', description: 'Linguagens de programação principais.', placeholder: 'Ex: TypeScript, React', defaultValue: 'TypeScript' },
+      { name: 'sistema', label: 'Sistema operacional', description: 'Plataformas suportadas.', placeholder: 'Ex: Web, Linux, Windows, macOS', defaultValue: 'Multiplataforma' },
+      { name: 'licença', label: 'Licença', description: 'Licença de distribuição.', placeholder: 'Ex: MIT, GPLv2+', defaultValue: 'MIT' },
+      { name: 'website', label: 'Website', description: 'URL oficial do software.', placeholder: 'https://...', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-infocaixa-artista-musical',
+    name: 'Infocaixa artista musical',
+    aliases: ['Info/Artista musical', 'Info/Música/artista', 'Infocaixa banda'],
+    category: 'infocaixa',
+    kind: 'block',
+    description: 'Ficha enciclopédica para cantores, compositores e bandas com origem, gêneros, atividade e gravadoras.',
+    exampleWikitext: `{{Infocaixa artista musical\n| nome = Clube da Esquina\n| origem = Belo Horizonte, Brasil\n| gênero = MPB, Rock progressivo\n| período = 1972–presente\n| gravadora = EMI-Odeon\n}}`,
+    params: [
+      { name: 'nome', label: 'Nome artístico / Banda', description: 'Nome principal do artista ou grupo.', placeholder: 'Ex: Elis Regina', defaultValue: 'Artista Musical', required: true },
+      { name: 'origem', label: 'Origem', description: 'Cidade/país de origem ou formação.', placeholder: 'Ex: Rio de Janeiro, Brasil', defaultValue: 'Brasil' },
+      { name: 'gênero', label: 'Gêneros musicais', description: 'Estilos predominantes.', placeholder: 'Ex: MPB, Jazz, Rock', defaultValue: 'MPB' },
+      { name: 'período', label: 'Período em atividade', description: 'Anos de carreira.', placeholder: 'Ex: 1990–presente', defaultValue: '2000–presente' },
+      { name: 'gravadora', label: 'Gravadora(s)', description: 'Selos e gravadoras.', placeholder: 'Ex: Som Livre', defaultValue: '' },
+      { name: 'integrantes', label: 'Integrantes', description: 'Membros atuais ou históricos.', placeholder: 'Nomes principais', defaultValue: '' },
+      { name: 'website', label: 'Site oficial', description: 'Página oficial.', placeholder: 'https://...', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-infocaixa-evento',
+    name: 'Infocaixa evento',
+    aliases: ['Info/Evento', 'Infocaixa conferência'],
+    category: 'infocaixa',
+    kind: 'block',
+    description: 'Quadro informativo para eventos históricos, congressos, feiras, campeonatos e simpósios.',
+    exampleWikitext: `{{Infocaixa evento\n| título = Wikimania 2026\n| tipo = Conferência internacional\n| data = Agosto de 2026\n| local = Paris, França\n| participantes = Comunidade Wikimedia\n}}`,
+    params: [
+      { name: 'título', label: 'Nome do evento', description: 'Título do acontecimento.', placeholder: 'Ex: Wikimania 2026', defaultValue: 'Evento Enciclopédico', required: true },
+      { name: 'tipo', label: 'Tipo / Natureza', description: 'Conferência, festival, evento histórico.', placeholder: 'Ex: Conferência anual', defaultValue: 'Conferência' },
+      { name: 'data', label: 'Data / Período', description: 'Quando ocorreu.', placeholder: 'Ex: 12 a 15 de agosto de 2026', defaultValue: '2026' },
+      { name: 'local', label: 'Local', description: 'Cidade, país ou plataforma.', placeholder: 'Ex: São Paulo, Brasil', defaultValue: 'Brasil' },
+      { name: 'participantes', label: 'Participantes / Organizadores', description: 'Entidades envolvidas.', placeholder: 'Ex: Pesquisadores e editores', defaultValue: '' },
+      { name: 'website', label: 'Site oficial', description: 'Endereço web.', placeholder: 'https://...', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-infocaixa-universidade',
+    name: 'Infocaixa universidade',
+    aliases: ['Info/Universidade', 'Info/Instituição de ensino'],
+    category: 'infocaixa',
+    kind: 'block',
+    description: 'Infocaixa institucional para universidades, faculdades e centros de pesquisa acadêmica.',
+    exampleWikitext: `{{Infocaixa universidade\n| nome = Universidade Federal de Minas Gerais\n| sigla = UFMG\n| fundação = 1927\n| tipo = Pública federal\n| localização = Belo Horizonte, Brasil\n| website = https://ufmg.br\n}}`,
+    params: [
+      { name: 'nome', label: 'Nome da instituição', description: 'Razão social ou nome completo.', placeholder: 'Ex: Universidade de São Paulo', defaultValue: 'Universidade Federal', required: true },
+      { name: 'sigla', label: 'Sigla', description: 'Acrônimo oficial.', placeholder: 'Ex: USP, UFMG', defaultValue: '' },
+      { name: 'fundação', label: 'Fundação', description: 'Ano de criação.', placeholder: 'Ex: 1934', defaultValue: '1934' },
+      { name: 'tipo', label: 'Tipo', description: 'Pública, Privada, Comunitária.', placeholder: 'Ex: Pública estadual', defaultValue: 'Pública' },
+      { name: 'localização', label: 'Localização', description: 'Cidade e país do campus sede.', placeholder: 'Ex: São Paulo, Brasil', defaultValue: 'Brasil' },
+      { name: 'reitor', label: 'Reitor(a)', description: 'Dirigente atual.', placeholder: 'Nome completo', defaultValue: '' },
+      { name: 'estudantes', label: 'Estudantes', description: 'Total aproximado de matriculados.', placeholder: 'Ex: 97.000', defaultValue: '' },
+      { name: 'website', label: 'Website', description: 'Portal acadêmico.', placeholder: 'https://...', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-infocaixa-empresa',
+    name: 'Infocaixa empresa',
+    aliases: ['Info/Empresa'],
+    category: 'infocaixa',
+    kind: 'block',
+    description: 'Ficha corporativa padronizada para companhias, startups e grupos empresariais.',
+    exampleWikitext: `{{Infocaixa empresa\n| nome = Embraer\n| tipo = Sociedade anônima\n| setor = Aeroespacial e Defesa\n| fundação = 1969\n| sede = São José dos Campos, Brasil\n| website = https://embraer.com\n}}`,
+    params: [
+      { name: 'nome', label: 'Nome da empresa', description: 'Nome comercial.', placeholder: 'Ex: Petrobras, Embraer', defaultValue: 'Empresa S.A.', required: true },
+      { name: 'tipo', label: 'Tipo societário', description: 'Capital aberto, privada, estatal.', placeholder: 'Ex: Capital aberto (S.A.)', defaultValue: 'Privada' },
+      { name: 'setor', label: 'Setor / Indústria', description: 'Segmento econômico.', placeholder: 'Ex: Tecnologia da Informação', defaultValue: 'Tecnologia' },
+      { name: 'fundação', label: 'Fundação', description: 'Ano de fundação.', placeholder: 'Ex: 1969', defaultValue: '2020' },
+      { name: 'sede', label: 'Sede', description: 'Cidade e país da matriz.', placeholder: 'Ex: São Paulo, Brasil', defaultValue: 'Brasil' },
+      { name: 'fundadores', label: 'Fundadores', description: 'Nomes dos fundadores.', placeholder: 'Ex: Ozires Silva', defaultValue: '' },
+      { name: 'website', label: 'Website', description: 'Site corporativo.', placeholder: 'https://...', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-artigo-bom',
+    name: 'Artigo bom',
+    aliases: ['Bom artigo', 'Good article'],
+    category: 'avisos',
+    kind: 'block',
+    description: 'Selo editorial reconhecendo artigos bem referenciados, imparciais e bem escritos pela comunidade.',
+    exampleWikitext: `{{Artigo bom|data=Novembro de 2026}}`,
+    params: [
+      { name: 'data', label: 'Data da aprovação', description: 'Data em que recebeu o selo.', placeholder: 'Ex: Novembro de 2026', defaultValue: '2026' },
+      { name: 'texto', label: 'Observação (opcional)', description: 'Nota editorial complementar.', placeholder: 'Ex: Revisado por pares em história da ciência.', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-escopo-global',
+    name: 'Escopo global',
+    aliases: ['Globalizar', 'Globalize', 'Visão mundial'],
+    category: 'avisos',
+    kind: 'block',
+    description: 'Alerta que o texto reflete apenas uma região ou país e precisa de perspectiva internacional.',
+    exampleWikitext: `{{Escopo global|região=lusófona|data=2026}}`,
+    params: [
+      { name: 'região', label: 'Região predominante', description: 'Recorte geográfico atual.', placeholder: 'Ex: brasileira, europeia', defaultValue: 'específica' },
+      { name: 'data', label: 'Data', description: 'Ano ou mês da marcação.', placeholder: 'Ex: 2026', defaultValue: '2026' },
+      { name: 'motivo', label: 'Motivo (opcional)', description: 'O que deve ser globalizado.', placeholder: 'Incluir legislação e dados internacionais', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-fonte-primaria',
+    name: 'Fonte primária',
+    aliases: ['Fontes primárias', 'Primary sources'],
+    category: 'avisos',
+    kind: 'block',
+    description: 'Indica dependência excessiva de fontes primárias e solicita fontes secundárias independentes.',
+    exampleWikitext: `{{Fonte primária|data=2026|assunto=Histórico oficial}}`,
+    params: [
+      { name: 'data', label: 'Data', description: 'Mês/ano da marcação.', placeholder: 'Ex: Novembro de 2026', defaultValue: '2026' },
+      { name: 'assunto', label: 'Seção / Foco (opcional)', description: 'Parte do artigo afetada.', placeholder: 'Ex: Biografia', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-traduzido-de',
+    name: 'Traduzido de',
+    aliases: ['Tradução de', 'Translated page'],
+    category: 'navegacao',
+    kind: 'block',
+    description: 'Atribui formalmente a origem de conteúdo traduzido de outra edição da Wikipédia ou projeto irmão.',
+    exampleWikitext: `{{Traduzido de|en|Wiki|versao=2026}}`,
+    params: [
+      { name: '1', label: 'Código do idioma', description: 'Código ISO do projeto de origem (en, es, fr...).', placeholder: 'Ex: en', defaultValue: 'en', required: true },
+      { name: '2', label: 'Artigo original', description: 'Título exato na wiki de origem.', placeholder: 'Ex: Knowledge base', defaultValue: 'Article', required: true },
+      { name: 'versao', label: 'Versão / Data (opcional)', description: 'Identificador ou ano da revisão.', placeholder: 'Ex: 2026', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-anexo',
+    name: 'Anexo',
+    aliases: ['Ver anexo', 'Appendix'],
+    category: 'navegacao',
+    kind: 'block',
+    description: 'Nota remissiva indicando listas detalhadas, tabelas longas ou anexos complementares.',
+    exampleWikitext: `{{Anexo|Anexo:Lista de extensões MediaWiki}}`,
+    params: [
+      { name: '1', label: 'Página de anexo', description: 'Título do anexo relacionado.', placeholder: 'Ex: Anexo:Lista de versões', defaultValue: 'Anexo:Dados complementares', required: true },
+      { name: '2', label: 'Segundo anexo (opcional)', description: 'Outro anexo relacionado.', placeholder: 'Ex: Anexo:Cronologia', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-cronologia',
+    name: 'Cronologia',
+    aliases: ['Timeline', 'Linha do tempo'],
+    category: 'navegacao',
+    kind: 'block',
+    description: 'Exibe uma linha do tempo estruturada com marcos históricos e descrições breves.',
+    exampleWikitext: `{{Cronologia\n| título = Evolução do Conhecimento Aberto\n| item1 = 2001 — Fundação da Wikipédia\n| item2 = 2002 — Lançamento do MediaWiki\n| item3 = 2012 — Criação do Wikidata\n}}`,
+    params: [
+      { name: 'título', label: 'Título da cronologia', description: 'Cabeçalho da linha do tempo.', placeholder: 'Ex: Marcos históricos', defaultValue: 'Linha do Tempo', required: true },
+      { name: 'item1', label: 'Marco 1', description: 'Data e descrição.', placeholder: 'Ex: 2001 — Lançamento inicial', defaultValue: '2001 — Início do projeto', required: true },
+      { name: 'item2', label: 'Marco 2', description: 'Data e descrição.', placeholder: 'Ex: 2010 — Expansão global', defaultValue: '2010 — Consolidação' },
+      { name: 'item3', label: 'Marco 3', description: 'Data e descrição.', placeholder: 'Ex: 2020 — Nova arquitetura', defaultValue: '2026 — Edição moderna' },
+      { name: 'item4', label: 'Marco 4 (opcional)', description: 'Data e descrição.', placeholder: 'Ex: 2028 — Próxima fase', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-galeria',
+    name: 'Galeria',
+    aliases: ['Gallery', 'Galeria de imagens'],
+    category: 'editorial',
+    kind: 'block',
+    description: 'Organiza múltiplas imagens em grade responsiva com legendas descritivas.',
+    exampleWikitext: `{{Galeria\n| título = Registros visuais\n| img1 = https://upload.wikimedia.org/wikipedia/commons/6/63/Wikipedia-logo.png\n| leg1 = Emblema enciclopédico\n}}`,
+    params: [
+      { name: 'título', label: 'Título da galeria', description: 'Legenda superior opcional.', placeholder: 'Ex: Galeria ilustrativa', defaultValue: 'Galeria de Imagens' },
+      { name: 'img1', label: 'URL Imagem 1', description: 'Endereço https:// da primeira imagem.', placeholder: 'https://...', defaultValue: '', required: true },
+      { name: 'leg1', label: 'Legenda 1', description: 'Descrição da primeira imagem.', placeholder: 'Legenda 1', defaultValue: 'Ilustração 1' },
+      { name: 'img2', label: 'URL Imagem 2 (opcional)', description: 'Endereço https:// da segunda imagem.', placeholder: 'https://...', defaultValue: '' },
+      { name: 'leg2', label: 'Legenda 2', description: 'Descrição da segunda imagem.', placeholder: 'Legenda 2', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-imagem-dupla',
+    name: 'Imagem dupla',
+    aliases: ['Multiple image', 'Double image'],
+    category: 'editorial',
+    kind: 'block',
+    description: 'Compara duas imagens lado a lado dentro de uma moldura única com legendas.',
+    exampleWikitext: `{{Imagem dupla|título=Comparativo visual|img1=https://exemplo.org/a.png|leg1=Antes|img2=https://exemplo.org/b.png|leg2=Depois}}`,
+    params: [
+      { name: 'título', label: 'Título comparativo', description: 'Cabeçalho da moldura.', placeholder: 'Ex: Comparação estrutural', defaultValue: 'Comparativo' },
+      { name: 'img1', label: 'URL Imagem A', description: 'Link https:// da imagem esquerda.', placeholder: 'https://...', defaultValue: '', required: true },
+      { name: 'leg1', label: 'Legenda A', description: 'Texto abaixo da imagem A.', placeholder: 'Ex: Modelo A', defaultValue: 'Imagem A' },
+      { name: 'img2', label: 'URL Imagem B', description: 'Link https:// da imagem direita.', placeholder: 'https://...', defaultValue: '', required: true },
+      { name: 'leg2', label: 'Legenda B', description: 'Texto abaixo da imagem B.', placeholder: 'Ex: Modelo B', defaultValue: 'Imagem B' },
+    ],
+  },
+  {
+    id: 'tpl-voto',
+    name: 'Voto',
+    aliases: ['Apoio', 'Contra', 'Neutro'],
+    category: 'editorial',
+    kind: 'inline',
+    description: 'Marcador padrão de consenso em páginas de discussão e votações comunitárias (Apoio, Contra, Neutro).',
+    exampleWikitext: `{{Voto|apoio|Concordo com a padronização dos títulos.}}`,
+    params: [
+      { name: '1', label: 'Posição', description: 'apoio, contra, neutro ou comentario.', placeholder: 'apoio | contra | neutro', defaultValue: 'apoio', required: true },
+      { name: '2', label: 'Justificativa (opcional)', description: 'Resumo curto da opinião.', placeholder: 'Ex: Melhora a navegabilidade.', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-etiqueta',
+    name: 'Etiqueta',
+    aliases: ['Badge', 'Tag', 'Marcador'],
+    category: 'editorial',
+    kind: 'inline',
+    description: 'Rótulo tipográfico compacto para destacar versões, status de protocolo ou categorias no corpo do texto.',
+    exampleWikitext: `Recurso disponível a partir da {{Etiqueta|v2.4|ok}}.`,
+    params: [
+      { name: '1', label: 'Texto do marcador', description: 'Rótulo exibido.', placeholder: 'Ex: Estável, Beta, v2.0', defaultValue: 'Estável', required: true },
+      { name: 'tipo', label: 'Estilo', description: 'info, ok, aviso, erro ou neutro.', placeholder: 'info | ok | aviso | erro | neutro', defaultValue: 'info' },
+    ],
+  },
+  {
+    id: 'tpl-audio',
+    name: 'Áudio',
+    aliases: ['Audio', 'Som', 'Pronúncia'],
+    category: 'editorial',
+    kind: 'inline',
+    description: 'Insere referência ou player compacto de áudio/pronúncia para termos enciclopédicos.',
+    exampleWikitext: `{{Áudio|https://upload.wikimedia.org/wikipedia/commons/example.ogg|Ouvir pronúncia}}`,
+    params: [
+      { name: '1', label: 'URL ou nome do arquivo', description: 'Endereço de áudio (https://...) ou nome descritivo.', placeholder: 'https://...', defaultValue: 'Pronúncia padrão', required: true },
+      { name: '2', label: 'Rótulo (opcional)', description: 'Texto exibido no botão/link.', placeholder: 'Ex: Ouvir pronúncia', defaultValue: 'Ouvir áudio' },
+    ],
+  },
+  {
+    id: 'tpl-ipa',
+    name: 'IPA',
+    aliases: ['AFI', 'Pronúncia IPA'],
+    category: 'dados',
+    kind: 'inline',
+    description: 'Exibe transcrição fonética no Alfabeto Fonético Internacional (AFI/IPA) com indicação opcional de idioma.',
+    exampleWikitext: `Wikcionário ({{IPA|wiksjoˈnaɾju|pt}})`,
+    params: [
+      { name: '1', label: 'Transcrição IPA', description: 'Símbolos fonéticos entre colchetes ou barras.', placeholder: 'Ex: ˈwiki', defaultValue: 'ˈwiki', required: true },
+      { name: 'lang', label: 'Idioma (opcional)', description: 'Código ou nome do idioma.', placeholder: 'Ex: pt, en, fr', defaultValue: 'pt' },
+    ],
+  },
+  {
+    id: 'tpl-moeda',
+    name: 'Moeda',
+    aliases: ['Preço', 'Currency'],
+    category: 'dados',
+    kind: 'inline',
+    description: 'Formata valores monetários com símbolo oficial da divisa (BRL, USD, EUR, GBP, JPY).',
+    exampleWikitext: `Orçamento estimado em {{Moeda|250000|BRL}}.`,
+    params: [
+      { name: '1', label: 'Valor numérico', description: 'Quantia sem símbolo.', placeholder: 'Ex: 1500.50', defaultValue: '1000', required: true },
+      { name: '2', label: 'Código da moeda', description: 'BRL, USD, EUR, GBP, JPY.', placeholder: 'Ex: BRL', defaultValue: 'BRL', required: true },
+    ],
+  },
+  {
+    id: 'tpl-barra-progresso',
+    name: 'Barra de progresso',
+    aliases: ['Progresso', 'Progress bar'],
+    category: 'dados',
+    kind: 'block',
+    description: 'Exibe indicador percentual de andamento para projetos, traduções ou metas comunitárias.',
+    exampleWikitext: `{{Barra de progresso|75|título=Progresso da revisão documental}}`,
+    params: [
+      { name: '1', label: 'Percentual (0–100)', description: 'Número inteiro representando conclusão.', placeholder: 'Ex: 75', defaultValue: '65', required: true },
+      { name: 'título', label: 'Descrição (opcional)', description: 'Rótulo acima da barra.', placeholder: 'Ex: Tradução concluída', defaultValue: 'Andamento da meta' },
+      { name: 'cor', label: 'Cor (opcional)', description: 'blue, emerald, amber ou rose.', placeholder: 'blue | emerald | amber | rose', defaultValue: 'emerald' },
+    ],
+  },
+  {
+    id: 'tpl-matematica',
+    name: 'Matemática',
+    aliases: ['Math', 'Fórmula'],
+    category: 'dados',
+    kind: 'inline',
+    description: 'Renderiza expressões e equações matemáticas com tipografia serifa científica preservada.',
+    exampleWikitext: `A relação energia-massa é {{Matemática|E = mc²}}.`,
+    params: [
+      { name: '1', label: 'Expressão matemática', description: 'Equação ou notação científica.', placeholder: 'Ex: a² + b² = c²', defaultValue: 'E = mc²', required: true },
+    ],
+  },
+  {
+    id: 'tpl-codigo',
+    name: 'Código',
+    aliases: ['Code', 'Inline code'],
+    category: 'dados',
+    kind: 'inline',
+    description: 'Destaca identificadores, comandos ou trechos técnicos em fonte monoespaçada inline.',
+    exampleWikitext: `Execute {{Código|npm run build|bash}} para compilar.`,
+    params: [
+      { name: '1', label: 'Trecho de código', description: 'Comando, função ou variável.', placeholder: 'Ex: parseWikitext()', defaultValue: 'parseWikitext()', required: true },
+      { name: 'lang', label: 'Linguagem (opcional)', description: 'Nome da linguagem para título.', placeholder: 'Ex: ts, bash', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-isbn',
+    name: 'ISBN',
+    aliases: ['Isbn'],
+    category: 'dados',
+    kind: 'inline',
+    description: 'Formata código ISBN de livros com ligação direta de consulta bibliográfica.',
+    exampleWikitext: `Consulte {{ISBN|978-85-359-0277-8}}.`,
+    params: [
+      { name: '1', label: 'Código ISBN', description: 'ISBN-10 ou ISBN-13 com ou sem hífens.', placeholder: 'Ex: 978-85-359-0277-8', defaultValue: '978-85-359-0277-8', required: true },
+    ],
+  },
+  {
+    id: 'tpl-doi',
+    name: 'DOI',
+    aliases: ['Doi'],
+    category: 'dados',
+    kind: 'inline',
+    description: 'Formata identificador digital DOI para publicações científicas com ligação oficial.',
+    exampleWikitext: `Publicado sob {{DOI|10.1038/s41586-020-2649-2}}.`,
+    params: [
+      { name: '1', label: 'Identificador DOI', description: 'Prefixo e sufixo DOI (ex: 10.1000/182).', placeholder: 'Ex: 10.1038/s41586-020-2649-2', defaultValue: '10.1000/182', required: true },
+      { name: 'título', label: 'Rótulo opcional', description: 'Título abreviado do artigo.', placeholder: 'Ex: Artigo científico', defaultValue: '' },
+    ],
+  },
+
+  // === Predefinições & Blocos Comuns do Wikidot ===
+  {
+    id: 'tpl-wikidot-infobox',
+    name: 'Wikidot Infobox',
+    aliases: ['[[div class="infobox"]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[div class="infobox"]]\n**{{{título}}}**\n\n* **Categoria:** {{{categoria}}}\n* **Status:** {{{status}}}\n* **Autor:** {{{autor}}}\n* **Referência:** {{{referencia}}}\n[[/div]]`,
+    description: 'Caixa lateral flutuante no padrão Wikidot ([[div class="infobox"]]) com suporte nativo a Markdown e links internos.',
+    exampleWikitext: `[[div class="infobox"]]\n**Projeto Wikidot**\n\n* **Categoria:** Documentação\n* **Status:** Ativo\n[[/div]]`,
+    params: [
+      { name: 'título', label: 'Título da Infobox', description: 'Cabeçalho exibido no topo do card Wikidot.', placeholder: 'Ex: Ficha do Projeto', defaultValue: 'Ficha Técnica', required: true },
+      { name: 'categoria', label: 'Categoria', description: 'Classificação principal.', placeholder: 'Ex: Tecnologia Aberta', defaultValue: 'Documentação' },
+      { name: 'status', label: 'Status', description: 'Situação atual.', placeholder: 'Ex: Ativo, Arquivado', defaultValue: 'Ativo' },
+      { name: 'autor', label: 'Responsável / Autor', description: 'Mantenedor ou autor.', placeholder: 'Ex: Equipe Editorial', defaultValue: 'Comunidade' },
+      { name: 'referencia', label: 'Referência / Link', description: 'Link [[Artigo]] ou URL.', placeholder: 'Ex: [[Página Inicial]]', defaultValue: '[[Página Principal]]' },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-callout',
+    name: 'Wikidot Callout (Alerta)',
+    aliases: ['[[callout]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[callout type="{{{tipo}}}" title="{{{título}}}"]]\n{{{texto}}}\n[[/callout]]`,
+    description: 'Bloco de alerta estilizado do Wikidot ([[callout type="..." title="..."]]) para avisos, dicas, sucesso ou erros críticos.',
+    exampleWikitext: `[[callout type="warning" title="Atenção Técnica"]]\nVerifique as permissões antes de aplicar alterações em produção.\n[[/callout]]`,
+    params: [
+      { name: 'tipo', label: 'Tipo (type)', description: 'info, warning, danger, success ou note.', placeholder: 'info | warning | danger | success', defaultValue: 'warning', required: true },
+      { name: 'título', label: 'Título (title)', description: 'Cabeçalho do alerta.', placeholder: 'Ex: Atenção', defaultValue: 'Alerta Editorial', required: true },
+      { name: 'texto', label: 'Conteúdo do alerta', description: 'Corpo da mensagem (aceita Markdown/Wikitext).', placeholder: 'Descreva o aviso...', defaultValue: 'Revise as informações e cite fontes verificáveis.', multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-note',
+    name: 'Wikidot Note',
+    aliases: ['[[note]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[note]]\n**{{{título}}}:** {{{texto}}}\n[[/note]]`,
+    description: 'Caixa de anotação rápida Wikidot ([[note]]...[[/note]]) ideal para observações editoriais no meio do texto.',
+    exampleWikitext: `[[note]]\n**Observação:** Esta seção segue a sintaxe compatível com blocos Wikidot.\n[[/note]]`,
+    params: [
+      { name: 'título', label: 'Rótulo inicial', description: 'Prefixo em negrito da nota.', placeholder: 'Ex: Nota', defaultValue: 'Nota editorial' },
+      { name: 'texto', label: 'Mensagem', description: 'Texto explicativo da nota.', placeholder: 'Digite a observação...', defaultValue: 'Este trecho detalha parâmetros compatíveis com a arquitetura da wiki.', multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-navbox',
+    name: 'Wikidot Navbox',
+    aliases: ['[[div class="navbox"]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[div class="navbox"]]\n**{{{título}}}**\n\n{{{links}}}\n[[/div]]`,
+    description: 'Caixa de navegação horizontal no padrão Wikidot ([[div class="navbox"]]) para agrupar artigos relacionados no rodapé.',
+    exampleWikitext: `[[div class="navbox"]]\n**Navegação da Série**\n\n[[Introdução]] · [[Arquitetura]] · [[Referências]]\n[[/div]]`,
+    params: [
+      { name: 'título', label: 'Título da caixa', description: 'Cabeçalho da Navbox.', placeholder: 'Ex: Tópicos Relacionados', defaultValue: 'Navegação Temática', required: true },
+      { name: 'links', label: 'Links de navegação', description: 'Artigos separados por · ou listas.', placeholder: '[[Artigo 1]] · [[Artigo 2]]', defaultValue: '[[Página Inicial]] · [[MediaWiki]] · [[Parsoid]]', multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-collapsible',
+    name: 'Wikidot Retrátil (Collapsible)',
+    aliases: ['[[collapsible]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[collapsible show="{{{mostrar}}}" hide="{{{ocultar}}}"]]\n{{{conteudo}}}\n[[/collapsible]]`,
+    description: 'Bloco expansível/retrátil interativo do Wikidot ([[collapsible show="..." hide="..."]]) usando disclosure nativo.',
+    exampleWikitext: `[[collapsible show="+ Mostrar detalhes técnicos" hide="- Ocultar detalhes"]]\nConteúdo detalhado exibido ao clicar.\n[[/collapsible]]`,
+    params: [
+      { name: 'mostrar', label: 'Texto para abrir (show)', description: 'Rótulo do botão recolhido.', placeholder: 'Ex: + Ver detalhes', defaultValue: '+ Mostrar conteúdo oculto', required: true },
+      { name: 'ocultar', label: 'Texto para fechar (hide)', description: 'Rótulo alternativo.', placeholder: 'Ex: - Ocultar', defaultValue: '- Ocultar conteúdo' },
+      { name: 'conteudo', label: 'Conteúdo interno', description: 'Texto, listas ou links internos.', placeholder: 'Escreva o conteúdo expandido...', defaultValue: 'Conteúdo complementar organizado em bloco retrátil Wikidot.', multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-tabview',
+    name: 'Wikidot Abas (Tabview)',
+    aliases: ['[[tabview]]', '[[tab]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[tabview]]\n[[tab {{{aba1}}}]]\n{{{conteudo1}}}\n[[/tab]]\n[[tab {{{aba2}}}]]\n{{{conteudo2}}}\n[[/tab]]\n[[/tabview]]`,
+    description: 'Container de abas organizadas do Wikidot ([[tabview]] + [[tab Nome]]) para comparar versões, etapas ou idiomas.',
+    exampleWikitext: `[[tabview]]\n[[tab Visão Geral]]\nResumo inicial.\n[[/tab]]\n[[tab Especificações]]\nDetalhes técnicos.\n[[/tab]]\n[[/tabview]]`,
+    params: [
+      { name: 'aba1', label: 'Título da Aba 1', description: 'Nome da primeira aba.', placeholder: 'Ex: Visão Geral', defaultValue: 'Visão Geral', required: true },
+      { name: 'conteudo1', label: 'Conteúdo da Aba 1', description: 'Texto da primeira aba.', placeholder: 'Texto...', defaultValue: 'Descrição introdutória e contexto histórico.', multiline: true, required: true },
+      { name: 'aba2', label: 'Título da Aba 2', description: 'Nome da segunda aba.', placeholder: 'Ex: Detalhes Técnicos', defaultValue: 'Detalhes Técnicos', required: true },
+      { name: 'conteudo2', label: 'Conteúdo da Aba 2', description: 'Texto da segunda aba.', placeholder: 'Texto...', defaultValue: 'Especificações, parâmetros e referências.', multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-quote',
+    name: 'Wikidot Citação (Quote)',
+    aliases: ['[[quote]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[quote author="{{{autor}}}" source="{{{fonte}}}"]]\n{{{texto}}}\n[[/quote]]`,
+    description: 'Citação destacada do Wikidot ([[quote author="..." source="..."]]) com autoria e referência opcional.',
+    exampleWikitext: `[[quote author="Tim Berners-Lee" source="Weaving the Web"]]\nA Web é mais uma criação social do que técnica.\n[[/quote]]`,
+    params: [
+      { name: 'texto', label: 'Trecho citado', description: 'Texto literal da citação.', placeholder: 'Digite a citação...', defaultValue: 'O conhecimento livre floresce quando ferramentas simples permitem colaboração aberta.', multiline: true, required: true },
+      { name: 'autor', label: 'Autor(a)', description: 'Nome do autor citado.', placeholder: 'Ex: Tim Berners-Lee', defaultValue: 'Autor' },
+      { name: 'fonte', label: 'Fonte / Obra', description: 'Livro, discurso ou artigo.', placeholder: 'Ex: Weaving the Web', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-code',
+    name: 'Wikidot Bloco de Código',
+    aliases: ['[[code]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[code type="{{{tipo}}}"]]\n{{{codigo}}}\n[[/code]]`,
+    description: 'Bloco de código monoespaçado do Wikidot ([[code type="..."]]) com destaque de linguagem.',
+    exampleWikitext: `[[code type="typescript"]]\nconst wiki = 'NotMediaWiki';\nconsole.log(wiki);\n[[/code]]`,
+    params: [
+      { name: 'tipo', label: 'Linguagem (type)', description: 'typescript, javascript, python, css, html, wikitext.', placeholder: 'Ex: typescript', defaultValue: 'typescript', required: true },
+      { name: 'codigo', label: 'Código-fonte', description: 'Trecho de código a exibir.', placeholder: 'Cole o código...', defaultValue: `function saudacao(nome: string) {\n  return \`Olá, \${nome}!\`;\n}`, multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-toc',
+    name: 'Wikidot Sumário (TOC)',
+    aliases: ['[[toc]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[toc title="{{{título}}}"]]`,
+    description: 'Marcador Wikidot [[toc]] que exibe o indicador de índice de seções do artigo.',
+    exampleWikitext: `[[toc]]`,
+    params: [
+      { name: 'título', label: 'Título do índice (opcional)', description: 'Rótulo exibido no marcador.', placeholder: 'Ex: Índice de Conteúdo', defaultValue: 'Índice (Sumário)' },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-footnote',
+    name: 'Wikidot Nota de Rodapé',
+    aliases: ['[[footnote]]'],
+    category: 'wikidot',
+    kind: 'inline',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[footnote]]{{{texto}}}[[/footnote]]`,
+    description: 'Insere uma nota de rodapé no estilo Wikidot ([[footnote]]...[[/footnote]]), integrada automaticamente às referências do artigo.',
+    exampleWikitext: `Esta informação foi confirmada em arquivo histórico[[footnote]]Documento técnico publicado em 2026.[[/footnote]].`,
+    params: [
+      { name: 'texto', label: 'Conteúdo da nota', description: 'Referência ou explicação exibida no rodapé.', placeholder: 'Ex: Fonte consultada em 2026', defaultValue: 'Nota bibliográfica verificada em fonte primária.', multiline: true, required: true },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-module-rate',
+    name: 'Wikidot Module Rate',
+    aliases: ['[[module Rate]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[module Rate label="{{{rotulo}}}"]]`,
+    description: 'Módulo de avaliação comunitária do Wikidot ([[module Rate]]) exibindo widget de classificação editorial.',
+    exampleWikitext: `[[module Rate]]`,
+    params: [
+      { name: 'rotulo', label: 'Rótulo exibido', description: 'Texto do widget de avaliação.', placeholder: 'Ex: Avaliação do artigo', defaultValue: 'Avaliação da página' },
+    ],
+  },
+  {
+    id: 'tpl-wikidot-module-listpages',
+    name: 'Wikidot Module ListPages',
+    aliases: ['[[module ListPages]]'],
+    category: 'wikidot',
+    kind: 'block',
+    syntaxStyle: 'wikidot',
+    snippetPattern: `[[module ListPages category="{{{categoria}}}" order="{{{ordem}}}" limit="{{{limite}}}"]]`,
+    description: 'Módulo Wikidot ListPages ([[module ListPages ...]]) para listar páginas por categoria, ordenação e limite.',
+    exampleWikitext: `[[module ListPages category="Guias" order="updated_at desc" limit="5"]]`,
+    params: [
+      { name: 'categoria', label: 'Categoria (category)', description: 'Filtro de categoria ou * para todas.', placeholder: 'Ex: *, Guias, Tecnologia', defaultValue: '*' },
+      { name: 'ordem', label: 'Ordenação (order)', description: 'updated_at desc | created_at desc | title asc.', placeholder: 'updated_at desc', defaultValue: 'updated_at desc' },
+      { name: 'limite', label: 'Limite (limit)', description: 'Quantidade máxima de itens.', placeholder: 'Ex: 5', defaultValue: '5' },
+    ],
+  },
 ];
 
 /**
- * Gera código Wikitext formatado para invocação de uma predefinição {{Nome|...}}
+ * Gera código Wikitext ou Wikidot formatado para invocação de uma predefinição
  */
 export function buildTemplateInvocationWikitext(
   templateName: string,
   values: Record<string, string>,
   definition?: WikiTemplateDefinition
 ): string {
+  if (definition?.snippetPattern) {
+    let rendered = definition.snippetPattern;
+    const defaultMap = new Map(definition.params.map(p => [p.name, p.defaultValue ?? '']));
+    rendered = rendered.replace(/\{\{\{([^}]+)\}\}\}/g, (_, key: string) => {
+      const k = key.trim();
+      const val = values[k] !== undefined ? values[k] : defaultMap.get(k) ?? '';
+      return val.trim();
+    });
+    return rendered;
+  }
+
   const cleanName = templateName
     .replace(/^(?:Predefinição|Predef|Template):/i, '')
     .trim()

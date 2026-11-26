@@ -480,6 +480,134 @@ const BUILTIN_PARAM_ALIASES: Record<string, Record<string, string[]>> = {
     '1': ['1', 'url', 'site'],
     nome: ['nome', '2', 'name', 'label'],
   },
+  'infocaixa software': {
+    nome: ['nome', 'name', 'título', 'titulo', '1'],
+    desenvolvedor: ['desenvolvedor', 'developer', 'autor', 'author'],
+    versão: ['versão', 'versao', 'version'],
+    lançamento: ['lançamento', 'lancamento', 'release'],
+    linguagem: ['linguagem', 'language', 'programming_language'],
+    sistema: ['sistema', 'so', 'operating_system', 'plataforma'],
+    licença: ['licença', 'licenca', 'license'],
+    website: ['website', 'site'],
+  },
+  'infocaixa artista musical': {
+    nome: ['nome', 'name', 'título', 'titulo', '1'],
+    origem: ['origem', 'origin', 'local'],
+    gênero: ['gênero', 'genero', 'gêneros', 'generos', 'genre'],
+    período: ['período', 'periodo', 'years_active', 'atividade'],
+    gravadora: ['gravadora', 'label'],
+    integrantes: ['integrantes', 'membros', 'members'],
+    website: ['website', 'site'],
+  },
+  'infocaixa evento': {
+    título: ['título', 'titulo', 'title', 'nome', '1'],
+    tipo: ['tipo', 'type'],
+    data: ['data', 'date', 'período', 'periodo'],
+    local: ['local', 'location', 'cidade'],
+    participantes: ['participantes', 'participants', 'organizadores'],
+    website: ['website', 'site'],
+  },
+  'infocaixa universidade': {
+    nome: ['nome', 'name', 'título', 'titulo', '1'],
+    sigla: ['sigla', 'acronym'],
+    fundação: ['fundação', 'fundacao', 'founded'],
+    tipo: ['tipo', 'type'],
+    localização: ['localização', 'localizacao', 'local', 'sede'],
+    reitor: ['reitor', 'diretor'],
+    estudantes: ['estudantes', 'alunos', 'students'],
+    website: ['website', 'site'],
+  },
+  'infocaixa empresa': {
+    nome: ['nome', 'name', 'título', 'titulo', '1'],
+    tipo: ['tipo', 'type'],
+    setor: ['setor', 'área', 'area', 'industry'],
+    fundação: ['fundação', 'fundacao', 'founded'],
+    sede: ['sede', 'headquarters', 'local'],
+    fundadores: ['fundadores', 'founders'],
+    website: ['website', 'site'],
+  },
+  'artigo bom': {
+    data: ['data', 'date', '1'],
+    texto: ['texto', '2'],
+  },
+  'escopo global': {
+    região: ['região', 'regiao', 'region', '1'],
+    data: ['data', 'date', '2'],
+    motivo: ['motivo', 'reason'],
+  },
+  'fonte primária': {
+    data: ['data', 'date', '1'],
+    assunto: ['assunto', 'seção', 'secao', '2'],
+  },
+  'traduzido de': {
+    '1': ['1', 'idioma', 'lang'],
+    '2': ['2', 'artigo', 'title'],
+    versao: ['versao', 'versão', 'data', 'version'],
+  },
+  anexo: {
+    '1': ['1'],
+    '2': ['2'],
+  },
+  cronologia: {
+    título: ['título', 'titulo', 'title'],
+    item1: ['item1', '1'],
+    item2: ['item2', '2'],
+    item3: ['item3', '3'],
+    item4: ['item4', '4'],
+  },
+  galeria: {
+    título: ['título', 'titulo', 'title'],
+    img1: ['img1', 'imagem1'],
+    leg1: ['leg1', 'legenda1', 'caption1'],
+    img2: ['img2', 'imagem2'],
+    leg2: ['leg2', 'legenda2', 'caption2'],
+  },
+  'imagem dupla': {
+    título: ['título', 'titulo', 'title'],
+    img1: ['img1', 'imagem1', 'image1'],
+    leg1: ['leg1', 'legenda1', 'caption1'],
+    img2: ['img2', 'imagem2', 'image2'],
+    leg2: ['leg2', 'legenda2', 'caption2'],
+  },
+  voto: {
+    '1': ['1', 'posição', 'posicao', 'tipo'],
+    '2': ['2', 'comentário', 'comentario', 'texto'],
+  },
+  etiqueta: {
+    '1': ['1', 'texto', 'label'],
+    tipo: ['tipo', 'type', '2'],
+  },
+  áudio: {
+    '1': ['1', 'arquivo', 'url'],
+    '2': ['2', 'rótulo', 'rotulo', 'label'],
+  },
+  ipa: {
+    '1': ['1', 'transcrição', 'transcricao'],
+    lang: ['lang', 'idioma', '2'],
+  },
+  moeda: {
+    '1': ['1', 'valor'],
+    '2': ['2', 'moeda', 'code'],
+  },
+  'barra de progresso': {
+    '1': ['1', 'percentual', 'value'],
+    título: ['título', 'titulo', 'title'],
+    cor: ['cor', 'color'],
+  },
+  matemática: {
+    '1': ['1', 'expressão', 'expressao', 'expr'],
+  },
+  código: {
+    '1': ['1', 'código', 'codigo', 'code'],
+    lang: ['lang', 'linguagem', '2'],
+  },
+  isbn: {
+    '1': ['1', 'isbn', 'código', 'codigo'],
+  },
+  doi: {
+    '1': ['1', 'doi', 'id'],
+    título: ['título', 'titulo', 'title', '2'],
+  },
 };
 
 function stripAccents(value: string): string {
@@ -1247,9 +1375,9 @@ export class TemplateService {
       return { matchedTemplateName: canonical, isKnown: true, expectedParams };
     }
 
-    // 2. Built-in MediaWiki standard templates
+    // 2. Built-in MediaWiki standard templates (exclude Wikidot [[...]] blocks)
     const builtin = this.findBuiltin(cleanName);
-    if (builtin) {
+    if (builtin && builtin.syntaxStyle !== 'wikidot') {
       const canonicalKey = normalizeTemplateKey(builtin.name);
       const aliasMap = BUILTIN_PARAM_ALIASES[canonicalKey] || {};
       const expectedParams: ExpectedTemplateParamInfo[] = builtin.params.map(p => {
@@ -1319,6 +1447,7 @@ export class TemplateService {
 
     const candidates: Array<{ folded: string; canonical: string }> = [];
     for (const def of BUILTIN_MEDIAWIKI_TEMPLATES) {
+      if (def.syntaxStyle === 'wikidot') continue;
       candidates.push({ folded: foldTemplateKey(def.name), canonical: def.name });
       for (const alias of def.aliases || []) {
         candidates.push({ folded: foldTemplateKey(alias), canonical: def.name });

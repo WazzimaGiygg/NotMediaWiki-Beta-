@@ -27,6 +27,7 @@ import { InfoboxTutorialPanel } from './InfoboxTutorialPanel';
 import { ArticleFootnotes } from './ArticleFootnotes';
 import { ReferenceManagerModal } from './ReferenceManagerModal';
 import { TemplateManagerModal } from './TemplateManagerModal';
+import { TemplateManagementPanel } from './TemplateManagementPanel';
 import { TemplateFixAssistantPanel } from './TemplateFixAssistantPanel';
 import { RichFormattedEditor } from './RichFormattedEditor';
 import { FORMATTED_INSERT_OPTIONS } from '../utils/wikitextRichConverter';
@@ -109,8 +110,9 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
   // Bibliographic Reference Manager Modal state
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
 
-  // MediaWiki Template Manager Modal, Auto-Fix Assistant & Custom Namespace 10 Templates state
+  // MediaWiki Template Manager Modal, Gestão de Predefinições Panel, Auto-Fix Assistant & Custom Namespace 10 Templates state
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isTemplateManagementOpen, setIsTemplateManagementOpen] = useState(false);
   const [isTemplateFixPanelOpen, setIsTemplateFixPanelOpen] = useState(false);
   const [cursorOffset, setCursorOffset] = useState<number>(0);
   const [customTemplates, setCustomTemplates] = useState<Article[]>([]);
@@ -962,6 +964,22 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             <>
               <button
                 type="button"
+                onClick={() => setIsTemplateManagementOpen(prev => !prev)}
+                aria-expanded={isTemplateManagementOpen}
+                data-testid="toggle-template-management-panel-btn"
+                className={`px-2.5 py-1 border rounded font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                  isTemplateManagementOpen
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-200'
+                }`}
+                title="Abrir painel de Gestão de Predefinições para pré-visualizar e inserir blocos Wikidot (infobox, callout, navbox) e Wikipédia"
+              >
+                <Blocks className="w-3 h-3 shrink-0" />
+                <span>Gestão de Predefinições</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setIsTemplateModalOpen(true)}
                 data-testid="open-template-manager-btn"
                 className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded text-indigo-800 dark:text-indigo-200 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0"
@@ -1075,6 +1093,17 @@ export const WikiEditor: React.FC<WikiEditorProps> = ({
             </div>
           )}
         </div>
+        )}
+
+        {/* Inline Gestão de Predefinições (Wikidot + Wikipédia + NS10) */}
+        {isTemplatesEnabled && isTemplateManagementOpen && (
+          <TemplateManagementPanel
+            customTemplates={customTemplates}
+            pageTitle={title}
+            onInsertCode={snippet => insertMarkup(`${snippet}\n`)}
+            onOpenFullCatalog={() => setIsTemplateModalOpen(true)}
+            onClose={() => setIsTemplateManagementOpen(false)}
+          />
         )}
 
         {/* Template Key Correction Suggestion & Expected Parameters Assistant */}

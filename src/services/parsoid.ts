@@ -4,6 +4,7 @@ import {
   templateService,
   ServiceTemplateExpansionOptions,
 } from './templateService';
+import { convertWikidotFootnotes, expandWikidotSyntax } from '../utils/wikidotSyntax';
 import { isRuntimeExtensionEnabled } from '../extensions';
 
 import { TemplateDiagnostic } from '../types';
@@ -91,6 +92,9 @@ export class ClientParsoidService {
       ast.push({ type: 'Category', name: cleanCat });
       return '';
     });
+
+    // 1.5. Convert Wikidot [[footnote]]...[[/footnote]] to <ref>...</ref> before Cite extraction
+    processed = convertWikidotFootnotes(processed);
 
     // 2. Extract <ref> tags (supporting <ref>, <ref name="...">, <ref name="..." />, <ref group="...">)
     if (isCite) {
@@ -183,6 +187,9 @@ export class ClientParsoidService {
       }
       return '';
     });
+
+    // 2.6. Expand Wikidot blocks & modules ([[note]], [[callout]], [[collapsible]], [[tabview]], [[div]], [[quote]], [[code]], [[toc]], [[module ...]])
+    processed = expandWikidotSyntax(processed);
 
     // 3. Process Infoboxes: {{Infobox ... }}
     if (isInfobox) {
@@ -394,7 +401,7 @@ export class ClientParsoidService {
     const htmlBlocks = paragraphs.map(p => {
       const trimmed = p.trim();
       if (!trimmed) return '';
-      if (/^<(?:h[1-6]|p|aside|div|li|ul|ol|table|pre|blockquote|nav|section|center|figure|hr)(?:\s|>|\/)/i.test(trimmed)) {
+      if (/^<(?:h[1-6]|p|aside|div|details|summary|li|ul|ol|table|pre|blockquote|nav|section|center|figure|hr)(?:\s|>|\/)/i.test(trimmed)) {
         return trimmed;
       }
       return `<p class="leading-relaxed text-slate-800 dark:text-slate-300 mb-4 font-serif text-[16px]">${trimmed.replace(/\n/g, '<br/>')}</p>`;

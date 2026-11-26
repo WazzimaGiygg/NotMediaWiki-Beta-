@@ -450,6 +450,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {[
                   { id: 'all' as CategoryFilter, label: 'Todas' },
+                  { id: 'wikidot' as CategoryFilter, label: 'Wikidot' },
                   { id: 'avisos' as CategoryFilter, label: 'Avisos' },
                   { id: 'navegacao' as CategoryFilter, label: 'Navegação' },
                   { id: 'infocaixa' as CategoryFilter, label: 'Infocaixas' },
@@ -498,9 +499,9 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                            {'{{'}
-                            {entry.name}
-                            {'}}'}
+                            {entry.definition?.syntaxStyle === 'wikidot'
+                              ? entry.name
+                              : `{{${entry.name}}}`}
                           </span>
                           <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 shrink-0">
                             {entry.isCustom ? 'Custom · NS10' : TEMPLATE_CATEGORY_LABELS[entry.category as WikiTemplateCategory]?.split(' ')[0]}
@@ -523,13 +524,13 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {'{{'}
-                            {selectedEntry.name}
-                            {'}}'}
+                            {selectedEntry.definition?.syntaxStyle === 'wikidot'
+                              ? selectedEntry.name
+                              : `{{${selectedEntry.name}}}`}
                           </h3>
                           {selectedEntry.aliases && selectedEntry.aliases.length > 0 && (
                             <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                              Aliases: {selectedEntry.aliases.map(a => `{{${a}}}`).join(', ')}
+                              Aliases: {selectedEntry.aliases.map(a => selectedEntry.definition?.syntaxStyle === 'wikidot' ? a : `{{${a}}}`).join(', ')}
                             </span>
                           )}
                         </div>
