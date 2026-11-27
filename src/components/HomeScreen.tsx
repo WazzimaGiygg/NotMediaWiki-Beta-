@@ -50,6 +50,7 @@ interface HomeScreenProps {
   onOpenNewArticle: () => void;
   onSwitchUser?: (userId: string) => void;
   onRandomArticle?: () => void;
+  onOpenRecentChanges?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -59,12 +60,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenNewArticle,
   onSwitchUser,
   onRandomArticle,
+  onOpenRecentChanges,
 }) => {
   const { siteTitleConfig, isExtensionEnabled } = useExtensions();
   const isHomeCustomizerEnabled = isExtensionEnabled ? isExtensionEnabled('HomePageCustomizer', true) : true;
   const isGovernanceEnabled = isExtensionEnabled ? isExtensionEnabled('GovernanceAndCompliance', true) : true;
   const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
   const isTemplatesEnabled = isExtensionEnabled ? isExtensionEnabled('MediaWikiTemplates', true) : true;
+  const isRecentChangesEnabled = isExtensionEnabled ? isExtensionEnabled('EventStreams', true) : true;
   const [homeMeta, setHomeMeta] = useState<HomePageMetadata>({
     id: 'home_page',
     htmlContent: DEFAULT_HOMEPAGE_HTML,
@@ -501,6 +504,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {onOpenRecentChanges && isRecentChangesEnabled && (
+              <button
+                type="button"
+                onClick={onOpenRecentChanges}
+                data-testid="homescreen-recent-changes-btn"
+                className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded flex items-center gap-1.5 cursor-pointer transition-colors font-medium"
+                title="Abrir página de Mudanças Recentes da enciclopédia"
+              >
+                <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Mudanças Recentes</span>
+              </button>
+            )}
             {isTemplatesEnabled && (
               <button
                 type="button"

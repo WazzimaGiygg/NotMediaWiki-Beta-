@@ -43,10 +43,12 @@ import { getPortalsConfig } from '../src/extensions/portalsExtension';
 import { useExtensions } from '../src/context/ExtensionsContext';
 import { CategoryExplorer } from '../src/components/CategoryExplorer';
 import { SpecialPagesHub } from '../src/components/SpecialPagesHub';
+import { RecentChangesPage } from '../src/components/RecentChangesPage';
+import { HomeScreen } from '../src/components/HomeScreen';
 import { Header } from '../src/components/Header';
 import { WikiFooter } from '../src/components/WikiFooter';
 import { UserPageView } from '../src/components/UserPageView';
-import { Article, UserSession } from '../src/types';
+import { Article, UserSession, WikiEvent } from '../src/types';
 
 vi.mock('../src/context/ExtensionsContext', async () => {
   const actual = await vi.importActual<typeof import('../src/context/ExtensionsContext')>(
@@ -304,5 +306,105 @@ describe('CategoryExplorer, RecentChanges links, and User Contributions', () => 
     expect(contribsTabHtml).toContain('Contribuições de AliceWiki');
     expect(contribsTabHtml).toContain('Especial:Contribuições');
     expect(contribsTabHtml).toContain('Revisões Registradas');
+  });
+
+  it('renders dedicated RecentChangesPage with date groups, markers (N/m/b), editor links, and HomeScreen link', () => {
+    const sampleEvents: WikiEvent[] = [
+      {
+        id: 'evt-1',
+        meta: {
+          uri: 'https://en.wikipedia.org/wiki/MediaWiki',
+          request_id: 'req-1',
+          id: 'evt-1',
+          dt: new Date().toISOString(),
+          domain: 'en.wikipedia.org',
+          stream: 'mediawiki.recentchange',
+        },
+        database: 'enwiki',
+        page_title: 'Inteligência_Artificial',
+        page_namespace: 0,
+        rev_id: 'rev-101',
+        rev_timestamp: new Date().toISOString(),
+        rev_sha1: 'abc123',
+        rev_minor_edit: false,
+        rev_len: 2450,
+        user_text: 'AliceWiki',
+        comment: 'Criação inicial do verbete enciclopédico',
+        type: 'new',
+      },
+      {
+        id: 'evt-2',
+        meta: {
+          uri: 'https://en.wikipedia.org/wiki/Predefinição:Info',
+          request_id: 'req-2',
+          id: 'evt-2',
+          dt: new Date(Date.now() - 86400 * 1000).toISOString(),
+          domain: 'en.wikipedia.org',
+          stream: 'mediawiki.recentchange',
+        },
+        database: 'enwiki',
+        page_title: 'Predefinição:Info',
+        page_namespace: 10,
+        rev_id: 'rev-102',
+        rev_timestamp: new Date(Date.now() - 86400 * 1000).toISOString(),
+        rev_sha1: 'def456',
+        rev_minor_edit: true,
+        rev_len: 810,
+        user_text: 'AutoBot',
+        comment: 'Ajuste automático de sintaxe',
+        type: 'edit',
+      },
+    ];
+
+    const rcHtml = renderToStaticMarkup(
+      <RecentChangesPage
+        initialEvents={sampleEvents}
+        onNavigateArticle={vi.fn()}
+        onOpenHistory={vi.fn()}
+        onOpenUser={vi.fn()}
+        onOpenSpecialPages={vi.fn()}
+        onOpenCategoryExplorer={vi.fn()}
+      />
+    );
+
+    expect(rcHtml).toContain('data-testid="recent-changes-page"');
+    expect(rcHtml).toContain('data-testid="recent-changes-list"');
+    expect(rcHtml).toContain('Especial:MudançasRecentes (Special:RecentChanges)');
+    expect(rcHtml).toContain('Hoje');
+    expect(rcHtml).toContain('Ontem');
+    expect(rcHtml).toContain('Inteligência Artificial');
+    expect(rcHtml).toContain('Predefinição:Info');
+    expect(rcHtml).toContain('AliceWiki');
+    expect(rcHtml).toContain('AutoBot');
+    expect(rcHtml).toContain('Criação inicial do verbete enciclopédico');
+    expect(rcHtml).toContain('title="Página nova"');
+    expect(rcHtml).toContain('title="Edição menor"');
+    expect(rcHtml).toContain('title="Edição automatizada por robô"');
+
+    const headerRcHtml = renderToStaticMarkup(
+      <Header
+        currentView="recent_changes"
+        onSelectView={vi.fn()}
+        currentUser={sampleUser}
+        onUserChanged={vi.fn()}
+        onNavigateArticle={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onOpenNewArticle={vi.fn()}
+        activeArticleSlug="MediaWiki"
+      />
+    );
+    expect(headerRcHtml).toContain('data-testid="nav-item-recent_changes"');
+
+    const homeHtml = renderToStaticMarkup(
+      <HomeScreen
+        currentUser={sampleUser}
+        onNavigateArticle={vi.fn()}
+        onEditArticle={vi.fn()}
+        onOpenNewArticle={vi.fn()}
+        onOpenRecentChanges={vi.fn()}
+      />
+    );
+    expect(homeHtml).toContain('data-testid="homescreen-recent-changes-btn"');
+    expect(homeHtml).toContain('Mudanças Recentes');
   });
 });

@@ -37,6 +37,7 @@ import { generateMediaWikiXmlDump, parseMediaWikiXmlDump } from '../utils/wikiXm
 import { parseSemanticFacts, SemanticPageData } from '../utils/semanticParser';
 import { CategoryTreeView } from './CategoryTreeView';
 import { CategoryExplorer } from './CategoryExplorer';
+import { RecentChangesPage } from './RecentChangesPage';
 import { BUILTIN_MEDIAWIKI_TEMPLATES, TEMPLATE_CATEGORY_LABELS } from '../data/defaultTemplates';
 import { TEMPLATE_EXAMPLE_SLUG } from '../data/templateExampleArticle';
 import { extractTemplateDeclaredParams } from '../utils/templateEngine';
@@ -91,6 +92,7 @@ interface SpecialPagesHubProps {
   onNavigateArticle: (slug: string) => void;
   onOpenEdit: (slug: string) => void;
   onOpenHistory: (slug: string) => void;
+  onOpenUser?: (username: string) => void;
   currentUser?: UserSession | null;
   onRandomArticle?: () => void;
 }
@@ -100,6 +102,7 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   onNavigateArticle,
   onOpenEdit,
   onOpenHistory,
+  onOpenUser,
   currentUser,
   onRandomArticle,
 }) => {
@@ -117,11 +120,6 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [events, setEvents] = useState<WikiEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-
-  // Filters for Special:RecentChanges
-  const [rcNamespace, setRcNamespace] = useState<number | 'all'>('all');
-  const [rcHideBots, setRcHideBots] = useState<boolean>(false);
-  const [rcHideMinor, setRcHideMinor] = useState<boolean>(false);
 
   // Filters for Special:AllPages
   const [allPagesNamespace, setAllPagesNamespace] = useState<number>(0);
@@ -163,23 +161,13 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
     setLoading(true);
     Promise.all([
       api.getArticles(),
-      api.getEventHistory(100).catch(() => []),
+      api.getRecentChanges(120).catch(() => []),
     ]).then(([arts, evts]) => {
       setArticles(arts);
       setEvents(evts);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
-
-  // Filtered Recent Changes
-  const filteredEvents = useMemo(() => {
-    return events.filter(evt => {
-      if (rcNamespace !== 'all' && evt.page_namespace !== rcNamespace) return false;
-      if (rcHideMinor && evt.rev_minor_edit) return false;
-      if (rcHideBots && evt.user_text.toLowerCase().includes('bot')) return false;
-      return true;
-    });
-  }, [events, rcNamespace, rcHideMinor, rcHideBots]);
 
   // Filtered AllPages
   const filteredAllPages = useMemo(() => {
@@ -523,131 +511,19 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
         />
       )}
       {activePage === 'RecentChanges' && isRecentChangesEnabled && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span>Especial:MudançasRecentes (Special:RecentChanges)</span>
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Feed em tempo real com deltas de caracteres, namespaces e sinalização de bots.
-              </p>
-            </div>
-          </div>
-
-          {/* Advanced Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-xs">
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Namespace:</label>
-              <select
-                value={rcNamespace}
-                onChange={e => setRcNamespace(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                className="w-full border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs"
-              >
-                <option value="all">Todos os namespaces</option>
-                {getAvailableNamespaces().map(ns => (
-                  <option key={ns.id} value={ns.id}>
-                    {ns.id}: {ns.localized || ns.canonical || '(Principal)'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-4 pt-4 sm:pt-6">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={rcHideBots}
-                  onChange={e => setRcHideBots(e.target.checked)}
-                  className="rounded text-blue-600"
-                />
-                <span>Ocultar robôs (bots)</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={rcHideMinor}
-                  onChange={e => setRcHideMinor(e.target.checked)}
-                  className="rounded text-blue-600"
-                />
-                <span>Ocultar edições menores (m)</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Recent Changes List */}
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredEvents.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-xs">
-                Nenhuma alteração registrada com os filtros selecionados.
-              </div>
-            ) : (
-              filteredEvents.map(evt => {
-                const lenDelta = evt.rev_len || 0;
-                const isPositive = lenDelta >= 0;
-
-                return (
-                  <div
-                    key={evt.id}
-                    className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-slate-50/60 dark:hover:bg-slate-800/40 px-2 rounded"
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {new Date(evt.rev_timestamp).toLocaleTimeString('pt-BR')}
-                      </span>
-
-                      {evt.rev_minor_edit && (
-                        <span className="text-[10px] font-mono font-bold px-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" title="Edição menor">
-                          m
-                        </span>
-                      )}
-
-                      <button
-                        onClick={() => onNavigateArticle(evt.page_title)}
-                        className="font-bold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        {evt.page_title}
-                      </button>
-
-                      <span
-                        className={`text-[11px] font-mono font-bold px-1.5 py-0.2 rounded ${
-                          isPositive
-                            ? 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400'
-                            : 'text-rose-700 bg-rose-50 dark:bg-rose-950 dark:text-rose-400'
-                        }`}
-                      >
-                        {isPositive ? `+${lenDelta}` : `${lenDelta}`}
-                      </span>
-
-                      <span className="text-slate-400">·</span>
-
-                      <span className="font-mono text-slate-600 dark:text-slate-300">
-                        {evt.user_text}
-                      </span>
-
-                      {evt.comment && (
-                        <span className="text-slate-500 italic text-[11px]">
-                          ({evt.comment})
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <button
-                        onClick={() => onOpenHistory(evt.page_title)}
-                        className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        histórico
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <RecentChangesPage
+          embedded
+          initialEvents={events.length > 0 ? events : undefined}
+          onNavigateArticle={onNavigateArticle}
+          onOpenHistory={onOpenHistory}
+          onOpenUser={
+            onOpenUser ||
+            (username => {
+              setContribUser(username);
+              setActivePage('Contributions');
+            })
+          }
+        />
       )}
 
       {/* VIEW: SPECIAL:ALLPAGES */}

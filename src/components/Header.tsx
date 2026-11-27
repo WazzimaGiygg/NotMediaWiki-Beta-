@@ -1664,7 +1664,8 @@ export const Header: React.FC<HeaderProps> = ({
           <nav className="flex items-center gap-1">
             {navItems.map(item => {
               const isRecentChangesActive =
-                currentView === 'special' && activeSpecialPage === 'RecentChanges';
+                currentView === 'recent_changes' ||
+                (currentView === 'special' && activeSpecialPage === 'RecentChanges');
               const isActive =
                 item.id === 'recent_changes'
                   ? isRecentChangesActive

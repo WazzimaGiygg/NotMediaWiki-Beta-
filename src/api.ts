@@ -62,6 +62,8 @@ import {
   fetchArticlesFromFirestore,
   fetchArticleFromFirestore,
   fetchRevisionsFromFirestore,
+  fetchRecentEventsAndRevisionsFromFirestore,
+  subscribeToFirestoreEvents,
   fetchUserContributionsFromFirestore,
   saveArticleToFirestore,
   fetchUsersFromFirestore,
@@ -691,6 +693,36 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  async getRecentChanges(limitCount: number = 150): Promise<WikiEvent[]> {
+    const [cloudEvents, serverEvents] = await Promise.all([
+      fetchRecentEventsAndRevisionsFromFirestore(limitCount).catch(() => []),
+      this.getEventHistory(limitCount).catch(() => []),
+    ]);
+
+    const byKey = new Map<string, WikiEvent>();
+    for (const evt of [...cloudEvents, ...serverEvents]) {
+      if (!evt || !evt.page_title) continue;
+      const key = evt.rev_id
+        ? `rev:${evt.rev_id}`
+        : `evt:${evt.page_title}:${(evt.rev_timestamp || '').slice(0, 16)}`;
+      const existing = byKey.get(key);
+      if (!existing || (!existing.comment && evt.comment)) {
+        byKey.set(key, evt);
+      }
+    }
+
+    return Array.from(byKey.values())
+      .sort((a, b) => new Date(b.rev_timestamp).getTime() - new Date(a.rev_timestamp).getTime())
+      .slice(0, limitCount);
+  },
+
+  subscribeRecentChanges(
+    onUpdate: (events: WikiEvent[]) => void,
+    onError?: (err: unknown) => void
+  ): () => void {
+    return subscribeToFirestoreEvents(onUpdate, onError);
   },
 
   async getUserContributions(

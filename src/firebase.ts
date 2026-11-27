@@ -1114,6 +1114,104 @@ export function subscribeToFirestoreEvents(
 }
 
 /**
+ * Fetches recent changes from Firestore combining wiki_events and revisions,
+ * deduplicated by revision ID / page timestamp and ordered newest-first.
+ */
+export async function fetchRecentEventsAndRevisionsFromFirestore(
+  limitCount: number = 150
+): Promise<WikiEvent[]> {
+  const byKey = new Map<string, WikiEvent>();
+
+  const upsertEvent = (evt: WikiEvent) => {
+    const key = evt.rev_id
+      ? `rev:${evt.rev_id}`
+      : `evt:${evt.page_title}:${(evt.rev_timestamp || '').slice(0, 16)}`;
+    const existing = byKey.get(key);
+    if (!existing || (!existing.comment && evt.comment)) {
+      byKey.set(key, evt);
+    }
+  };
+
+  try {
+    const [eventsRes, revisionsRes] = await Promise.allSettled([
+      getDocs(query(collection(db, 'wiki_events'), orderBy('rev_timestamp', 'desc'), limit(limitCount))),
+      getDocs(query(collection(db, 'revisions'), orderBy('timestamp', 'desc'), limit(limitCount))),
+    ]);
+
+    if (eventsRes.status === 'fulfilled') {
+      eventsRes.value.forEach(docSnap => {
+        const d = docSnap.data() as any;
+        const pageTitle = String(d.page_title || '').trim();
+        if (!pageTitle) return;
+        const parsed = parseTitle(pageTitle);
+        upsertEvent({
+          id: d.id || docSnap.id,
+          meta: {
+            uri: `https://en.wikipedia.org/wiki/${encodeURIComponent(pageTitle)}`,
+            request_id: `req-${docSnap.id}`,
+            id: docSnap.id,
+            dt: d.rev_timestamp || new Date().toISOString(),
+            domain: 'en.wikipedia.org',
+            stream: 'mediawiki.recentchange',
+          },
+          database: d.database || 'enwiki',
+          page_title: pageTitle,
+          page_namespace:
+            typeof d.page_namespace === 'number' ? d.page_namespace : parsed.namespaceId,
+          rev_id: d.rev_id || docSnap.id,
+          rev_timestamp: d.rev_timestamp || new Date().toISOString(),
+          rev_sha1: d.rev_sha1 || '',
+          rev_minor_edit: Boolean(d.rev_minor_edit),
+          rev_len: Number(d.rev_len || 0),
+          user_text: d.user_text || 'Anônimo',
+          comment: d.comment || '',
+          type: (d.type as WikiEvent['type']) || 'edit',
+        });
+      });
+    }
+
+    if (revisionsRes.status === 'fulfilled') {
+      revisionsRes.value.forEach(docSnap => {
+        const d = docSnap.data() as Revision;
+        const pageTitle = String(d.articleSlug || '').trim();
+        if (!pageTitle) return;
+        const parsed = parseTitle(pageTitle);
+        const revId = d.id || docSnap.id;
+        const ts = d.timestamp || new Date().toISOString();
+        upsertEvent({
+          id: `rev-${revId}`,
+          meta: {
+            uri: `https://en.wikipedia.org/wiki/${encodeURIComponent(pageTitle)}`,
+            request_id: `req-${revId}`,
+            id: revId,
+            dt: ts,
+            domain: 'en.wikipedia.org',
+            stream: 'mediawiki.recentchange',
+          },
+          database: 'enwiki',
+          page_title: pageTitle,
+          page_namespace: parsed.namespaceId,
+          rev_id: revId,
+          rev_timestamp: ts,
+          rev_sha1: (d.sha256 || '').substring(0, 16),
+          rev_minor_edit: Boolean(d.isMinor),
+          rev_len: Number(d.byteSize || (d.wikitext ? d.wikitext.length : 0)),
+          user_text: d.author?.name || d.author?.username || 'Editor',
+          comment: d.comment || '',
+          type: d.parentRevisionId === null ? 'new' : 'edit',
+        });
+      });
+    }
+  } catch (err) {
+    console.warn('Notice: Error fetching recent events/revisions from Firestore:', err);
+  }
+
+  return Array.from(byKey.values())
+    .sort((a, b) => new Date(b.rev_timestamp).getTime() - new Date(a.rev_timestamp).getTime())
+    .slice(0, limitCount);
+}
+
+/**
  * Subscribes to real-time system and microservice logs in Firestore
  */
 export function subscribeToFirestoreLogs(

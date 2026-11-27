@@ -13,6 +13,7 @@ import { UserPageView, UserPageTab } from './components/UserPageView';
 import { ChatDrawer } from './components/ChatDrawer';
 import { DailyChecklistModal } from './components/DailyChecklistModal';
 import { SpecialPagesHub } from './components/SpecialPagesHub';
+import { RecentChangesPage } from './components/RecentChangesPage';
 import { GoogleOneTapPopup } from './components/GoogleOneTapPopup';
 import { PromoVideoStudio } from './components/PromoVideoStudio';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -131,6 +132,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const isHistoryEnabled = isExtensionEnabled ? isExtensionEnabled('DiffLedger', true) : true;
   const isCirrusSearchEnabled = isExtensionEnabled ? isExtensionEnabled('CirrusSearch', true) : true;
   const isSpecialPagesEnabled = isExtensionEnabled ? isExtensionEnabled('SpecialPagesHub', true) : true;
+  const isRecentChangesEnabled = isExtensionEnabled ? isExtensionEnabled('EventStreams', true) : true;
   const isPromoVideoEnabled = isExtensionEnabled ? isExtensionEnabled('PromoVideoStudio', true) : true;
   const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
   const isWikiSeoEnabled = isExtensionEnabled ? isExtensionEnabled('WikiSEO', true) : true;
@@ -172,6 +174,15 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         siteName: brandName,
         description: `Painel oficial dos burocratas e gerenciamento de extensões do ${siteTitle} sincronizado via Firebase.`,
         canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/#/burocratas`,
+        ogType: 'website',
+        jsonLd: null,
+      });
+    } else if (currentView === 'recent_changes') {
+      applyDynamicSeoMeta({
+        title: `Mudanças Recentes — ${brandName}`,
+        siteName: brandName,
+        description: `Registro em tempo real das mudanças recentes, criações de artigos e revisões da enciclopédia ${siteTitle}.`,
+        canonicalUrl: `${PRIMARY_CANONICAL_ORIGIN}/#/mudancas-recentes`,
         ogType: 'website',
         jsonLd: null,
       });
@@ -226,8 +237,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       } else if (hash === '#/random' || hash === '#/aleatorio' || hash === '#/aleatoria') {
         handleRandomArticle();
       } else if (hash === '#/mudancas-recentes' || hash === '#/recent-changes') {
-        setSpecialPageName('RecentChanges');
-        setCurrentView('special');
+        setCurrentView('recent_changes');
       } else if (hash.startsWith('#/wiki/Special:') || hash.startsWith('#/wiki/Especial:')) {
         const rawSpecial = decodeURIComponent(hash.replace('#/wiki/', ''));
         const colonIdx = rawSpecial.indexOf(':');
@@ -241,8 +251,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           setSpecialPageName('Templates');
           setCurrentView('special');
         } else if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
-          setSpecialPageName('RecentChanges');
-          setCurrentView('special');
+          setCurrentView('recent_changes');
         } else if (['exploradordecategorias', 'categoryexplorer', 'exploradorcategorias'].includes(normalized)) {
           setSpecialPageName('CategoryExplorer');
           setCurrentView('special');
@@ -261,8 +270,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           setSpecialPageName('Templates');
           setCurrentView('special');
         } else if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
-          setSpecialPageName('RecentChanges');
-          setCurrentView('special');
+          setCurrentView('recent_changes');
         } else if (['exploradordecategorias', 'categoryexplorer', 'exploradorcategorias'].includes(normalized)) {
           setSpecialPageName('CategoryExplorer');
           setCurrentView('special');
@@ -284,8 +292,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             setSpecialPageName('Templates');
             setCurrentView('special');
           } else if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
-            setSpecialPageName('RecentChanges');
-            setCurrentView('special');
+            setCurrentView('recent_changes');
           } else if (['exploradordecategorias', 'categoryexplorer', 'exploradorcategorias'].includes(normalized)) {
             setSpecialPageName('CategoryExplorer');
             setCurrentView('special');
@@ -492,6 +499,11 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         window.location.hash = '#/burocratas';
         return;
       }
+      if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
+        setCurrentView('recent_changes');
+        window.location.hash = '#/mudancas-recentes';
+        return;
+      }
       setSpecialPageName(spName);
       setCurrentView('special');
       window.location.hash = `#/special/${encodeURIComponent(spName)}`;
@@ -515,6 +527,38 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
     setActiveArticleSlug(slug);
     setCurrentView('history');
     window.location.hash = `#/history/${encodeURIComponent(slug)}`;
+  };
+
+  const handleOpenUserByUsername = (username: string) => {
+    const clean = (username || '').trim();
+    if (!clean) return;
+    fetchUsersFromFirestore().then(users => {
+      const match = users.find(
+        u =>
+          u.username.toLowerCase() === clean.toLowerCase() ||
+          `${u.username}${u.userTag || ''}`.toLowerCase() === clean.toLowerCase()
+      );
+      setSelectedUserForPage(
+        match || {
+          id: clean,
+          username: clean,
+          role: 'editor',
+          editCount: 0,
+          avatar: clean.substring(0, 2).toUpperCase(),
+        }
+      );
+    }).catch(() => {
+      setSelectedUserForPage({
+        id: clean,
+        username: clean,
+        role: 'editor',
+        editCount: 0,
+        avatar: clean.substring(0, 2).toUpperCase(),
+      });
+    });
+    setUserPageInitialTab('contribuicoes');
+    setCurrentView('user_page');
+    window.location.hash = `#/usuario/${encodeURIComponent(clean)}/contribuicoes`;
   };
 
   const handleOpenSearch = (query: string) => {
@@ -696,9 +740,8 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           activeSpecialPage={specialPageName}
           onSelectView={view => {
             if (view === 'recent_changes') {
-              setSpecialPageName('RecentChanges');
-              setCurrentView('special');
-              window.location.hash = '#/special/RecentChanges';
+              setCurrentView('recent_changes');
+              window.location.hash = '#/mudancas-recentes';
               return;
             }
             setCurrentView(view);
@@ -766,6 +809,10 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
               onEditArticle={handleOpenEdit}
               onOpenNewArticle={() => setIsNewArticleModalOpen(true)}
               onRandomArticle={handleRandomArticle}
+              onOpenRecentChanges={() => {
+                setCurrentView('recent_changes');
+                window.location.hash = '#/mudancas-recentes';
+              }}
             />
           </section>
         )}
@@ -860,9 +907,8 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
                 onNavigateArticle={handleNavigateArticle}
                 onOpenHistory={handleOpenHistory}
                 onOpenRecentChanges={() => {
-                  setSpecialPageName('RecentChanges');
-                  setCurrentView('special');
-                  window.location.hash = '#/special/RecentChanges';
+                  setCurrentView('recent_changes');
+                  window.location.hash = '#/mudancas-recentes';
                 }}
                 onOpenSpecialContributions={username => {
                   const target = `Contributions:${username}`;
@@ -1004,6 +1050,41 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           </section>
         )}
 
+        {currentView === 'recent_changes' && (
+          <section role="region" aria-label="Mudanças recentes da enciclopédia">
+            {isRecentChangesEnabled ? (
+              <RecentChangesPage
+                onNavigateArticle={handleNavigateArticle}
+                onOpenHistory={handleOpenHistory}
+                onOpenUser={handleOpenUserByUsername}
+                onOpenSpecialPages={() => {
+                  setSpecialPageName('SpecialPages');
+                  setCurrentView('special');
+                  window.location.hash = '#/special/SpecialPages';
+                }}
+                onOpenCategoryExplorer={() => {
+                  setSpecialPageName('CategoryExplorer');
+                  setCurrentView('special');
+                  window.location.hash = '#/special/CategoryExplorer';
+                }}
+              />
+            ) : (
+              <DisabledExtensionView
+                extensionName="EventStreams"
+                featureLabel="Mudanças Recentes"
+                onGoHome={() => {
+                  setCurrentView('home');
+                  window.location.hash = '#/home';
+                }}
+                onManageExtensions={() => {
+                  setCurrentView('bureaucrats');
+                  window.location.hash = '#/burocratas';
+                }}
+              />
+            )}
+          </section>
+        )}
+
         {currentView === 'special' && (
           <section role="region" aria-label={`Central de páginas especiais: ${specialPageName}`}>
             {isSpecialPagesEnabled ? (
@@ -1013,6 +1094,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
                 onNavigateArticle={handleNavigateArticle}
                 onOpenEdit={handleOpenEdit}
                 onOpenHistory={handleOpenHistory}
+                onOpenUser={handleOpenUserByUsername}
                 onRandomArticle={handleRandomArticle}
               />
             ) : (
@@ -1094,9 +1176,8 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           }}
           onNavigateLgpd={() => handleNavigateArticle(LGPD_INVESTIGATION_SLUG)}
           onNavigateRecentChanges={() => {
-            setSpecialPageName('RecentChanges');
-            setCurrentView('special');
-            window.location.hash = '#/special/RecentChanges';
+            setCurrentView('recent_changes');
+            window.location.hash = '#/mudancas-recentes';
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onNavigateCategories={() => {
