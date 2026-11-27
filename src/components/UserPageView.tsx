@@ -21,8 +21,21 @@ import {
   TrendingUp,
   CheckCircle2,
   BookOpen,
+  History,
+  Clock,
+  FileText,
+  Search,
 } from 'lucide-react';
-import { UserPage, UserSession, UserPageTalkPost, UserBoxItem, UserDailyChecklist, UserMonthlyPointsLedger, UserKarmaProfile } from '../types';
+import {
+  UserPage,
+  UserSession,
+  UserPageTalkPost,
+  UserBoxItem,
+  UserDailyChecklist,
+  UserMonthlyPointsLedger,
+  UserKarmaProfile,
+  UserContributionItem,
+} from '../types';
 import { api } from '../api';
 import { clientParsoid } from '../services/parsoid';
 import { buildInfoboxUserWikitext, hasInfoboxInWikitext } from '../utils/infoboxUser';
@@ -41,25 +54,41 @@ import {
   getCurrentMonthString,
 } from '../firebase';
 
+export type UserPageTab = 'pagina' | 'contribuicoes' | 'tutorial' | 'userboxes' | 'discussao' | 'checklist' | 'karma';
+
 interface UserPageViewProps {
   targetUser: UserSession;
   currentUser: UserSession | null;
+  initialTab?: UserPageTab;
   onBack: () => void;
   onStartChat: (targetUser: UserSession) => void;
+  onNavigateArticle?: (slug: string) => void;
+  onOpenHistory?: (slug: string) => void;
+  onOpenRecentChanges?: () => void;
+  onOpenSpecialContributions?: (username: string) => void;
 }
 
 export const UserPageView: React.FC<UserPageViewProps> = ({
   targetUser,
   currentUser,
+  initialTab = 'pagina',
   onBack,
   onStartChat,
+  onNavigateArticle,
+  onOpenHistory,
+  onOpenRecentChanges,
+  onOpenSpecialContributions,
 }) => {
   const [userPage, setUserPage] = useState<UserPage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pagina' | 'tutorial' | 'userboxes' | 'discussao' | 'checklist' | 'karma'>('pagina');
+  const [activeTab, setActiveTab] = useState<UserPageTab>(initialTab);
   const [dailyChecklist, setDailyChecklist] = useState<UserDailyChecklist | null>(null);
   const [monthlyLedger, setMonthlyLedger] = useState<UserMonthlyPointsLedger | null>(null);
   const [karmaProfile, setKarmaProfile] = useState<UserKarmaProfile | null>(null);
+  const [contributions, setContributions] = useState<UserContributionItem[]>([]);
+  const [isLoadingContributions, setIsLoadingContributions] = useState<boolean>(true);
+  const [contribQuery, setContribQuery] = useState<string>('');
+  const [contribFilterMode, setContribFilterMode] = useState<'all' | 'major' | 'new'>('all');
 
   // Edit Mode
   const [isEditing, setIsEditing] = useState(false);
@@ -139,6 +168,21 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
       if (isMounted && profile) setKarmaProfile(profile);
     });
 
+    // 5. Fetch user's contributions (revisions, WikiEvents & edited pages)
+    setIsLoadingContributions(true);
+    api
+      .getUserContributions(targetUser)
+      .then(items => {
+        if (isMounted) {
+          setContributions(items);
+          setIsLoadingContributions(false);
+        }
+      })
+      .catch(err => {
+        console.warn('Notice: Error fetching user contributions:', err);
+        if (isMounted) setIsLoadingContributions(false);
+      });
+
     return () => {
       isMounted = false;
       unsubscribe();
@@ -147,6 +191,42 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
       unsubKarma();
     };
   }, [targetUser.id, targetUser.username]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab, targetUser.id]);
+
+  const navigateToArticle = (slug: string) => {
+    if (onNavigateArticle) {
+      onNavigateArticle(slug);
+    } else if (typeof window !== 'undefined') {
+      window.location.hash = `#/wiki/${encodeURIComponent(slug)}`;
+    }
+  };
+
+  const navigateToHistory = (slug: string) => {
+    if (onOpenHistory) {
+      onOpenHistory(slug);
+    } else if (typeof window !== 'undefined') {
+      window.location.hash = `#/history/${encodeURIComponent(slug)}`;
+    }
+  };
+
+  const navigateToRecentChanges = () => {
+    if (onOpenRecentChanges) {
+      onOpenRecentChanges();
+    } else if (typeof window !== 'undefined') {
+      window.location.hash = '#/special/RecentChanges';
+    }
+  };
+
+  const navigateToSpecialContributions = () => {
+    if (onOpenSpecialContributions) {
+      onOpenSpecialContributions(targetUser.username);
+    } else if (typeof window !== 'undefined') {
+      window.location.hash = `#/special/${encodeURIComponent(`Contributions:${targetUser.username}`)}`;
+    }
+  };
 
   const handleSavePage = async () => {
     if (!userPage) return;
@@ -216,14 +296,43 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Navigation & Header Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Voltar ao Leitor</span>
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Voltar ao Leitor</span>
+          </button>
+
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+
+          <a
+            href="#/special/RecentChanges"
+            onClick={e => {
+              e.preventDefault();
+              navigateToRecentChanges();
+            }}
+            data-testid="userpage-recent-changes-link"
+            className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap cursor-pointer"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Mudanças Recentes</span>
+          </a>
+
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('contribuicoes')}
+            data-testid="userpage-quick-contributions-btn"
+            className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Contribuições do Usuário ({contributions.length})</span>
+          </button>
+        </div>
 
         <div className="flex items-center gap-2">
           {!isOwner && (
@@ -349,6 +458,18 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
             }`}
           >
             Página de Usuário (Wikitext)
+          </button>
+          <button
+            onClick={() => setActiveTab('contribuicoes')}
+            data-testid="userpage-tab-contribuicoes"
+            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'contribuicoes'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <History className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Contribuições ({contributions.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('karma')}
@@ -493,6 +614,85 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
                     className="wiki-content text-justify max-w-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden"
                     dangerouslySetInnerHTML={{ __html: parsedHtml }}
                   />
+                  {/* Summary of User Contributions & Recent Changes link directly visible on user profile */}
+                  <div
+                    data-testid="userpage-contributions-summary"
+                    className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-4 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <History className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                          Últimas Contribuições de {targetUser.username}
+                        </h3>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('contribuicoes')}
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer whitespace-nowrap"
+                        >
+                          Ver todas ({contributions.length}) →
+                        </button>
+                        <a
+                          href="#/special/RecentChanges"
+                          onClick={e => {
+                            e.preventDefault();
+                            navigateToRecentChanges();
+                          }}
+                          className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 whitespace-nowrap"
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Mudanças Recentes</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    {isLoadingContributions ? (
+                      <div className="text-xs text-slate-400 py-2">
+                        Carregando contribuições registradas...
+                      </div>
+                    ) : contributions.length === 0 ? (
+                      <div className="text-xs text-slate-500 dark:text-slate-400 py-1">
+                        Nenhuma revisão pública registrada ainda para {targetUser.username}.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {contributions.slice(0, 5).map(item => (
+                          <div
+                            key={item.id}
+                            className="py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              <span className="text-[11px] font-mono tabular-nums text-slate-400 shrink-0">
+                                {new Date(item.timestamp).toLocaleDateString('pt-BR')}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => navigateToArticle(item.articleSlug)}
+                                className="font-semibold text-blue-700 dark:text-blue-400 hover:underline truncate cursor-pointer text-left"
+                              >
+                                {item.articleTitle}
+                              </button>
+                              {item.comment && (
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 italic truncate max-w-md">
+                                  ({item.comment})
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => navigateToHistory(item.articleSlug)}
+                              className="text-[11px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:underline shrink-0 cursor-pointer self-start sm:self-auto"
+                            >
+                              histórico
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/60 px-3.5 py-2.5 rounded-lg">
                     <span>
                       Quer personalizar seu cartão de identificação <strong>Infobox de Usuário</strong> ou usar <strong>Infobox Software</strong> nos artigos?
@@ -506,6 +706,216 @@ export const UserPageView: React.FC<UserPageViewProps> = ({
                       <span>Abrir Tutorial de Infobox →</span>
                     </button>
                   </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Tab: Contribuições do Usuário */}
+        {activeTab === 'contribuicoes' && (() => {
+          const normalizedQuery = contribQuery.trim().toLowerCase();
+          const filteredContribs = contributions.filter(item => {
+            if (contribFilterMode === 'major' && item.isMinor) return false;
+            if (contribFilterMode === 'new' && !item.isNewPage) return false;
+            if (!normalizedQuery) return true;
+            return (
+              item.articleTitle.toLowerCase().includes(normalizedQuery) ||
+              item.articleSlug.toLowerCase().includes(normalizedQuery) ||
+              item.comment.toLowerCase().includes(normalizedQuery)
+            );
+          });
+          const distinctPagesCount = new Set(contributions.map(c => c.articleSlug)).size;
+          const newPagesCount = contributions.filter(c => c.isNewPage).length;
+
+          return (
+            <div data-testid="userpage-contributions-panel" className="space-y-4 pt-2">
+              {/* Top Header & Quick Wiki Links */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <History className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Contribuições de {targetUser.username}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Histórico completo de revisões, criações de artigos e resumos de edição vinculados à conta {tagDisplay}.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <a
+                    href="#/special/RecentChanges"
+                    onClick={e => {
+                      e.preventDefault();
+                      navigateToRecentChanges();
+                    }}
+                    className="px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/60 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Mudanças Recentes</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={navigateToSpecialContributions}
+                    className="px-3 py-1.5 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Especial:Contribuições</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Metrics Strip */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                    Revisões Registradas
+                  </span>
+                  <strong className="text-xl font-mono tabular-nums font-bold text-slate-900 dark:text-slate-100">
+                    {contributions.length}
+                  </strong>
+                </div>
+                <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                    Páginas Distintas Editadas
+                  </span>
+                  <strong className="text-xl font-mono tabular-nums font-bold text-blue-600 dark:text-blue-400">
+                    {distinctPagesCount}
+                  </strong>
+                </div>
+                <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                    Novas Páginas Criadas
+                  </span>
+                  <strong className="text-xl font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
+                    {newPagesCount}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Filter Toolbar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 text-xs">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={contribQuery}
+                    onChange={e => setContribQuery(e.target.value)}
+                    placeholder="Filtrar por artigo ou comentário de edição..."
+                    aria-label="Filtrar contribuições do usuário"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-800 dark:text-slate-200"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {(
+                    [
+                      { id: 'all', label: 'Todas' },
+                      { id: 'major', label: 'Principais' },
+                      { id: 'new', label: 'Páginas novas' },
+                    ] as const
+                  ).map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setContribFilterMode(opt.id)}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                        contribFilterMode === opt.id
+                          ? 'bg-slate-900 dark:bg-blue-600 text-white'
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Contributions List */}
+              {isLoadingContributions ? (
+                <div className="py-10 text-center text-xs text-slate-400">
+                  Carregando histórico de contribuições de {targetUser.username}...
+                </div>
+              ) : filteredContribs.length === 0 ? (
+                <div className="py-10 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
+                  {contributions.length === 0
+                    ? `Nenhuma contribuição registrada até o momento para ${targetUser.username}.`
+                    : 'Nenhuma contribuição corresponde ao filtro selecionado.'}
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+                  {filteredContribs.map(item => (
+                    <div
+                      key={item.id}
+                      className="p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
+                    >
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                            {new Date(item.timestamp).toLocaleDateString('pt-BR')}{' '}
+                            {new Date(item.timestamp).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+
+                          {item.isNewPage && (
+                            <span
+                              className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                              title="Criação de nova página"
+                            >
+                              N
+                            </span>
+                          )}
+
+                          {item.isMinor && (
+                            <span
+                              className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                              title="Edição menor"
+                            >
+                              m
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => navigateToArticle(item.articleSlug)}
+                            className="font-bold text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left"
+                          >
+                            <FileText className="w-3.5 h-3.5 shrink-0" />
+                            <span>{item.articleTitle}</span>
+                          </button>
+
+                          <span className="text-[11px] font-mono tabular-nums text-slate-400">
+                            ({item.byteSize.toLocaleString('pt-BR')} B)
+                          </span>
+                        </div>
+
+                        {item.comment && (
+                          <div className="text-[11px] text-slate-600 dark:text-slate-400 italic">
+                            Resumo: &ldquo;{item.comment}&rdquo;
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => navigateToHistory(item.articleSlug)}
+                          className="px-2 py-1 rounded text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer whitespace-nowrap"
+                        >
+                          Histórico
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigateToArticle(item.articleSlug)}
+                          className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-800 dark:text-slate-200 font-medium cursor-pointer whitespace-nowrap transition-colors"
+                        >
+                          Abrir artigo
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

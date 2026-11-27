@@ -13,6 +13,7 @@ import {
   Hash,
   Zap,
   ThumbsUp,
+  History,
 } from 'lucide-react';
 import { UserSession, UserRole } from '../types';
 import { fetchUsersFromFirestore, subscribeToFirestoreUsers } from '../firebase';
@@ -20,12 +21,14 @@ import { fetchUsersFromFirestore, subscribeToFirestoreUsers } from '../firebase'
 interface UserDirectoryProps {
   currentUser: UserSession | null;
   onOpenUserPage: (user: UserSession) => void;
+  onOpenUserContributions?: (user: UserSession) => void;
   onStartChatWithUser: (targetUser: UserSession) => void;
 }
 
 export const UserDirectory: React.FC<UserDirectoryProps> = ({
   currentUser,
   onOpenUserPage,
+  onOpenUserContributions,
   onStartChatWithUser,
 }) => {
   const [users, setUsers] = useState<UserSession[]>([]);
@@ -290,6 +293,20 @@ export const UserDirectory: React.FC<UserDirectoryProps> = ({
                   >
                     <ExternalLink className="w-3 h-3 text-slate-400" />
                     <span>Página Pessoal</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenUserContributions
+                        ? onOpenUserContributions(user)
+                        : onOpenUserPage(user)
+                    }
+                    className="py-1.5 px-2.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
+                    title={`Ver contribuições de ${user.username}`}
+                  >
+                    <History className="w-3 h-3" />
+                    <span>Contribuições</span>
                   </button>
 
                   {!isMe && (

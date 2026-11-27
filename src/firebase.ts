@@ -61,6 +61,7 @@ import {
   ArticleVote,
   ArticleVoteSummary,
   UserKarmaProfile,
+  UserContributionItem,
 } from './types';
 import { DEFAULT_EXTENSIONS } from './data/defaultExtensions';
 import { api } from './api';
@@ -923,6 +924,146 @@ export async function fetchRevisionsFromFirestore(slug: string): Promise<Revisio
     console.warn(`Error fetching revisions for ${slug} from Firestore:`, err);
     return [];
   }
+}
+
+/**
+ * Fetches all contributions (revisions + wiki_events + fallback articles) by a user from Firestore
+ */
+export async function fetchUserContributionsFromFirestore(
+  targetUser: Pick<UserSession, 'id' | 'username' | 'userTag'>
+): Promise<UserContributionItem[]> {
+  const byKey = new Map<string, UserContributionItem>();
+  const cleanName = (targetUser.username || '').trim();
+  const nameWithTag = targetUser.userTag ? `${cleanName}${targetUser.userTag}` : cleanName;
+  const candidateNames = new Set(
+    [cleanName, nameWithTag, targetUser.id]
+      .map(s => (s || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const upsert = (item: UserContributionItem) => {
+    const key = item.revisionId
+      ? `rev:${item.revisionId}`
+      : `art:${item.articleSlug}:${item.timestamp.slice(0, 16)}`;
+    const existing = byKey.get(key);
+    if (!existing || (existing.source !== 'revision' && item.source === 'revision')) {
+      byKey.set(key, item);
+    }
+  };
+
+  try {
+    const revQueries = [
+      query(collection(db, 'revisions'), where('authorUid', '==', targetUser.id), limit(100)),
+      query(collection(db, 'revisions'), where('author.id', '==', targetUser.id), limit(100)),
+      ...(cleanName
+        ? [query(collection(db, 'revisions'), where('author.name', '==', cleanName), limit(100))]
+        : []),
+    ];
+
+    const revResults = await Promise.allSettled(revQueries.map(q => getDocs(q)));
+    for (const res of revResults) {
+      if (res.status !== 'fulfilled') continue;
+      res.value.forEach(docSnap => {
+        const d = docSnap.data() as Revision & { authorUid?: string };
+        const parsed = parseTitle(d.articleSlug || '');
+        upsert({
+          id: docSnap.id,
+          revisionId: d.id || docSnap.id,
+          articleSlug: d.articleSlug || '',
+          articleTitle: (d.articleSlug || '').replace(/_/g, ' '),
+          namespace: parsed.namespaceId,
+          comment: d.comment || '',
+          timestamp: d.timestamp || new Date().toISOString(),
+          byteSize: Number(d.byteSize || (d.wikitext ? d.wikitext.length : 0)),
+          isMinor: Boolean(d.isMinor),
+          isNewPage: d.parentRevisionId === null,
+          authorName: d.author?.name || d.author?.username || cleanName || targetUser.id,
+          source: 'revision',
+        });
+      });
+    }
+  } catch (err) {
+    console.warn(`Notice: Error fetching user revisions for ${targetUser.id}:`, err);
+  }
+
+  try {
+    const eventQueries = [
+      ...(cleanName
+        ? [query(collection(db, 'wiki_events'), where('user_text', '==', cleanName), limit(100))]
+        : []),
+      ...(nameWithTag && nameWithTag !== cleanName
+        ? [query(collection(db, 'wiki_events'), where('user_text', '==', nameWithTag), limit(100))]
+        : []),
+    ];
+    const eventResults = await Promise.allSettled(eventQueries.map(q => getDocs(q)));
+    for (const res of eventResults) {
+      if (res.status !== 'fulfilled') continue;
+      res.value.forEach(docSnap => {
+        const d = docSnap.data() as any;
+        const slug = String(d.page_title || '').trim();
+        if (!slug) return;
+        const parsed = parseTitle(slug);
+        upsert({
+          id: d.id || docSnap.id,
+          revisionId: d.rev_id || d.id || docSnap.id,
+          articleSlug: slug,
+          articleTitle: slug.replace(/_/g, ' '),
+          namespace: typeof d.page_namespace === 'number' ? d.page_namespace : parsed.namespaceId,
+          comment: d.comment || '',
+          timestamp: d.rev_timestamp || new Date().toISOString(),
+          byteSize: Number(d.rev_len || 0),
+          isMinor: Boolean(d.rev_minor_edit),
+          isNewPage: d.type === 'new',
+          authorName: d.user_text || cleanName || targetUser.id,
+          source: 'event',
+        });
+      });
+    }
+  } catch (err) {
+    console.warn(`Notice: Error fetching user wiki_events for ${targetUser.id}:`, err);
+  }
+
+  try {
+    const artQueries = [
+      query(collection(db, 'articles'), where('lastEditedByUid', '==', targetUser.id), limit(60)),
+      ...(cleanName
+        ? [query(collection(db, 'articles'), where('lastEditedBy', '==', cleanName), limit(60))]
+        : []),
+    ];
+    const artResults = await Promise.allSettled(artQueries.map(q => getDocs(q)));
+    for (const res of artResults) {
+      if (res.status !== 'fulfilled') continue;
+      res.value.forEach(docSnap => {
+        const d = docSnap.data() as Article & { lastEditedBy?: string; lastEditedByUid?: string };
+        const revId = d.latestRevisionId || `art-${d.slug}`;
+        const authorCandidate = (d.lastEditedBy || '').trim().toLowerCase();
+        if (d.lastEditedByUid !== targetUser.id && !candidateNames.has(authorCandidate)) {
+          return;
+        }
+        const parsed = parseTitle(d.slug || d.title || '');
+        upsert({
+          id: `art-${d.slug}-${revId}`,
+          revisionId: revId,
+          articleSlug: d.slug,
+          articleTitle: d.title || d.slug.replace(/_/g, ' '),
+          namespace: typeof d.namespace === 'number' ? d.namespace : parsed.namespaceId,
+          comment: d.summary || 'Última edição registrada',
+          timestamp: d.updatedAt || d.createdAt || new Date().toISOString(),
+          byteSize: (d.wikitext || '').length,
+          isMinor: false,
+          isNewPage: false,
+          authorName: d.lastEditedBy || cleanName || targetUser.id,
+          source: 'article',
+        });
+      });
+    }
+  } catch (err) {
+    console.warn(`Notice: Error fetching user edited articles for ${targetUser.id}:`, err);
+  }
+
+  return Array.from(byKey.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 }
 
 /**

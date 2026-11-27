@@ -9,7 +9,7 @@ import { ArticleHistory } from './components/ArticleHistory';
 import { SearchResults } from './components/SearchResults';
 import { NewArticleModal } from './components/NewArticleModal';
 import { UserDirectory } from './components/UserDirectory';
-import { UserPageView } from './components/UserPageView';
+import { UserPageView, UserPageTab } from './components/UserPageView';
 import { ChatDrawer } from './components/ChatDrawer';
 import { DailyChecklistModal } from './components/DailyChecklistModal';
 import { SpecialPagesHub } from './components/SpecialPagesHub';
@@ -82,6 +82,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
   const [currentView, setCurrentView] = useState<string>('home');
   const [activeArticleSlug, setActiveArticleSlug] = useState<string>('MediaWiki');
   const [specialPageName, setSpecialPageName] = useState<string>('SpecialPages');
+  const [userPageInitialTab, setUserPageInitialTab] = useState<UserPageTab>('pagina');
   const [activePortal, setActivePortal] = useState<'livros' | 'universitario' | 'jornal'>('livros');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isNewArticleModalOpen, setIsNewArticleModalOpen] = useState(false);
@@ -224,32 +225,46 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         setCurrentView('home');
       } else if (hash === '#/random' || hash === '#/aleatorio' || hash === '#/aleatoria') {
         handleRandomArticle();
+      } else if (hash === '#/mudancas-recentes' || hash === '#/recent-changes') {
+        setSpecialPageName('RecentChanges');
+        setCurrentView('special');
       } else if (hash.startsWith('#/wiki/Special:') || hash.startsWith('#/wiki/Especial:')) {
         const rawSpecial = decodeURIComponent(hash.replace('#/wiki/', ''));
         const colonIdx = rawSpecial.indexOf(':');
         const spName = colonIdx >= 0 ? rawSpecial.substring(colonIdx + 1) : 'SpecialPages';
-        const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const normalized = spName.toLowerCase().replace(/[\s_-]+/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
           handleRandomArticle();
         } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
           setCurrentView('bureaucrats');
         } else if (['predefinicoes', 'predefinicao', 'templates', 'template'].includes(normalized)) {
           setSpecialPageName('Templates');
+          setCurrentView('special');
+        } else if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
+          setSpecialPageName('RecentChanges');
+          setCurrentView('special');
+        } else if (['exploradordecategorias', 'categoryexplorer', 'exploradorcategorias'].includes(normalized)) {
+          setSpecialPageName('CategoryExplorer');
           setCurrentView('special');
         } else {
           setSpecialPageName(spName);
           setCurrentView('special');
         }
       } else if (hash === '#/special' || hash === '#/especial' || hash.startsWith('#/special/') || hash.startsWith('#/especial/')) {
-        const parts = hash.split('/');
-        const spName = parts[2] ? decodeURIComponent(parts[2]) : 'SpecialPages';
-        const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const spName = decodeURIComponent(hash.replace(/^#\/(?:special|especial)\/?/i, '')) || 'SpecialPages';
+        const normalized = spName.toLowerCase().replace(/[\s_-]+/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
           handleRandomArticle();
         } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
           setCurrentView('bureaucrats');
         } else if (['predefinicoes', 'predefinicao', 'templates', 'template'].includes(normalized)) {
           setSpecialPageName('Templates');
+          setCurrentView('special');
+        } else if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
+          setSpecialPageName('RecentChanges');
+          setCurrentView('special');
+        } else if (['exploradordecategorias', 'categoryexplorer', 'exploradorcategorias'].includes(normalized)) {
+          setSpecialPageName('CategoryExplorer');
           setCurrentView('special');
         } else {
           setSpecialPageName(spName);
@@ -260,13 +275,19 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
         if (slug.startsWith('Special:') || slug.startsWith('Especial:')) {
           const colonIdx = slug.indexOf(':');
           const spName = colonIdx >= 0 ? slug.substring(colonIdx + 1) : 'SpecialPages';
-          const normalized = spName.toLowerCase().replace(/_/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const normalized = spName.toLowerCase().replace(/[\s_-]+/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (['random', 'paginaaleatoria', 'aleatoria', 'aleatorio'].includes(normalized)) {
             handleRandomArticle();
           } else if (['burocratas', 'bureaucrats', 'burocrata'].includes(normalized)) {
             setCurrentView('bureaucrats');
           } else if (['predefinicoes', 'predefinicao', 'templates', 'template'].includes(normalized)) {
             setSpecialPageName('Templates');
+            setCurrentView('special');
+          } else if (['mudancasrecentes', 'recentchanges'].includes(normalized)) {
+            setSpecialPageName('RecentChanges');
+            setCurrentView('special');
+          } else if (['exploradordecategorias', 'categoryexplorer', 'exploradorcategorias'].includes(normalized)) {
+            setSpecialPageName('CategoryExplorer');
             setCurrentView('special');
           } else {
             setSpecialPageName(spName);
@@ -338,9 +359,17 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       } else if (hash === '#/usuarios' || hash === '#/directory') {
         setCurrentView('directory');
       } else if (hash === '#/minha-pagina') {
+        setUserPageInitialTab('pagina');
         setCurrentView('user_page');
       } else if (hash.startsWith('#/usuario/')) {
-        const usernameQuery = decodeURIComponent(hash.replace('#/usuario/', ''));
+        const rawUserPath = hash.replace('#/usuario/', '');
+        const [rawUserPart, rawQueryPart] = rawUserPath.split('?');
+        const hasContribsSuffix = /\/contribuicoes$/i.test(rawUserPart);
+        const cleanUserPart = rawUserPart.replace(/\/contribuicoes$/i, '');
+        const wantsContribsTab =
+          hasContribsSuffix || (rawQueryPart && rawQueryPart.includes('tab=contribuicoes'));
+        setUserPageInitialTab(wantsContribsTab ? 'contribuicoes' : 'pagina');
+        const usernameQuery = decodeURIComponent(cleanUserPart);
         fetchUsersFromFirestore().then(allUsers => {
           const match = allUsers.find(
             u =>
@@ -664,7 +693,14 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
       {!(isZenMode && currentView === 'reader') && (
         <Header
           currentView={currentView}
+          activeSpecialPage={specialPageName}
           onSelectView={view => {
+            if (view === 'recent_changes') {
+              setSpecialPageName('RecentChanges');
+              setCurrentView('special');
+              window.location.hash = '#/special/RecentChanges';
+              return;
+            }
             setCurrentView(view);
             if (view === 'home') {
               window.location.hash = '#/home';
@@ -698,6 +734,7 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
           onOpenMyUserPage={() => {
             if (currentUser) {
               setSelectedUserForPage(currentUser);
+              setUserPageInitialTab('pagina');
               setCurrentView('user_page');
               window.location.hash = '#/minha-pagina';
             }
@@ -768,8 +805,15 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
                 currentUser={currentUser}
                 onOpenUserPage={user => {
                   setSelectedUserForPage(user);
+                  setUserPageInitialTab('pagina');
                   setCurrentView('user_page');
                   window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}`;
+                }}
+                onOpenUserContributions={user => {
+                  setSelectedUserForPage(user);
+                  setUserPageInitialTab('contribuicoes');
+                  setCurrentView('user_page');
+                  window.location.hash = `#/usuario/${encodeURIComponent(user.username + (user.userTag || ''))}/contribuicoes`;
                 }}
                 onStartChatWithUser={user => {
                   if (!isCommunityChatEnabled) return;
@@ -808,9 +852,23 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
                   email: 'mafersao1100@gmail.com',
                 }}
                 currentUser={currentUser}
+                initialTab={userPageInitialTab}
                 onBack={() => {
                   setCurrentView('reader');
                   window.location.hash = `#/wiki/${encodeURIComponent(activeArticleSlug)}`;
+                }}
+                onNavigateArticle={handleNavigateArticle}
+                onOpenHistory={handleOpenHistory}
+                onOpenRecentChanges={() => {
+                  setSpecialPageName('RecentChanges');
+                  setCurrentView('special');
+                  window.location.hash = '#/special/RecentChanges';
+                }}
+                onOpenSpecialContributions={username => {
+                  const target = `Contributions:${username}`;
+                  setSpecialPageName(target);
+                  setCurrentView('special');
+                  window.location.hash = `#/special/${encodeURIComponent(target)}`;
                 }}
                 onStartChat={user => {
                   if (!isCommunityChatEnabled) return;
@@ -1035,6 +1093,18 @@ const WikiAppShell: React.FC<WikiAppShellProps> = ({ currentUser, setCurrentUser
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onNavigateLgpd={() => handleNavigateArticle(LGPD_INVESTIGATION_SLUG)}
+          onNavigateRecentChanges={() => {
+            setSpecialPageName('RecentChanges');
+            setCurrentView('special');
+            window.location.hash = '#/special/RecentChanges';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onNavigateCategories={() => {
+            setSpecialPageName('CategoryExplorer');
+            setCurrentView('special');
+            window.location.hash = '#/special/CategoryExplorer';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           deviceMode={deviceMode}
           onChangeDeviceMode={setDeviceMode}
           onOpenAppOptions={() => setIsAppModalOpen(true)}

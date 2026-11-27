@@ -9,6 +9,8 @@ export type FooterDeviceMode = 'auto' | 'mobile' | 'desktop' | 'tv';
 export interface WikiFooterProps {
   onNavigateHome: () => void;
   onNavigateLgpd: () => void;
+  onNavigateRecentChanges?: () => void;
+  onNavigateCategories?: () => void;
   deviceMode?: FooterDeviceMode;
   onChangeDeviceMode?: (mode: FooterDeviceMode) => void;
   onOpenAppOptions?: () => void;
@@ -17,6 +19,8 @@ export interface WikiFooterProps {
 export const WikiFooter: React.FC<WikiFooterProps> = ({
   onNavigateHome,
   onNavigateLgpd,
+  onNavigateRecentChanges,
+  onNavigateCategories,
   deviceMode: controlledDeviceMode,
   onChangeDeviceMode,
   onOpenAppOptions,
@@ -218,7 +222,41 @@ export const WikiFooter: React.FC<WikiFooterProps> = ({
 
         {/* Licenses, Legal Compliance & 88x31 Classic Web Badges */}
         <div className="pt-3 border-t border-slate-200 dark:border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center md:text-left text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+          <div className="space-y-1.5 text-center md:text-left text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 text-[11px] font-sans">
+              <a
+                href="#/special/RecentChanges"
+                onClick={e => {
+                  if (onNavigateRecentChanges) {
+                    e.preventDefault();
+                    onNavigateRecentChanges();
+                  }
+                }}
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium whitespace-nowrap"
+              >
+                Mudanças Recentes
+              </a>
+              <span className="text-slate-300 dark:text-slate-700">·</span>
+              <a
+                href="#/special/CategoryExplorer"
+                onClick={e => {
+                  if (onNavigateCategories) {
+                    e.preventDefault();
+                    onNavigateCategories();
+                  }
+                }}
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium whitespace-nowrap"
+              >
+                Explorador de Categorias
+              </a>
+              <span className="text-slate-300 dark:text-slate-700">·</span>
+              <a
+                href="#/special/SpecialPages"
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium whitespace-nowrap"
+              >
+                Páginas Especiais
+              </a>
+            </div>
             <p>
               O texto está disponível sob a licença{' '}
               <a

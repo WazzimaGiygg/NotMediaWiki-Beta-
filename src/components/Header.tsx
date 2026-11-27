@@ -61,6 +61,7 @@ interface HeaderProps {
   onOpenSearch: (query: string) => void;
   onOpenNewArticle: () => void;
   activeArticleSlug: string;
+  activeSpecialPage?: string;
   readingProgress?: number;
   onOpenChat?: () => void;
   onOpenDirectory?: () => void;
@@ -79,6 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   onOpenNewArticle,
   activeArticleSlug,
+  activeSpecialPage,
   readingProgress,
   onOpenChat,
   onOpenDirectory,
@@ -134,6 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isChatEnabled = isExtensionEnabled ? isExtensionEnabled('CommunityChat', true) : true;
   const isDirectoryEnabled = isExtensionEnabled ? isExtensionEnabled('UserDirectoryProfiles', true) : true;
   const isSpecialPagesEnabled = isExtensionEnabled ? isExtensionEnabled('SpecialPagesHub', true) : true;
+  const isRecentChangesEnabled = isExtensionEnabled ? isExtensionEnabled('EventStreams', true) : true;
   const isPromoStudioEnabled = isExtensionEnabled ? isExtensionEnabled('PromoVideoStudio', true) : true;
   const isPwaEnabled = isExtensionEnabled ? isExtensionEnabled('PwaMobileDesktopApp', true) : true;
   const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
@@ -616,6 +619,9 @@ export const Header: React.FC<HeaderProps> = ({
   const navItems = [
     { id: 'home', label: 'Página Inicial (Início)' },
     { id: 'reader', label: 'Artigos (Reader)' },
+    ...(isSpecialPagesEnabled && isRecentChangesEnabled
+      ? [{ id: 'recent_changes', label: 'Mudanças Recentes' }]
+      : []),
     ...(isSpecialPagesEnabled ? [{ id: 'special', label: 'Páginas Especiais' }] : []),
     ...(isDirectoryEnabled ? [{ id: 'directory', label: 'Diretório de Usuários' }] : []),
     { id: 'bureaucrats', label: 'Burocratas' },
@@ -1657,11 +1663,19 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto no-scrollbar py-1">
           <nav className="flex items-center gap-1">
             {navItems.map(item => {
-              const isActive = currentView === item.id || (item.id === 'reader' && currentView === 'history');
+              const isRecentChangesActive =
+                currentView === 'special' && activeSpecialPage === 'RecentChanges';
+              const isActive =
+                item.id === 'recent_changes'
+                  ? isRecentChangesActive
+                  : item.id === 'special'
+                    ? currentView === 'special' && !isRecentChangesActive
+                    : currentView === item.id || (item.id === 'reader' && currentView === 'history');
               return (
                 <button
                   key={item.id}
                   onClick={() => onSelectView(item.id)}
+                  data-testid={`nav-item-${item.id}`}
                   className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${
                     isActive
                       ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-2xs'

@@ -36,10 +36,55 @@ import { MEDIAWIKI_NAMESPACES, getAvailableNamespaces, parseTitle } from '../uti
 import { generateMediaWikiXmlDump, parseMediaWikiXmlDump } from '../utils/wikiXmlDump';
 import { parseSemanticFacts, SemanticPageData } from '../utils/semanticParser';
 import { CategoryTreeView } from './CategoryTreeView';
+import { CategoryExplorer } from './CategoryExplorer';
 import { BUILTIN_MEDIAWIKI_TEMPLATES, TEMPLATE_CATEGORY_LABELS } from '../data/defaultTemplates';
 import { TEMPLATE_EXAMPLE_SLUG } from '../data/templateExampleArticle';
 import { extractTemplateDeclaredParams } from '../utils/templateEngine';
 import { useExtensions } from '../context/ExtensionsContext';
+
+function resolveSpecialPageTarget(raw?: string): { page: string; contribFilter?: string } {
+  const value = (raw || 'SpecialPages').trim();
+  const contribMatch = value.match(/^(?:Contributions|Contribuições|Contribuicoes)[:/](.+)$/i);
+  if (contribMatch) {
+    return { page: 'Contributions', contribFilter: contribMatch[1].trim() };
+  }
+
+  const normalized = value
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const map: Record<string, string> = {
+    specialpages: 'SpecialPages',
+    paginasespeciais: 'SpecialPages',
+    recentchanges: 'RecentChanges',
+    mudancasrecentes: 'RecentChanges',
+    allpages: 'AllPages',
+    todasaspaginas: 'AllPages',
+    templates: 'Templates',
+    predefinicoes: 'Templates',
+    predefinicao: 'Templates',
+    categoryexplorer: 'CategoryExplorer',
+    exploradordecategorias: 'CategoryExplorer',
+    exploradorcategorias: 'CategoryExplorer',
+    categories: 'Categories',
+    categorias: 'Categories',
+    arvoredecategorias: 'Categories',
+    semanticdata: 'SemanticData',
+    dadosestruturados: 'SemanticData',
+    whatlinkshere: 'WhatLinksHere',
+    paginasafluentes: 'WhatLinksHere',
+    contributions: 'Contributions',
+    contribuicoes: 'Contributions',
+    import: 'Import',
+    importar: 'Import',
+    watchlist: 'Watchlist',
+    paginasvigiadas: 'Watchlist',
+  };
+
+  return { page: map[normalized] || value || 'SpecialPages' };
+}
 
 interface SpecialPagesHubProps {
   initialSpecialPage?: string;
@@ -66,7 +111,8 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   const isRecentChangesEnabled = isExtensionEnabled ? isExtensionEnabled('EventStreams', true) : true;
   const isRandomEnabled = isExtensionEnabled ? isExtensionEnabled('RandomArticle', true) : true;
 
-  const [activePage, setActivePage] = useState<string>(initialSpecialPage);
+  const initialResolved = resolveSpecialPageTarget(initialSpecialPage);
+  const [activePage, setActivePage] = useState<string>(initialResolved.page);
   const [articles, setArticles] = useState<Article[]>([]);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [events, setEvents] = useState<WikiEvent[]>([]);
@@ -85,7 +131,7 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   const [whatLinksTarget, setWhatLinksTarget] = useState<string>('MediaWiki');
 
   // Contributions state
-  const [contribUser, setContribUser] = useState<string>('');
+  const [contribUser, setContribUser] = useState<string>(initialResolved.contribFilter || '');
 
   // XML Import state
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
@@ -106,7 +152,11 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
   }, [currentUser?.id]);
 
   useEffect(() => {
-    setActivePage(initialSpecialPage);
+    const resolved = resolveSpecialPageTarget(initialSpecialPage);
+    setActivePage(resolved.page);
+    if (resolved.contribFilter !== undefined) {
+      setContribUser(resolved.contribFilter);
+    }
   }, [initialSpecialPage]);
 
   useEffect(() => {
@@ -289,6 +339,7 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
             { id: 'RecentChanges', label: 'Mudanças Recentes (RecentChanges)', icon: Clock, visible: isRecentChangesEnabled },
             { id: 'AllPages', label: 'Todas as Páginas (AllPages)', icon: FileText, visible: true },
             { id: 'Templates', label: 'Predefinições (Templates)', icon: Blocks, visible: isTemplatesEnabled },
+            { id: 'CategoryExplorer', label: 'Explorador de Categorias', icon: Tag, visible: isCategoriesEnabled },
             { id: 'Categories', label: 'Árvore de Categorias', icon: FolderTree, visible: isCategoriesEnabled },
             { id: 'SemanticData', label: 'Dados Estruturados (SMW / Cargo)', icon: Database, visible: isCargoEnabled },
             { id: 'WhatLinksHere', label: 'Páginas afluentes (WhatLinksHere)', icon: Link2, visible: true },
@@ -383,12 +434,20 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
                   </li>
                 )}
                 {isCategoriesEnabled && (
-                  <li>
-                    <button onClick={() => setActivePage('Categories')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
-                      Especial:ÁrvoreDeCategorias
-                    </button>
-                    <p className="text-[11px] text-slate-400">Taxonomia hierárquica e subcategorias expansíveis.</p>
-                  </li>
+                  <>
+                    <li>
+                      <button onClick={() => setActivePage('CategoryExplorer')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-semibold">
+                        Especial:ExploradorDeCategorias (CategoryExplorer)
+                      </button>
+                      <p className="text-[11px] text-slate-400">Listagem de todas as categorias existentes com painel de artigos associados.</p>
+                    </li>
+                    <li>
+                      <button onClick={() => setActivePage('Categories')} className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                        Especial:ÁrvoreDeCategorias
+                      </button>
+                      <p className="text-[11px] text-slate-400">Taxonomia hierárquica e subcategorias expansíveis.</p>
+                    </li>
+                  </>
                 )}
                 {isCargoEnabled && (
                   <li>
@@ -658,6 +717,22 @@ export const SpecialPagesHub: React.FC<SpecialPagesHubProps> = ({
             ))}
           </div>
         </div>
+      )}
+
+      {/* VIEW: SPECIAL:CATEGORYEXPLORER */}
+      {activePage === 'CategoryExplorer' && !isCategoriesEnabled && (
+        <DisabledSpecialExtensionNotice
+          extensionName="CategoryTree"
+          title="Explorador de Categorias (CategoryExplorer)"
+          onBackToIndex={() => setActivePage('SpecialPages')}
+        />
+      )}
+      {activePage === 'CategoryExplorer' && isCategoriesEnabled && (
+        <CategoryExplorer
+          articles={articles}
+          onNavigateArticle={onNavigateArticle}
+          onOpenHistory={onOpenHistory}
+        />
       )}
 
       {/* VIEW: SPECIAL:CATEGORIES (CategoryTree) */}

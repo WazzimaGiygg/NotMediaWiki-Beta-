@@ -24,6 +24,7 @@ import {
   WatchlistSubscription,
   ArticleNotification,
   FcmTokenRegistration,
+  UserContributionItem,
 } from './types';
 import { botAgentService } from './services/botAgentService';
 import {
@@ -61,6 +62,7 @@ import {
   fetchArticlesFromFirestore,
   fetchArticleFromFirestore,
   fetchRevisionsFromFirestore,
+  fetchUserContributionsFromFirestore,
   saveArticleToFirestore,
   fetchUsersFromFirestore,
   deleteUserFromFirestore,
@@ -689,6 +691,60 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  async getUserContributions(
+    targetUser: Pick<UserSession, 'id' | 'username' | 'userTag'>
+  ): Promise<UserContributionItem[]> {
+    const cloudItems = await fetchUserContributionsFromFirestore(targetUser).catch(() => []);
+    const serverEvents = await this.getEventHistory(100).catch(() => []);
+
+    const matchTokens = new Set(
+      [
+        targetUser.id,
+        targetUser.username,
+        targetUser.userTag ? `${targetUser.username}${targetUser.userTag}` : '',
+      ]
+        .map(s => (s || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    const byKey = new Map<string, UserContributionItem>();
+    for (const item of cloudItems) {
+      const key = item.revisionId
+        ? `rev:${item.revisionId}`
+        : `art:${item.articleSlug}:${item.timestamp.slice(0, 16)}`;
+      byKey.set(key, item);
+    }
+
+    for (const evt of serverEvents) {
+      const userLower = (evt.user_text || '').trim().toLowerCase();
+      if (!matchTokens.has(userLower)) continue;
+      const key = evt.rev_id
+        ? `rev:${evt.rev_id}`
+        : `art:${evt.page_title}:${(evt.rev_timestamp || '').slice(0, 16)}`;
+      if (!byKey.has(key)) {
+        const parsed = parseTitle(evt.page_title || '');
+        byKey.set(key, {
+          id: evt.id,
+          revisionId: evt.rev_id || evt.id,
+          articleSlug: evt.page_title,
+          articleTitle: (evt.page_title || '').replace(/_/g, ' '),
+          namespace: typeof evt.page_namespace === 'number' ? evt.page_namespace : parsed.namespaceId,
+          comment: evt.comment || '',
+          timestamp: evt.rev_timestamp || new Date().toISOString(),
+          byteSize: Number(evt.rev_len || 0),
+          isMinor: Boolean(evt.rev_minor_edit),
+          isNewPage: evt.type === 'new',
+          authorName: evt.user_text,
+          source: 'event',
+        });
+      }
+    }
+
+    return Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
   },
 
   // ---------------------------------------------------------------------------

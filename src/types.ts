@@ -754,3 +754,19 @@ export interface ArticleDraft {
   storageSource?: 'firestore' | 'local';
 }
 
+export interface UserContributionItem {
+  id: string;
+  revisionId: string;
+  articleSlug: string;
+  articleTitle: string;
+  namespace: number;
+  comment: string;
+  timestamp: string;
+  byteSize: number;
+  isMinor: boolean;
+  isNewPage: boolean;
+  authorName: string;
+  source: 'revision' | 'event' | 'article';
+}
+
+
